@@ -8,7 +8,7 @@ export type ChartType = 'candles' | 'hollow' | 'bars' | 'heikin' | 'line' | 'are
 export type ScaleMode = 'normal' | 'log' | 'percent'
 export type PanelId = 'screener' | 'watchlist' | 'alerts'
 export type MobileTab = 'chart' | PanelId
-export type Tool = 'cursor' | 'trend' | 'ray' | 'hline' | 'hray' | 'vline' | 'cross' | 'rect' | 'fib' | 'long' | 'short' | 'measure'
+export type Tool = 'cursor' | 'trend' | 'ray' | 'hline' | 'hray' | 'vline' | 'cross' | 'rect' | 'fib' | 'long' | 'short' | 'text' | 'measure'
 export type Theme = 'dark' | 'light'
 export type ThemePref = 'system' | Theme
 
@@ -172,6 +172,7 @@ interface Saved {
   tabTemplates?: { screener?: string | null; watchlist?: string | null }
   searchFilter?: { exchange?: ExchangeId | 'all'; market?: MarketId | 'all' }
   drawingsHidden?: boolean
+  phoneStack?: boolean
 }
 
 const saved = load<Saved>('app', {})
@@ -218,6 +219,8 @@ export const app = reactive({
     market: (saved.searchFilter?.market ?? 'futures') as MarketId | 'all',
   },
   drawingsHidden: saved.drawingsHidden ?? false,
+  /** телефон: показывать все окна раскладки сразу (столбцом), а не одно */
+  phoneStack: saved.phoneStack ?? false,
 
   // не сохраняется
   tool: 'cursor' as Tool,
@@ -233,11 +236,15 @@ export const app = reactive({
   gotoOpen: false,
   /** счётчик запросов «поставить курсор в поле цены оповещения» (Alt+A) */
   alertFocus: 0,
+  /** окно ввода текста: новый текст в точке pt либо правка рисунка id */
+  textEdit: null as null | { pane: number; id: string | null; pt: { t: number; p: number } | null; text: string },
+  checklistOpen: false,
+  tradeTextOpen: false,
 })
 
 persist(
   'app',
-  () => [app.themePref, app.layout, app.panes, app.active, app.panel, app.panelOpen, app.magnet, app.sync, app.favTfs, app.templates, app.templateId, app.tabTemplates, app.searchFilter, app.drawingsHidden],
+  () => [app.themePref, app.layout, app.panes, app.active, app.panel, app.panelOpen, app.magnet, app.sync, app.favTfs, app.templates, app.templateId, app.tabTemplates, app.searchFilter, app.drawingsHidden, app.phoneStack],
   () => ({
     themePref: app.themePref,
     layout: app.layout,
@@ -253,6 +260,7 @@ persist(
     tabTemplates: app.tabTemplates,
     searchFilter: app.searchFilter,
     drawingsHidden: app.drawingsHidden,
+    phoneStack: app.phoneStack,
   }),
 )
 
@@ -273,13 +281,16 @@ window.addEventListener('resize', () => {
   viewport.h = window.innerHeight
 })
 
-/** Телефон: один график на экране, нижняя навигация, панели на весь экран */
-export const isPhone = computed(() => viewport.w < 720)
+/** Телефон (в том числе повёрнутый набок): нижняя навигация, панели на весь экран */
+export const isPhone = computed(() => viewport.w < 720 || viewport.h < 500)
+export const isLandscape = computed(() => viewport.w > viewport.h)
 
 export const paneCount = computed(() => layoutCount(app.layout))
 export const activeIndex = computed(() => Math.min(app.active, paneCount.value - 1))
 export const activePane = computed(() => app.panes[activeIndex.value])
-export const modalOpen = computed(() => !!(app.search || app.indicatorsOpen || app.indSettings || app.intervalInput || app.hotkeysOpen || app.gotoOpen))
+export const modalOpen = computed(
+  () => !!(app.search || app.indicatorsOpen || app.indSettings || app.intervalInput || app.hotkeysOpen || app.gotoOpen || app.textEdit || app.checklistOpen || app.tradeTextOpen),
+)
 
 // ---------- действия ----------
 

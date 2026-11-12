@@ -7,10 +7,7 @@ import { drawings } from './drawings'
 export type Side = 'long' | 'short'
 export type SideFilter = 'all' | Side
 
-export interface WatchItem extends SymbolRef {
-  /** направление, отмеченное вручную; не задано — берётся у последней позиции на графике */
-  side?: Side
-}
+export type WatchItem = SymbolRef
 
 export interface WatchList {
   id: string
@@ -41,7 +38,14 @@ function defaults(): { all: WatchList[]; activeId: string } {
 }
 
 function initial() {
-  const saved = load<{ all?: WatchList[]; activeId?: string; filter?: SideFilter } | null>('lists', null)
+  const saved = load<{ all?: (Omit<WatchList, 'items'> & { items: (SymbolRef & { side?: Side })[] })[]; activeId?: string; filter?: SideFilter; marks?: Record<string, Side> } | null>(
+    'lists',
+    null,
+  )
+  const marks: Record<string, Side> = {}
+  for (const [k, v] of Object.entries(saved?.marks ?? {})) if (v === 'long' || v === 'short') marks[k] = v
+  // раньше отметка хранилась в строке списка — переносим её на монету
+  for (const l of saved?.all ?? []) for (const r of l?.items ?? []) if (r && (r.side === 'long' || r.side === 'short')) marks[symbolKey(r)] ??= r.side
   const all = (saved?.all ?? [])
     .filter((l) => l && typeof l.name === 'string' && Array.isArray(l.items))
     .map((l, i) => ({
@@ -51,26 +55,44 @@ function initial() {
       collapsed: l.collapsed === true,
       items: l.items
         .filter((r) => r && r.exchange && r.market && r.symbol)
-        .map((r) => ({ exchange: r.exchange, market: r.market, symbol: r.symbol, ...(r.side === 'long' || r.side === 'short' ? { side: r.side } : {}) })),
+        .map((r) => ({ exchange: r.exchange, market: r.market, symbol: r.symbol })),
     }))
   const base = all.length ? { all, activeId: all.some((l) => l.id === saved?.activeId) ? saved!.activeId! : all[0].id } : defaults()
-  return { ...base, filter: (saved?.filter === 'long' || saved?.filter === 'short' ? saved.filter : 'all') as SideFilter }
+  return { ...base, filter: (saved?.filter === 'long' || saved?.filter === 'short' ? saved.filter : 'all') as SideFilter, marks }
 }
 
-/** Списки наблюдения. activeId — текущий список: в него добавляют Alt+W и звёздочка */
+/**
+ * Списки наблюдения. activeId — текущий список: в него добавляет Alt+W.
+ * marks — отметки направления по монетам: одна и та же в отборе, поиске и всех списках.
+ */
 export const lists = reactive(initial())
 persist('lists', lists, () => lists)
 
 export const activeList = computed(() => lists.all.find((l) => l.id === lists.activeId) ?? lists.all[0])
 
+/** Отметка направления, поставленная вручную */
+export const markOf = (ref: SymbolRef): Side | null => lists.marks[symbolKey(ref)] ?? null
+
 /** Направление инструмента: ручная отметка либо направление последней позиции на его графике */
-export function sideOf(item: WatchItem): Side | null {
-  if (item.side) return item.side
-  const p = latestPosition(drawings[symbolKey(item)])
+export function sideOf(ref: SymbolRef): Side | null {
+  const mark = markOf(ref)
+  if (mark) return mark
+  const p = latestPosition(drawings[symbolKey(ref)])
   return p ? (p.type as Side) : null
 }
 
-export const matchesFilter = (item: WatchItem) => lists.filter === 'all' || sideOf(item) === lists.filter
+export function setMark(ref: SymbolRef, side: Side | null) {
+  const key = symbolKey(ref)
+  if (side) lists.marks[key] = side
+  else delete lists.marks[key]
+}
+
+/** Фильтр «лонги» прячет только шорты (и наоборот): неотмеченные инструменты видны всегда */
+export function matchesFilter(item: WatchItem): boolean {
+  if (lists.filter === 'all') return true
+  const side = sideOf(item)
+  return side === null || side === lists.filter
+}
 
 /** Инструменты в том порядке, как они видны на экране: свёрнутые списки и отфильтрованные строки пропущены */
 export const visibleItems = computed(() => lists.all.flatMap((l) => (l.collapsed ? [] : l.items.filter(matchesFilter))))
@@ -84,12 +106,14 @@ export function addWatch(ref: SymbolRef): boolean {
   return true
 }
 
-/** Звёздочка: добавляет в текущий список или убирает из него */
-export function toggleWatch(ref: SymbolRef) {
-  const items = activeList.value.items
-  const i = items.findIndex((r) => sameSymbol(r, ref))
-  if (i >= 0) items.splice(i, 1)
-  else addWatch(ref)
+/** Списки, в которых есть инструмент, — в порядке показа */
+export const listsOf = (ref: SymbolRef) => lists.all.filter((l) => l.items.some((r) => sameSymbol(r, ref)))
+
+/** Добавляет инструмент в список или убирает из него */
+export function toggleInList(list: WatchList, ref: SymbolRef) {
+  const i = list.items.findIndex((r) => sameSymbol(r, ref))
+  if (i >= 0) list.items.splice(i, 1)
+  else list.items.push({ exchange: ref.exchange, market: ref.market, symbol: ref.symbol })
 }
 
 export function removeItem(listId: string, index: number) {
@@ -97,10 +121,9 @@ export function removeItem(listId: string, index: number) {
 }
 
 /** Отметка направления по кругу: нет → лонг → шорт → нет */
-export function cycleSide(item: WatchItem) {
-  if (!item.side) item.side = 'long'
-  else if (item.side === 'long') item.side = 'short'
-  else delete item.side
+export function cycleSide(ref: SymbolRef) {
+  const cur = markOf(ref)
+  setMark(ref, !cur ? 'long' : cur === 'long' ? 'short' : null)
 }
 
 /**

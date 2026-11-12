@@ -6,16 +6,13 @@ import ChartGrid from './components/ChartGrid.vue'
 import SidePanel from './components/SidePanel.vue'
 import BottomNav from './components/BottomNav.vue'
 import Toasts from './components/Toasts.vue'
-import { app, activeIndex, activePane, isPhone, modalOpen, paneCount, theme, cyclePane, openSearch, setSymbol, showPanel, toast, type Tool } from './stores/app'
+import { app, activeIndex, activePane, isPhone, modalOpen, paneCount, theme, cyclePane, openSearch, showPanel, toast, type Tool } from './stores/app'
 import { addWatch, activeList } from './stores/watchlist'
-import { addDrawing, clipboard, redo, selection, styleFor, undo, type Drawing } from './stores/drawings'
+import { clipboard, redo, selection, undo } from './stores/drawings'
 import { stepSymbol } from './stores/screener'
 import { chartAt } from './chart/registry'
-import { isPosition } from './chart/drawings'
-import { setPositionPrices } from './chart/position'
-import { parseSignal, type Signal } from './lib/signal'
-import { getTf } from './lib/timeframes'
-import { symbolKey, type SymbolRef } from './types'
+import { applySignal } from './chart/trade'
+import { parseSignal } from './lib/signal'
 
 // Диалоги нужны не сразу — грузим их код по первому открытию
 const SymbolSearch = defineAsyncComponent(() => import('./components/SymbolSearch.vue'))
@@ -24,6 +21,9 @@ const IndicatorSettings = defineAsyncComponent(() => import('./components/Indica
 const IntervalDialog = defineAsyncComponent(() => import('./components/IntervalDialog.vue'))
 const GoToDialog = defineAsyncComponent(() => import('./components/GoToDialog.vue'))
 const HotkeysDialog = defineAsyncComponent(() => import('./components/HotkeysDialog.vue'))
+const TextDialog = defineAsyncComponent(() => import('./components/TextDialog.vue'))
+const ChecklistDialog = defineAsyncComponent(() => import('./components/ChecklistDialog.vue'))
+const TradeTextDialog = defineAsyncComponent(() => import('./components/TradeTextDialog.vue'))
 
 watch(
   theme,
@@ -184,43 +184,6 @@ function onPaste(e: ClipboardEvent) {
   applySignal(sig)
 }
 
-function applySignal(sig: Signal) {
-  const sel = selection.value
-  const layer = sel ? chartAt(sel.pane)?.draw : undefined
-  const cur = layer?.selected()
-  if (layer && cur && isPosition(cur.type)) {
-    if (layer.applySignal(sig)) toast('Цены позиции обновлены из текста')
-    else toast('Не получилось: стоп и цель должны быть по разные стороны от входа', 'error')
-    return
-  }
-  if (sig.entry === undefined || sig.stop === undefined || sig.target === undefined) {
-    toast('Чтобы создать позицию из текста, нужны вход, стоп и цель. Либо выделите позицию и вставьте снова', 'error')
-    return
-  }
-  const pane = activePane.value
-  const ref: SymbolRef = { exchange: pane.symbol.exchange, market: pane.symbol.market, symbol: sig.symbol ?? pane.symbol.symbol }
-  // вход — текущая минута; ширина — сутки на интервале до часа, чтобы позицию было видно на любом внутридневном графике
-  const t = Math.floor(Date.now() / 60_000) * 60
-  const d: Drawing = {
-    id: Math.random().toString(36).slice(2, 10),
-    type: 'long',
-    color: styleFor('long').color,
-    pts: [
-      { t, p: sig.entry },
-      { t: t + Math.min(getTf(pane.tf).sec, 3600) * 24, p: sig.target },
-      { t, p: sig.stop },
-    ],
-  }
-  if (!setPositionPrices(d, sig.entry, sig.stop, sig.target)) {
-    toast('Не получилось: стоп и цель должны быть по разные стороны от входа', 'error')
-    return
-  }
-  addDrawing(symbolKey(ref), d)
-  if (ref.symbol !== pane.symbol.symbol) setSymbol(ref)
-  selection.value = { pane: activeIndex.value, id: d.id }
-  toast(`${d.type === 'long' ? 'Лонг' : 'Шорт'} ${ref.symbol} добавлен на график`)
-}
-
 function onKey(e: KeyboardEvent) {
   const typing = isTyping(e.target)
   const plain = !e.ctrlKey && !e.metaKey && !e.altKey
@@ -271,7 +234,7 @@ onBeforeUnmount(() => {
   <div class="app" :class="{ phone: isPhone }">
     <TopBar />
     <div class="body">
-      <DrawToolbar v-if="!isPhone || app.drawBarOpen" />
+      <DrawToolbar v-if="!isPhone || app.drawBarOpen" :horizontal="isPhone" />
       <ChartGrid />
       <SidePanel v-if="!isPhone && app.panelOpen" class="side-dock" :tab="app.panel" tabs />
       <div v-if="isPhone && app.mobileTab !== 'chart'" class="sheet">
@@ -286,6 +249,9 @@ onBeforeUnmount(() => {
     <IntervalDialog v-if="app.intervalInput" />
     <GoToDialog v-if="app.gotoOpen" />
     <HotkeysDialog v-if="app.hotkeysOpen" />
+    <TextDialog v-if="app.textEdit" :key="app.textEdit.id ?? 'new'" />
+    <ChecklistDialog v-if="app.checklistOpen" />
+    <TradeTextDialog v-if="app.tradeTextOpen" />
     <Toasts />
   </div>
 </template>
@@ -303,6 +269,13 @@ onBeforeUnmount(() => {
   flex: 1;
   min-height: 0;
   display: flex;
+}
+/* телефон: панель рисования — полосой под графиком */
+.app.phone .body {
+  flex-direction: column;
+}
+.app.phone .drawbar {
+  order: 2;
 }
 .side-dock {
   width: 340px;

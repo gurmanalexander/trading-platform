@@ -2,7 +2,10 @@
 import Icon from './Icon.vue'
 import { app, activePane, type Tool } from '../stores/app'
 import { symbolKey } from '../types'
-import { clearDrawings, drawings, selection } from '../stores/drawings'
+import { clearDrawings, drawings, redo, selection, undo } from '../stores/drawings'
+
+// На телефоне панель лежит горизонтальной полосой под графиком: ширина экрана там дороже высоты
+defineProps<{ horizontal?: boolean }>()
 
 const TOOLS: { id: Tool; label: string; sep?: boolean }[] = [
   { id: 'cursor', label: 'Курсор (Esc)' },
@@ -14,6 +17,7 @@ const TOOLS: { id: Tool; label: string; sep?: boolean }[] = [
   { id: 'cross', label: 'Перекрестие (Alt+C)' },
   { id: 'rect', label: 'Прямоугольник (Alt+Shift+R)' },
   { id: 'fib', label: 'Уровни Фибоначчи (Alt+F)' },
+  { id: 'text', label: 'Текст' },
   { id: 'long', label: 'Длинная позиция', sep: true },
   { id: 'short', label: 'Короткая позиция' },
   { id: 'measure', label: 'Линейка (Shift+щелчок)', sep: true },
@@ -31,7 +35,7 @@ function clearAll() {
 </script>
 
 <template>
-  <nav class="drawbar scroll" aria-label="Инструменты рисования">
+  <nav class="drawbar scroll" :class="{ horizontal }" aria-label="Инструменты рисования">
     <template v-for="t in TOOLS" :key="t.id">
       <span v-if="t.sep" class="sep" />
       <button class="btn" :class="{ on: app.tool === t.id }" :title="t.label" :aria-label="t.label" @click="app.tool = t.id">
@@ -39,6 +43,11 @@ function clearAll() {
       </button>
     </template>
     <span class="sep" />
+    <button class="btn" title="Чеклист сделки: заметка на график из отмеченных пунктов" @click="app.checklistOpen = true"><Icon name="checklist" /></button>
+    <button class="btn" title="Сделка текстом: ТВХ / SL / TP → позиция (Ctrl+V)" @click="app.tradeTextOpen = true"><Icon name="paste" /></button>
+    <span class="sep" />
+    <button class="btn" title="Отменить (Ctrl+Z)" @click="undo()"><Icon name="undo" /></button>
+    <button class="btn" title="Вернуть (Ctrl+Y)" @click="redo()"><Icon name="redo" /></button>
     <button class="btn" :class="{ on: app.magnet }" title="Магнит: привязка к ценам свечи" @click="app.magnet = !app.magnet">
       <Icon name="magnet" />
     </button>
@@ -76,5 +85,20 @@ function clearAll() {
   margin: 4px 0;
   background: var(--border);
   flex: none;
+}
+.drawbar.horizontal {
+  flex-direction: row;
+  width: auto;
+  height: calc(var(--ctl) + 8px);
+  padding: 0 5px;
+  border-right: 0;
+  border-top: 1px solid var(--border);
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+.drawbar.horizontal .sep {
+  width: 1px;
+  height: 20px;
+  margin: 0 4px;
 }
 </style>

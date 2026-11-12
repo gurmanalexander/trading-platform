@@ -1,18 +1,40 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, reactive } from 'vue'
 import ChartPane from './ChartPane.vue'
-import { app, activeIndex, isPhone } from '../stores/app'
+import { app, activeIndex, isLandscape, isPhone, paneCount } from '../stores/app'
 
-// номера панелей по группам: [[0], [1, 2]]
-const groups = computed(() => {
+/** Телефон в режиме «все окна сразу»: окна раскладки идут в один ряд — столбцом, а набок — строкой */
+const stacked = computed(() => isPhone.value && app.phoneStack && paneCount.value > 1)
+
+// доли окон в телефонном режиме живут отдельно от раскладки и не сохраняются
+const phoneSizes = reactive<number[]>([])
+
+const view = computed(() => {
+  if (stacked.value) {
+    const n = paneCount.value
+    while (phoneSizes.length < n) phoneSizes.push(1)
+    phoneSizes.length = n
+    const all = Array.from({ length: n }, (_, i) => i)
+    return isLandscape.value
+      ? { dir: 'rows' as const, groups: [all], groupSizes: [1], cellSizes: [phoneSizes] }
+      : { dir: 'rows' as const, groups: all.map((i) => [i]), groupSizes: phoneSizes, cellSizes: all.map(() => [1]) }
+  }
+  // номера панелей по группам: [[0], [1, 2]]
   let next = 0
-  return app.layout.groups.map((n) => Array.from({ length: n }, () => next++))
+  return {
+    dir: app.layout.dir,
+    groups: app.layout.groups.map((n) => Array.from({ length: n }, () => next++)),
+    groupSizes: app.layout.groupSizes,
+    cellSizes: app.layout.cellSizes,
+  }
 })
 
-/** На телефоне и в развёрнутом режиме на экране одна панель — активная */
-const single = computed(() => isPhone.value || app.maximized)
+/** На экране одно окно — активное: телефон в обычном режиме либо развёрнутое окно */
+const single = computed(() => (isPhone.value ? !stacked.value : app.maximized))
 const shown = (index: number) => !single.value || index === activeIndex.value
 const groupShown = (cells: number[]) => !single.value || cells.includes(activeIndex.value)
+/** На телефоне скрытые окна не создаются вовсе: меньше соединений и памяти */
+const mounted = (index: number) => !isPhone.value || stacked.value || index === activeIndex.value
 
 const MIN_PX = 90
 
@@ -52,33 +74,27 @@ function equalize(sizes: number[]) {
 </script>
 
 <template>
-  <main class="grid" :class="[app.layout.dir, { single }]">
-    <template v-for="(cells, gi) in groups" :key="gi">
+  <main class="grid" :class="[view.dir, { single }]">
+    <template v-for="(cells, gi) in view.groups" :key="gi">
       <div
         v-if="gi > 0"
         v-show="!single"
         class="split main"
         title="Потяните, чтобы изменить размер. Двойной щелчок — поровну"
-        @pointerdown="startResize($event, app.layout.groupSizes, gi, app.layout.dir === 'rows')"
-        @dblclick="equalize(app.layout.groupSizes)"
+        @pointerdown="startResize($event, view.groupSizes, gi, view.dir === 'rows')"
+        @dblclick="equalize(view.groupSizes)"
       />
-      <div v-show="groupShown(cells)" class="group" :style="{ flex: `${app.layout.groupSizes[gi]} 1 0` }">
+      <div v-show="groupShown(cells)" class="group" :style="{ flex: `${view.groupSizes[gi]} 1 0` }">
         <template v-for="(index, ci) in cells" :key="index">
           <div
             v-if="ci > 0"
             v-show="!single"
             class="split cross"
             title="Потяните, чтобы изменить размер. Двойной щелчок — поровну"
-            @pointerdown="startResize($event, app.layout.cellSizes[gi], ci, app.layout.dir === 'cols')"
-            @dblclick="equalize(app.layout.cellSizes[gi])"
+            @pointerdown="startResize($event, view.cellSizes[gi], ci, view.dir === 'cols')"
+            @dblclick="equalize(view.cellSizes[gi])"
           />
-          <!-- на телефоне скрытые панели не создаются вовсе: меньше соединений и памяти -->
-          <ChartPane
-            v-if="!isPhone || index === activeIndex"
-            v-show="shown(index)"
-            :index="index"
-            :style="{ flex: `${app.layout.cellSizes[gi][ci]} 1 0` }"
-          />
+          <ChartPane v-if="mounted(index)" v-show="shown(index)" :index="index" :style="{ flex: `${view.cellSizes[gi][ci]} 1 0` }" />
         </template>
       </div>
     </template>
@@ -137,5 +153,15 @@ function equalize(sizes: number[]) {
 .cols > .split.main::after,
 .rows .split.cross::after {
   inset: 0 -5px;
+}
+@media (pointer: coarse) {
+  .rows > .split.main::after,
+  .cols .split.cross::after {
+    inset: -9px 0;
+  }
+  .cols > .split.main::after,
+  .rows .split.cross::after {
+    inset: 0 -9px;
+  }
 }
 </style>

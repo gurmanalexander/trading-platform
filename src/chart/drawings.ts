@@ -43,11 +43,12 @@ const HANDLE = 4.5
 const FONT = '11px -apple-system, "Segoe UI", Roboto, sans-serif'
 const DASHES: Record<Dash, number[]> = { solid: [], dashed: [6, 4], dotted: [1.5, 3.5] }
 
-const SINGLE = new Set<DrawingType>(['hline', 'vline', 'hray', 'cross'])
+const SINGLE = new Set<DrawingType>(['hline', 'vline', 'hray', 'cross', 'text'])
 const isSingle = (t: DrawingType) => SINGLE.has(t)
 export const isPosition = (t: DrawingType) => t === 'long' || t === 'short'
 /** Инструменты, у которых настраиваются цвет, толщина и вид линии */
-export const hasLineStyle = (t: DrawingType) => !isPosition(t) && t !== 'measure'
+export const hasLineStyle = (t: DrawingType) => !isPosition(t) && t !== 'measure' && t !== 'text'
+export const TEXT_SIZES = [10, 12, 14, 18, 24]
 export const hasText = (t: DrawingType) => t === 'hline' || t === 'hray' || t === 'trend' || t === 'ray' || t === 'rect'
 const uid = () => Math.random().toString(36).slice(2, 10)
 
@@ -106,6 +107,8 @@ export class DrawingsLayer {
   private pressing = false
   private downAt: XY = { x: 0, y: 0 }
   private drag: { d: Drawing; handle: number; start: XY; orig: XY[]; moved: boolean; copy: boolean } | null = null
+  /** где на экране нарисован каждый текст — чтобы попадать по нему указателем */
+  private textBoxes = new Map<string, { x: number; y: number; w: number; h: number }>()
   private priceLabels: ISeriesPrimitiveAxisView[] = []
   private timeLabels: ISeriesPrimitiveAxisView[] = []
   /** прокрутка графика отключена на время жеста над рисунком */
@@ -137,6 +140,7 @@ export class DrawingsLayer {
   }
 
   setList(list: Drawing[]) {
+    this.textBoxes.clear()
     this.list = list
     this.draft = null
     this.measure = null
@@ -180,8 +184,8 @@ export class DrawingsLayer {
         addPrice(d.pts[1].p, c.up)
         addPrice(d.pts[2].p, c.down)
         addPrice(d.pts[0].p, c.crossLabel)
-      } else if (active && d.type !== 'vline') d.pts.forEach((p) => addPrice(p.p, d.color))
-      if (active && d.type !== 'hline') {
+      } else if (active && d.type !== 'vline' && d.type !== 'text') d.pts.forEach((p) => addPrice(p.p, d.color))
+      if (active && d.type !== 'hline' && d.type !== 'text') {
         addTime(d.pts[0].t)
         if (d.pts.length > 1 && d.pts[1].t !== d.pts[0].t) addTime(d.pts[1].t)
       }
@@ -243,6 +247,10 @@ export class DrawingsLayer {
   }
 
   private geometry(d: Drawing, w: number, h: number): Geometry | null {
+    if (d.pin) {
+      const at = { x: d.pin.x * w, y: d.pin.y * h }
+      return { sp: [at], handles: [at] }
+    }
     const s = d.pts.map((p) => this.toScreen(p))
     if (s.some((p) => !p)) return null
     const sp = s as XY[]
@@ -328,6 +336,12 @@ export class DrawingsLayer {
         this.redraw()
       }
     })
+    on(el, 'dblclick', (e) => {
+      if (app.tool !== 'cursor') return
+      const r = el.getBoundingClientRect()
+      const h = this.hit(e.clientX - r.left, e.clientY - r.top, 6)
+      if (h?.d.type === 'text') this.editText(h.d)
+    })
     on(window, 'pointermove', (e) => {
       if (!this.drag) return
       const p = rel(e as PointerEvent)
@@ -393,6 +407,12 @@ export class DrawingsLayer {
       // второй щелчок завершает фигуру
       this.draft.pts[1] = pt
       this.commit()
+      return
+    }
+    if (tool === 'text') {
+      // текст вводится в отдельном окне; рисунок появится после подтверждения
+      app.tool = 'cursor'
+      app.textEdit = { pane: this.host.paneIndex, id: null, pt, text: '' }
       return
     }
     if (tool === 'long' || tool === 'short') this.draft = this.newPosition(tool, pt, x)
@@ -497,7 +517,7 @@ export class DrawingsLayer {
       return
     }
     selection.value = { pane: this.host.paneIndex, id: h.d.id }
-    const orig = h.d.pts.map((p) => this.toScreen(p) ?? { x, y })
+    const orig = this.geometry(h.d, size.width, size.height)?.sp ?? h.d.pts.map(() => ({ x, y }))
     // с зажатым Ctrl тянется копия: оригинал остаётся на месте
     this.drag = { d: h.d, handle: ctrl ? -1 : h.handle, start: { x, y }, orig, moved: false, copy: ctrl }
     this.lockScroll(true)
@@ -521,7 +541,12 @@ export class DrawingsLayer {
       }
     }
     const magnet = isPosition(g.d.type) ? false : app.magnet
-    if (g.handle >= 0) {
+    if (g.d.pin) {
+      // закреплённый текст двигается по экрану, а не по времени и цене
+      const size = this.host.chart.paneSize(0)
+      const clamp = (v: number) => Math.min(0.97, Math.max(0, v))
+      g.d.pin = { x: clamp((g.orig[0].x + dx) / size.width), y: clamp((g.orig[0].y + dy) / size.height) }
+    } else if (g.handle >= 0) {
       const pt = this.toPoint(x, y, magnet)
       if (pt) {
         if (isPosition(g.d.type)) movePositionHandle(g.d, g.handle, pt, 1 / 10 ** this.host.precision(), this.host.tfSec())
@@ -574,7 +599,11 @@ export class DrawingsLayer {
     const prec = this.host.precision()
     const tick = 1 / 10 ** prec
     const dt = bars * this.host.tfSec()
-    d.pts = d.pts.map((p) => ({ t: p.t + dt, p: +(p.p + ticks * tick).toFixed(prec) }))
+    if (d.pin) {
+      // закреплённый текст сдвигается по экрану: шаг — 4 пикселя
+      const size = this.host.chart.paneSize(0)
+      d.pin = { x: d.pin.x + (bars * 4) / size.width, y: d.pin.y - (ticks * 4) / size.height }
+    } else d.pts = d.pts.map((p) => ({ t: p.t + dt, p: +(p.p + ticks * tick).toFixed(prec) }))
     this.redraw()
     return true
   }
@@ -604,6 +633,95 @@ export class DrawingsLayer {
     if (!d) return ''
     if (isPosition(d.type)) return formatSignal(this.host.symbol(), d.type as 'long' | 'short', d.pts[0].p, d.pts[2].p, d.pts[1].p, this.host.precision())
     return `tvx:${d.type}:${d.id}`
+  }
+
+  // ---------- текст ----------
+
+  editText(d: Drawing) {
+    app.textEdit = { pane: this.host.paneIndex, id: d.id, pt: null, text: d.text ?? '' }
+  }
+
+  /** Новый текст в точке графика */
+  addText(pt: Pt, text: string): Drawing | null {
+    if (!text.trim()) return null
+    const d: Drawing = { ...this.newDrawing('text', [pt]), text, size: 12 }
+    checkpoint()
+    this.list.push(d)
+    selection.value = { pane: this.host.paneIndex, id: d.id }
+    this.redraw()
+    return d
+  }
+
+  /** Меняет текст рисунка; пустой текст удаляет рисунок */
+  setText(id: string, text: string) {
+    const i = this.list.findIndex((d) => d.id === id)
+    if (i < 0) return
+    checkpoint()
+    if (text.trim()) this.list[i].text = text
+    else {
+      this.list.splice(i, 1)
+      if (this.selectedId.value === id) selection.value = null
+    }
+    this.redraw()
+  }
+
+  /** Закрепляет текст на экране или возвращает привязку к времени и цене — не сдвигая его с места */
+  togglePin() {
+    const d = this.selected()
+    if (!d || d.type !== 'text') return
+    const size = this.host.chart.paneSize(0)
+    const at = this.geometry(d, size.width, size.height)?.sp[0]
+    if (!at) return
+    checkpoint()
+    if (d.pin) {
+      const pt = this.toPoint(at.x, at.y, false)
+      if (pt) d.pts = [pt]
+      delete d.pin
+    } else d.pin = { x: at.x / size.width, y: at.y / size.height }
+    this.redraw()
+  }
+
+  setTextStyle(patch: { size?: number; bg?: boolean; color?: string }) {
+    const d = this.selected()
+    if (!d) return
+    checkpoint()
+    Object.assign(d, patch)
+    this.redraw()
+  }
+
+  /**
+   * Заметка из чеклиста: одна на инструмент. Есть — обновляется на месте, нет — ставится
+   * в левый верхний угол видимой части графика. Пустой текст убирает заметку.
+   */
+  upsertNote(text: string): boolean {
+    const i = this.list.findIndex((d) => d.note)
+    if (!text.trim()) {
+      if (i < 0) return false
+      checkpoint()
+      this.list.splice(i, 1)
+      this.redraw()
+      return true
+    }
+    checkpoint()
+    if (i >= 0) this.list[i].text = text
+    else {
+      // заметка закреплена в левом верхнем углу окна, под легендой
+      const size = this.host.chart.paneSize(0)
+      const legend = this.host.el.parentElement?.querySelector<HTMLElement>('.legend')
+      const top = (legend?.offsetHeight ?? 56) + 14
+      const pt = this.toPoint(14, top, false) ?? { t: 0, p: 0 }
+      this.list.push({
+        ...this.newDrawing('text', [pt]),
+        text,
+        size: 12,
+        bg: true,
+        note: true,
+        vis: 'intraday',
+        pin: { x: 14 / Math.max(size.width, 200), y: Math.min(0.6, top / Math.max(size.height, 200)) },
+      })
+    }
+    this.redraw()
+    return true
   }
 
   /** Запоминает стиль выбранного рисунка как стиль по умолчанию для этого инструмента */
@@ -639,6 +757,9 @@ export class DrawingsLayer {
     const shift = this.host.tfSec() * 3
     const d: Drawing = { ...JSON.parse(JSON.stringify(src)), id: uid() }
     d.pts = d.pts.map((p) => ({ t: p.t + shift, p: p.p }))
+    if (d.pin) d.pin = { x: d.pin.x + 0.02, y: d.pin.y + 0.04 }
+    // копия заметки чеклиста — обычный текст: заметка у инструмента одна
+    delete d.note
     checkpoint()
     this.list.push(d)
     selection.value = { pane: this.host.paneIndex, id: d.id }
@@ -684,6 +805,11 @@ export class DrawingsLayer {
         case 'cross':
           ok = Math.abs(y - sp[0].y) <= tol || Math.abs(x - sp[0].x) <= tol
           break
+        case 'text': {
+          const b = this.textBoxes.get(d.id)
+          ok = !!b && x >= b.x - tol && x <= b.x + b.w + tol && y >= b.y - tol && y <= b.y + b.h + tol
+          break
+        }
         case 'trend':
           ok = distToSegment(x, y, sp[0], sp[1]) <= tol
           break
@@ -809,6 +935,40 @@ export class DrawingsLayer {
         line({ x: 0, y }, { x: w, y })
         line({ x, y: 0 }, { x, y: h })
         break
+      }
+      case 'text': {
+        // точка привязки — левый верхний угол текста
+        const size = d.size ?? 12
+        const lines = (d.text ?? '').split('\n')
+        const lh = Math.round(size * 1.35)
+        ctx.font = `${size}px -apple-system, "Segoe UI", Roboto, sans-serif`
+        const tw = Math.max(...lines.map((l) => ctx.measureText(l).width), 8)
+        const box = { x: sp[0].x - 5, y: sp[0].y - 4, w: tw + 10, h: lines.length * lh + 7 }
+        this.textBoxes.set(d.id, box)
+        ctx.setLineDash([])
+        if (d.bg) {
+          ctx.fillStyle = withAlpha(c.bg, 0.88)
+          ctx.beginPath()
+          ctx.roundRect(box.x, box.y, box.w, box.h, 4)
+          ctx.fill()
+          ctx.strokeStyle = withAlpha(d.color, 0.5)
+          ctx.lineWidth = 1
+          ctx.stroke()
+        }
+        if (hover || handles) {
+          ctx.strokeStyle = d.color
+          ctx.lineWidth = 1
+          ctx.setLineDash([3, 3])
+          ctx.strokeRect(box.x + 0.5, box.y + 0.5, box.w - 1, box.h - 1)
+          ctx.setLineDash([])
+        }
+        ctx.fillStyle = d.color
+        ctx.textAlign = 'left'
+        ctx.textBaseline = 'top'
+        lines.forEach((l, i) => ctx.fillText(l, sp[0].x, sp[0].y + i * lh))
+        ctx.font = FONT
+        // маркеры тексту не нужны: его рамка и так показывает выделение
+        return [{ x: box.x, y: box.y }]
       }
       case 'rect': {
         const x = Math.min(sp[0].x, sp[1].x)

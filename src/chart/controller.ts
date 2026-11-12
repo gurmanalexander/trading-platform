@@ -26,6 +26,7 @@ import { indicatorDef, resolveParams, toSource, type IndicatorDef, type Indicato
 import { app, paneCount, theme, type ChartType, type PaneState } from '../stores/app'
 import { crosshairBus, timeBus } from '../stores/sync'
 import { dayStats } from '../stores/atr'
+import { clearView, getView, setView, viewKey, type ChartView } from '../stores/views'
 import { chartColors, withAlpha, type ChartColors } from './theme'
 import { DrawingsLayer } from './drawings'
 import { heikinAshi, heikinBar, lowerBound } from './bars'
@@ -103,6 +104,9 @@ export class ChartController {
   private syncIdx = -1
   /** время, к которому панель привязана синхронизацией, пока догружается история */
   private pendingSyncTime: number | null = null
+  /** вид графика в момент нажатия — чтобы понять, двигал ли его пользователь */
+  private viewAtPress = ''
+  private saveViewTimer = 0
 
   constructor(
     private host: HTMLElement,
@@ -164,6 +168,73 @@ export class ChartController {
     el.addEventListener('pointerenter', this.onPointerIn)
     el.addEventListener('pointerdown', this.onPointerIn)
     el.addEventListener('pointerleave', this.onPointerOut)
+    el.addEventListener('pointerdown', this.onPress)
+    window.addEventListener('pointerup', this.onRelease)
+  }
+
+  // ---------- запоминание вида ----------
+
+  private viewSignature(): string {
+    const r = this.chart.timeScale().getVisibleLogicalRange()
+    const scale = this.chart.priceScale('right', 0)
+    const p = scale.options().autoScale ? null : scale.getVisibleRange()
+    return JSON.stringify([r && [Math.round(r.from * 10), Math.round(r.to * 10)], p && [p.from, p.to]])
+  }
+
+  private onPress = () => {
+    this.viewAtPress = this.viewSignature()
+  }
+
+  private onRelease = () => {
+    if (!this.viewAtPress) return
+    const before = this.viewAtPress
+    this.viewAtPress = ''
+    // после отпускания график ещё доезжает по инерции — сравниваем чуть позже
+    setTimeout(() => {
+      if (!this.disposed && this.viewSignature() !== before) this.scheduleSaveView()
+    }, 60)
+  }
+
+  /** Вид меняли руками (мышь, палец, колесо, клавиши) — запоминаем его для этой монеты и интервала */
+  private scheduleSaveView() {
+    clearTimeout(this.saveViewTimer)
+    const token = this.token
+    this.saveViewTimer = window.setTimeout(() => {
+      this.saveViewTimer = 0
+      if (this.disposed || token !== this.token || !this.bars.length || this.ui.loading) return
+      const ts = this.chart.timeScale()
+      const r = ts.getVisibleLogicalRange()
+      if (!r) return
+      const scale = this.chart.priceScale('right', 0)
+      const range = scale.options().autoScale ? null : scale.getVisibleRange()
+      const offset = ts.scrollPosition()
+      setView(viewKey(symbolKey(this.pane.symbol), this.tf.id), {
+        spacing: ts.options().barSpacing,
+        realtime: offset > -3,
+        offset,
+        center: this.logicalToTime((r.from + r.to) / 2),
+        price: range ? { from: range.from, to: range.to } : null,
+        at: Date.now(),
+      })
+    }, 500)
+  }
+
+  private async restoreView(v: ChartView) {
+    const token = this.token
+    const ts = this.chart.timeScale()
+    ts.applyOptions({ barSpacing: v.spacing })
+    if (v.realtime) ts.scrollToPosition(v.offset, false)
+    else await this.goToTime(v.center, v.spacing)
+    if (token !== this.token || !v.price) return
+    // если цена с тех пор ушла за сохранённый диапазон, оставляем автомасштаб — иначе её не будет видно
+    const last = this.bars[this.bars.length - 1]?.close
+    if (v.realtime && last !== undefined && (last < v.price.from || last > v.price.to)) return
+    requestAnimationFrame(() => {
+      if (token !== this.token) return
+      const scale = this.chart.priceScale('right', 0)
+      scale.setAutoScale(false)
+      scale.setVisibleRange(v.price!)
+    })
   }
 
   private onPointerIn = () => {
@@ -181,7 +252,11 @@ export class ChartController {
     const r = this.host.getBoundingClientRect()
     const x = e.clientX - r.left
     const y = e.clientY - r.top
-    if (x <= this.chart.paneSize(0).width) return
+    if (x <= this.chart.paneSize(0).width) {
+      // над графиком колесо масштабирует время — это делает сама библиотека, нам остаётся запомнить вид
+      this.scheduleSaveView()
+      return
+    }
     const tops = this.ui.paneTops
     let idx = -1
     for (let i = 0; i < tops.length; i++) if (y >= tops[i] && y < tops[i] + this.chart.paneSize(i).height) idx = i
@@ -207,6 +282,7 @@ export class ChartController {
     }
     scale.setAutoScale(false)
     scale.setVisibleRange({ from, to })
+    if (idx === 0) this.scheduleSaveView()
   }
 
   private onResize() {
@@ -234,6 +310,9 @@ export class ChartController {
     this.host.removeEventListener('pointerenter', this.onPointerIn)
     this.host.removeEventListener('pointerdown', this.onPointerIn)
     this.host.removeEventListener('pointerleave', this.onPointerOut)
+    this.host.removeEventListener('pointerdown', this.onPress)
+    window.removeEventListener('pointerup', this.onRelease)
+    clearTimeout(this.saveViewTimer)
     if (crosshairBus.value?.pane === this.paneIndex) crosshairBus.value = null
     this.token++
     this.stopLive()
@@ -273,6 +352,8 @@ export class ChartController {
       this.setAll()
       this.chart.priceScale('right').applyOptions({ autoScale: true })
       this.chart.timeScale().scrollToPosition(6, false)
+      const saved = getView(viewKey(symbolKey(symbol), this.tf.id))
+      if (saved) this.restoreView(saved)
       this.offLive = adapter.subscribeKline(
         symbol.market,
         symbol.symbol,
@@ -434,6 +515,8 @@ export class ChartController {
     if (r && r.from < 20) this.loadMore()
     const back = ts.scrollPosition() < -3
     if (back !== this.ui.scrolledBack) this.ui.scrolledBack = back
+    // график ещё доезжает по инерции после жеста — запомним вид, когда он остановится
+    if (this.saveViewTimer && this.pointerInside) this.scheduleSaveView()
     this.draw.layoutOverlay()
     if (r && this.pointerInside && app.sync.time && paneCount.value > 1 && this.bars.length) {
       timeBus.value = { pane: this.paneIndex, time: this.logicalToTime((r.from + r.to) / 2), realtime: !back }
@@ -542,29 +625,35 @@ export class ChartController {
   scrollBars(n: number) {
     const ts = this.chart.timeScale()
     ts.scrollToPosition(ts.scrollPosition() + n, false)
+    this.scheduleSaveView()
   }
 
   zoomBy(factor: number) {
     const ts = this.chart.timeScale()
     ts.applyOptions({ barSpacing: Math.min(60, Math.max(0.8, ts.options().barSpacing * factor)) })
+    this.scheduleSaveView()
   }
 
-  private centerOn(t: number) {
+  /**
+   * Ставит момент t в центр экрана, не меняя масштаб. spacing — ширина свечи, если её только что
+   * задали: на свежесозданном графике библиотека сообщает новое значение не сразу.
+   */
+  private centerOn(t: number, spacing?: number) {
     const ts = this.chart.timeScale()
     const l = this.timeToLogical(t)
-    const r = ts.getVisibleLogicalRange()
-    if (l == null || !r) return
-    const half = (r.to - r.from) / 2
-    ts.setVisibleLogicalRange({ from: l - half, to: l + half })
+    if (l == null) return
+    // позиция прокрутки — на сколько свечей правый край экрана правее последней свечи
+    const visibleBars = ts.width() / (spacing ?? ts.options().barSpacing)
+    ts.scrollToPosition(l + visibleBars / 2 - (this.bars.length - 1), false)
   }
 
   /** Показывает момент t (сек UTC) в центре графика, при необходимости догружая историю */
-  async goToTime(t: number) {
+  async goToTime(t: number, spacing?: number) {
     const token = this.token
     for (let i = 0; i < 40 && this.bars.length && this.bars[0].time > t && !this.noMore; i++) {
       if (!(await this.loadMore()) || token !== this.token) break
     }
-    if (token === this.token) this.centerOn(t)
+    if (token === this.token) this.centerOn(t, spacing)
   }
 
   /** Синхронизация времени: другая панель показывает момент t */
@@ -630,7 +719,10 @@ export class ChartController {
     })
   }
 
+  /** Возврат к виду по умолчанию; запомненный для монеты вид забывается */
   resetView() {
+    clearTimeout(this.saveViewTimer)
+    clearView(viewKey(symbolKey(this.pane.symbol), this.tf.id))
     this.chart.priceScale('right').applyOptions({ autoScale: true })
     this.chart.timeScale().applyOptions({ barSpacing: 8 })
     this.chart.timeScale().scrollToPosition(6, false)
@@ -638,6 +730,7 @@ export class ChartController {
 
   goRealtime() {
     this.chart.timeScale().scrollToRealTime()
+    this.scheduleSaveView()
   }
 
   applyTheme() {

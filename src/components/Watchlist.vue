@@ -2,6 +2,7 @@
 import { onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import Icon from './Icon.vue'
 import Dropdown from './Dropdown.vue'
+import SideMark from './SideMark.vue'
 import { EXCHANGE_NAMES, MARKET_NAMES, sameSymbol, symbolKey } from '../types'
 import { activePane, openSearch, setSymbol } from '../stores/app'
 import { tickers, useTickers } from '../stores/tickers'
@@ -12,8 +13,6 @@ import {
   lists,
   visibleItems,
   matchesFilter,
-  sideOf,
-  cycleSide,
   removeItem,
   moveItem,
   moveList,
@@ -278,6 +277,7 @@ function listMark(listId: string, i: number): string {
           @click="toggle(l, $event)"
         >
           <Icon name="chevron" :size="14" :style="{ transform: l.collapsed ? 'rotate(-90deg)' : '' }" />
+          <Icon name="flag" :size="14" class="flag" />
           <b>{{ l.name }}</b>
           <span class="muted count">{{ l.items.length }}</span>
           <span v-if="l.id === lists.activeId" class="cur" title="Текущий список: сюда добавляют Alt+W и звёздочка">★</span>
@@ -331,18 +331,7 @@ function listMark(listId: string, i: number): string {
               @click="pick(r)"
               @keydown.enter="setSymbol(r)"
             >
-              <button
-                class="side"
-                :class="[sideOf(r) ?? 'none', { manual: !!r.side }]"
-                :title="
-                  (sideOf(r) === 'long' ? 'Лонг' : sideOf(r) === 'short' ? 'Шорт' : 'Направление не отмечено') +
-                  (r.side || !sideOf(r) ? '' : ' (по последней позиции)') +
-                  '. Нажмите, чтобы изменить'
-                "
-                @click.stop="cycleSide(r)"
-              >
-                {{ sideOf(r) === 'long' ? '▲' : sideOf(r) === 'short' ? '▼' : '·' }}
-              </button>
+              <SideMark :item="r" />
               <b class="sym">{{ r.symbol }}<i v-if="r.exchange !== 'binance' || r.market !== 'futures'">{{ r.exchange === 'bybit' ? 'bb' : 'bn' }}{{ r.market === 'spot' ? '·с' : '' }}</i></b>
               <span class="num">{{ price(r) }}</span>
               <span class="num" :class="(tickers[symbolKey(r)]?.changePct ?? 0) >= 0 ? 'up' : 'down'">{{ fmtPct(tickers[symbolKey(r)]?.changePct) }}</span>
@@ -394,7 +383,6 @@ function listMark(listId: string, i: number): string {
 }
 .list {
   position: relative;
-  border-left: 3px solid var(--list);
 }
 .list-head {
   display: flex;
@@ -402,12 +390,20 @@ function listMark(listId: string, i: number): string {
   gap: 6px;
   height: 30px;
   padding: 0 4px 0 6px;
-  background: color-mix(in srgb, var(--list) 14%, var(--panel));
+  background: var(--panel-2);
   border-bottom: 1px solid var(--border);
   cursor: pointer;
   position: sticky;
   top: 0;
   z-index: 2;
+}
+/* цвет списка — только флажок, как метка, а не заливка */
+.flag {
+  color: var(--list);
+}
+.flag :deep(path) {
+  fill: var(--list);
+  fill-opacity: 0.85;
 }
 .list-head b {
   font-size: 12px;
@@ -469,27 +465,6 @@ function listMark(listId: string, i: number): string {
 }
 .list.drop-into > .list-head {
   box-shadow: inset 0 0 0 2px var(--accent);
-}
-.side {
-  width: 18px;
-  height: 22px;
-  border-radius: 4px;
-  font-size: 10px;
-  line-height: 1;
-  color: var(--muted);
-  opacity: 0.75;
-}
-.side:hover {
-  background: var(--panel-2);
-}
-.side.long {
-  color: var(--up);
-}
-.side.short {
-  color: var(--down);
-}
-.side.manual {
-  opacity: 1;
 }
 .sym {
   font-weight: 600;
@@ -576,11 +551,6 @@ function listMark(listId: string, i: number): string {
   .wl-row {
     height: 40px;
     grid-template-columns: 26px minmax(0, 1fr) auto 54px 58px 26px;
-  }
-  .side {
-    width: 26px;
-    height: 30px;
-    font-size: 12px;
   }
   .list-head {
     height: 38px;

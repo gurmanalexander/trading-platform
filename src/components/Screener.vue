@@ -4,7 +4,8 @@ import Icon from './Icon.vue'
 import { sameSymbol, symbolKey, EXCHANGE_NAMES, MARKET_NAMES } from '../types'
 import { activePane, setSymbol } from '../stores/app'
 import { settings, state, view, total, sortBy, refresh, resetSettings, startAutoRefresh, MAX_ROWS, type SortKey } from '../stores/screener'
-import { activeList, inActiveList, toggleWatch } from '../stores/watchlist'
+import SideMark from './SideMark.vue'
+import ListPicker from './ListPicker.vue'
 import { fmtPct, fmtPriceShort, fmtVolume } from '../lib/format'
 
 const showSettings = ref(false)
@@ -82,7 +83,7 @@ const COLS: { id: SortKey; label: string }[] = [
     </form>
 
     <div class="sc-head">
-      <button v-for="c in COLS" :key="c.id" class="muted" :class="{ on: settings.sort === c.id, num: c.id !== 'symbol' }" @click="sortBy(c.id)">
+      <button v-for="c in COLS" :key="c.id" class="muted" :class="{ on: settings.sort === c.id, num: c.id !== 'symbol', first: c.id === 'symbol' }" @click="sortBy(c.id)">
         {{ c.label }}
         <Icon v-if="settings.sort === c.id" :name="settings.dir === 'asc' ? 'sortUp' : 'sortDown'" :size="12" />
       </button>
@@ -100,18 +101,11 @@ const COLS: { id: SortKey; label: string }[] = [
         @click="setSymbol(r)"
         @keydown.enter="setSymbol(r)"
       >
-        <b>{{ r.symbol }}</b>
+        <span class="name"><SideMark :item="r" /><b>{{ r.symbol }}</b></span>
         <span class="num">{{ fmtPriceShort(r.last) }}</span>
         <span class="num" :class="r.changePct >= 0 ? 'up' : 'down'">{{ fmtPct(r.changePct) }}</span>
         <span class="num muted">{{ fmtVolume(r.usdVolume) }}</span>
-        <button
-          class="btn sm star"
-          :class="{ on: inActiveList(r) }"
-          :title="(inActiveList(r) ? 'Убрать из списка «' : 'В список «') + activeList.name + '»'"
-          @click.stop="toggleWatch(r)"
-        >
-          <Icon name="star" :size="14" />
-        </button>
+        <ListPicker :item="r" />
       </div>
       <p v-if="state.error" class="note muted">{{ state.error }}</p>
       <div v-else-if="state.loading && !view.length" class="note"><div class="spinner" /></div>
@@ -186,7 +180,7 @@ const COLS: { id: SortKey; label: string }[] = [
   grid-template-columns: minmax(84px, 1fr) minmax(0, auto) 52px 52px 22px;
   align-items: center;
   column-gap: 6px;
-  padding: 0 4px 0 10px;
+  padding: 0 4px 0 4px;
   font-size: 12.5px;
 }
 .sc-head {
@@ -201,6 +195,9 @@ const COLS: { id: SortKey; label: string }[] = [
   gap: 2px;
   height: 100%;
   white-space: nowrap;
+}
+.sc-head button.first {
+  padding-left: 21px;
 }
 .sc-head button.num {
   justify-content: flex-end;
@@ -225,6 +222,12 @@ const COLS: { id: SortKey; label: string }[] = [
   background: var(--accent-soft);
   box-shadow: inset 2px 0 0 var(--accent);
 }
+.name {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  min-width: 0;
+}
 .sc-row b {
   font-weight: 600;
   overflow: hidden;
@@ -233,18 +236,6 @@ const COLS: { id: SortKey; label: string }[] = [
 .num {
   text-align: right;
   white-space: nowrap;
-}
-.star {
-  color: var(--muted);
-  min-width: 22px;
-  padding: 0;
-}
-.star.on {
-  background: none;
-  color: var(--warn);
-}
-.star.on :deep(path) {
-  fill: currentColor;
 }
 .note {
   display: grid;

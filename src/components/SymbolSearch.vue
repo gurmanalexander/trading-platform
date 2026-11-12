@@ -4,7 +4,7 @@ import Icon from './Icon.vue'
 import Modal from './Modal.vue'
 import { EXCHANGE_NAMES, MARKET_NAMES, symbolKey, type ExchangeId, type MarketId, type SymbolInfo } from '../types'
 import { app, setSymbol } from '../stores/app'
-import { activeList, inActiveList, toggleWatch } from '../stores/watchlist'
+import ListPicker from './ListPicker.vue'
 import { SOURCES, loadSymbols, withUsdVolume, type SymbolVolume } from '../exchanges'
 import { autoPrecision, fmtCompact, fmtPct, fmtPrice } from '../lib/format'
 
@@ -137,14 +137,7 @@ const MARKETS: { id: MarketId | 'all'; label: string }[] = [
         <span class="ss-num">{{ fmtPrice(it.last, autoPrecision(it.last)) }}</span>
         <span class="ss-num" :class="it.changePct >= 0 ? 'up' : 'down'">{{ fmtPct(it.changePct) }}</span>
         <span class="ss-num muted vol">{{ it.usdVolume ? '$' + fmtCompact(it.usdVolume) : '' }}</span>
-        <button
-          class="btn sm star"
-          :class="{ on: inActiveList(it) }"
-          :title="(inActiveList(it) ? 'Убрать из списка «' : 'В список «') + activeList.name + '»'"
-          @click.stop="toggleWatch(it)"
-        >
-          <Icon name="star" :size="16" />
-        </button>
+        <ListPicker :item="it" />
       </div>
       <div v-if="loading" class="ss-note"><div class="spinner" /></div>
       <p v-else-if="!results.length" class="ss-note muted">Ничего не найдено</p>

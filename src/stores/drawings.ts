@@ -1,7 +1,7 @@
 import { reactive, ref } from 'vue'
 import { load, persist } from '../lib/storage'
 
-export type DrawingType = 'trend' | 'ray' | 'hline' | 'hray' | 'vline' | 'cross' | 'rect' | 'fib' | 'long' | 'short' | 'measure'
+export type DrawingType = 'trend' | 'ray' | 'hline' | 'hray' | 'vline' | 'cross' | 'rect' | 'fib' | 'long' | 'short' | 'text' | 'measure'
 export type Dash = 'solid' | 'dashed' | 'dotted'
 /** На каких интервалах рисунок виден: на всех, только внутри дня (< 1Д) или только от дня и старше */
 export type Visibility = 'all' | 'intraday' | 'daily'
@@ -25,6 +25,17 @@ export interface Drawing {
   dash?: Dash
   text?: string
   vis?: Visibility
+  /** размер шрифта текста, px */
+  size?: number
+  /** текст на подложке */
+  bg?: boolean
+  /** заметка, собранная из чеклиста: одна на инструмент, обновляется на месте */
+  note?: boolean
+  /**
+   * Текст закреплён на экране: доли ширины и высоты окна вместо времени и цены.
+   * Такой текст не уезжает при прокрутке и стоит в одном углу на любом интервале.
+   */
+  pin?: { x: number; y: number }
 }
 
 /** Позиции по умолчанию видны только на внутридневных интервалах: на дневке они сливаются в точку */

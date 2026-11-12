@@ -171,7 +171,7 @@ function toggleScale(id: ScaleMode) {
 </script>
 
 <template>
-  <section class="pane" :class="{ active: isActive && paneCount > 1 && !app.maximized && !isPhone }" @pointerdown.capture="activate">
+  <section class="pane" :class="{ active: isActive && paneCount > 1 && !app.maximized && (!isPhone || app.phoneStack) }" @pointerdown.capture="activate">
     <div
       ref="host"
       class="chart-host"
@@ -188,6 +188,7 @@ function toggleScale(id: ScaleMode) {
       :legend="ctrl.legend.value"
       :precision="precision"
       :last-time="ctrl.ui.lastTime"
+      :tiny="isPhone && app.phoneStack && paneCount > 1"
       :pane-tops="ctrl.ui.paneTops"
       :ind-pane="ctrl.ui.indPane"
       :compact="isPhone || (paneCount > 1 && !app.maximized)"

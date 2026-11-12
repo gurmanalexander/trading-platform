@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { nextTick, onBeforeUnmount, ref } from 'vue'
 
-// Выпадающее меню. Позиционируется fixed — не обрезается прокручиваемой панелью.
+// Выпадающее меню. Рисуется прямо в body: так его не обрезает прокручиваемая панель
+// и не перекрывают элементы со своим слоем (например, закреплённые заголовки списков).
 const props = defineProps<{ align?: 'left' | 'right' }>()
 const open = ref(false)
 const root = ref<HTMLElement>()
@@ -21,7 +22,8 @@ function place() {
 }
 
 function onDocDown(e: Event) {
-  if (!root.value?.contains(e.target as Node)) close()
+  const t = e.target as Node
+  if (!root.value?.contains(t) && !menu.value?.contains(t)) close()
 }
 
 async function toggle() {
@@ -46,9 +48,11 @@ onBeforeUnmount(close)
 <template>
   <div ref="root" class="dropdown">
     <slot name="trigger" :toggle="toggle" :open="open" />
-    <div v-if="open" ref="menu" class="menu dropdown-menu scroll" :style="style">
-      <slot :close="close" />
-    </div>
+    <Teleport to="body">
+      <div v-if="open" ref="menu" class="menu dropdown-menu scroll" :style="style">
+        <slot :close="close" />
+      </div>
+    </Teleport>
   </div>
 </template>
 
@@ -60,7 +64,7 @@ onBeforeUnmount(close)
 }
 .dropdown-menu {
   position: fixed;
-  z-index: 60;
+  z-index: 90;
   max-height: calc(100dvh - 60px);
   max-width: calc(100vw - 12px);
 }

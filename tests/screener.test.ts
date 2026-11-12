@@ -130,18 +130,84 @@ describe('списки наблюдения', () => {
     expect(w.lists.all.map((l) => l.name)).toEqual(before)
   })
 
-  it('отметка направления переключается по кругу и участвует в фильтре', async () => {
+  it('отметка направления — общая для монеты, переключается по кругу и участвует в фильтре', async () => {
     const w = await import('../src/stores/watchlist')
-    const item = w.lists.all[0].items[0] ?? (w.lists.all[0].items.push(row('A', 1, 0, 0)), w.lists.all[0].items[0])
-    delete item.side
+    const item = row('MARKUSDT', 1, 0, 0)
+    w.setMark(item, null)
     w.cycleSide(item)
-    expect(item.side).toBe('long')
+    expect(w.markOf(item)).toBe('long')
+    // та же монета в другом месте (отбор, другой список) показывает ту же отметку
+    expect(w.sideOf(row('MARKUSDT', 5, 0, 0))).toBe('long')
     w.lists.filter = 'short'
     expect(w.matchesFilter(item)).toBe(false)
     w.cycleSide(item)
     expect(w.matchesFilter(item)).toBe(true)
     w.cycleSide(item)
-    expect(item.side).toBeUndefined()
+    expect(w.markOf(item)).toBeNull()
+    // неотмеченный инструмент проходит и фильтр шортов, и фильтр лонгов
+    expect(w.matchesFilter(item)).toBe(true)
+    w.lists.filter = 'long'
+    expect(w.matchesFilter(item)).toBe(true)
     w.lists.filter = 'all'
+  })
+
+  it('монета добавляется в выбранный список и убирается из него', async () => {
+    const w = await import('../src/stores/watchlist')
+    const item = row('PICKUSDT', 1, 0, 0)
+    const [a, b] = w.lists.all
+    w.toggleInList(a, item)
+    w.toggleInList(b, item)
+    expect(w.listsOf(item).map((l) => l.id)).toEqual([a.id, b.id])
+    w.toggleInList(a, item)
+    expect(w.listsOf(item).map((l) => l.id)).toEqual([b.id])
+    w.toggleInList(b, item)
+    expect(w.listsOf(item)).toHaveLength(0)
+  })
+})
+
+describe('чеклист', () => {
+  it('по умолчанию — шесть блоков; зависимые блоки скрыты, пока не выбран стиль', async () => {
+    const c = await import('../src/stores/checklist')
+    const blocks = c.defaultBlocks()
+    expect(blocks.map((b) => b.question)).toEqual(['Стиль торговли', 'Уровни', 'Предпосылки к пробою', 'Предпосылки к ЛП/Отбою', 'ТВХ', 'Ордер'])
+    const visible = (sel: Record<string, string[]>) => blocks.filter((b) => c.blockVisible(b, sel)).map((b) => b.id)
+    expect(visible({})).toEqual(['style', 'levels', 'entry', 'order'])
+    expect(visible({ style: ['Пробой'] })).toEqual(['style', 'levels', 'breakout', 'entry', 'order'])
+    expect(visible({ style: ['Отбой/ЛП'] })).toEqual(['style', 'levels', 'bounce', 'entry', 'order'])
+  })
+
+  it('текст: однострочные блоки через запятую, остальные списком, порядок — как в блоке', async () => {
+    const c = await import('../src/stores/checklist')
+    const blocks = c.defaultBlocks()
+    const sel = { style: ['Пробой'], levels: ['Зеркальный', 'Экстремум'], breakout: ['Хороший запас хода', 'Ближний ретест'], order: ['3к1'] }
+    expect(c.buildText(blocks, sel)).toBe(
+      'Стиль торговли: Пробой\n\nУровни: Экстремум, Зеркальный\n\nПредпосылки к пробою:\n - Ближний ретест\n - Хороший запас хода\n\nОрдер: 3к1',
+    )
+  })
+
+  it('ответы скрытого блока в текст не попадают', async () => {
+    const c = await import('../src/stores/checklist')
+    const text = c.buildText(c.defaultBlocks(), { style: ['Отбой/ЛП'], breakout: ['Ближний ретест'], bounce: ['V-формация'] })
+    expect(text).toBe('Стиль торговли: Отбой/ЛП\n\nПредпосылки к ЛП/Отбою:\n - V-формация')
+  })
+
+  it('один вариант заменяет прежний, несколько — накапливаются; повторный выбор снимает отметку', async () => {
+    const c = await import('../src/stores/checklist')
+    const [style, levels] = c.defaultBlocks()
+    const sel: Record<string, string[]> = {}
+    c.toggleAnswer(style, sel, 'Пробой')
+    c.toggleAnswer(style, sel, 'Отбой/ЛП')
+    expect(sel.style).toEqual(['Отбой/ЛП'])
+    c.toggleAnswer(style, sel, 'Отбой/ЛП')
+    expect(sel.style).toEqual([])
+    c.toggleAnswer(levels, sel, 'Излом')
+    c.toggleAnswer(levels, sel, 'Локальный')
+    c.toggleAnswer(levels, sel, 'Излом')
+    expect(sel.levels).toEqual(['Локальный'])
+  })
+
+  it('пустой выбор — пустой текст', async () => {
+    const c = await import('../src/stores/checklist')
+    expect(c.buildText(c.defaultBlocks(), {})).toBe('')
   })
 })

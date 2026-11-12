@@ -3,6 +3,7 @@ import { computed, reactive } from 'vue'
 import Icon from './Icon.vue'
 import Dropdown from './Dropdown.vue'
 import LayoutIcon from './LayoutIcon.vue'
+import PhoneMenu from './PhoneMenu.vue'
 import { EXCHANGE_NAMES, MARKET_NAMES } from '../types'
 import {
   app,
@@ -19,7 +20,6 @@ import {
   toggleFavTf,
   setLayout,
   sameLayout,
-  cyclePane,
   saveTemplate,
   updateTemplate,
   deleteTemplate,
@@ -130,9 +130,23 @@ function fullscreen() {
       </template>
     </Dropdown>
 
-    <span class="sep" />
+    <!-- телефон: вкладки окон раскладки; подпись — интервал окна -->
+    <div v-if="isPhone && paneCount > 1" class="pane-tabs" role="tablist" aria-label="Окна раскладки">
+      <button
+        v-for="i in paneCount"
+        :key="i"
+        role="tab"
+        :class="{ on: activeIndex === i - 1 }"
+        :title="`Окно ${i}: ${app.panes[i - 1].symbol.symbol}`"
+        @click="app.active = i - 1"
+      >
+        {{ getTf(app.panes[i - 1].tf).label }}
+      </button>
+    </div>
 
-    <Dropdown>
+    <span v-if="!isPhone" class="sep" />
+
+    <Dropdown v-if="!isPhone">
       <template #trigger="{ toggle }">
         <button class="btn" title="Вид графика" @click="toggle"><Icon :name="chartType.icon" /></button>
       </template>
@@ -149,18 +163,15 @@ function fullscreen() {
       </template>
     </Dropdown>
 
-    <button class="btn" title="Индикаторы (/)" @click="app.indicatorsOpen = true">
+    <button v-if="!isPhone" class="btn" title="Индикаторы (/)" @click="app.indicatorsOpen = true">
       <Icon name="fx" /><span class="wide">Индикаторы</span>
     </button>
     <button v-if="!isPhone" class="btn" title="Оповещения (Alt+A)" @click="showPanel('alerts')"><Icon name="bell" /></button>
     <button v-if="isPhone" class="btn" :class="{ on: app.drawBarOpen }" title="Рисование" @click="app.drawBarOpen = !app.drawBarOpen">
       <Icon name="pencil" />
     </button>
-    <button v-if="isPhone && paneCount > 1" class="btn pane-switch" title="Следующее окно раскладки" @click="cyclePane(1)">
-      {{ activeIndex + 1 }}/{{ paneCount }}
-    </button>
-
     <span class="grow" />
+    <PhoneMenu v-if="isPhone" />
 
     <Dropdown v-if="!isPhone" align="right">
       <template #trigger="{ toggle }">
@@ -219,7 +230,7 @@ function fullscreen() {
       </template>
     </Dropdown>
 
-    <Dropdown align="right">
+    <Dropdown v-if="!isPhone" align="right">
       <template #trigger="{ toggle }">
         <button class="btn" title="Шаблоны: раскладка и настройки всех окон" @click="toggle">
           <Icon name="bookmark" /><span v-if="template" class="wide tpl-name">{{ template.name }}</span>
@@ -259,7 +270,7 @@ function fullscreen() {
       </template>
     </Dropdown>
 
-    <Dropdown align="right">
+    <Dropdown v-if="!isPhone" align="right">
       <template #trigger="{ toggle }">
         <button class="btn" title="Тема" @click="toggle"><Icon :name="theme === 'dark' ? 'moon' : 'sun'" /></button>
       </template>
@@ -302,9 +313,26 @@ function fullscreen() {
   padding: 0 7px;
   min-width: 0;
 }
-.pane-switch {
+.pane-tabs {
+  display: flex;
+  flex: none;
+  margin-left: 4px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.pane-tabs button {
+  height: calc(var(--ctl) - 6px);
+  padding: 0 9px;
   font-size: 12px;
   color: var(--muted);
+}
+.pane-tabs button + button {
+  border-left: 1px solid var(--border);
+}
+.pane-tabs button.on {
+  color: var(--accent);
+  background: var(--accent-soft);
 }
 .sep {
   width: 1px;

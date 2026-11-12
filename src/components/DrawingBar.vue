@@ -2,7 +2,7 @@
 import { computed } from 'vue'
 import Icon from './Icon.vue'
 import { DRAW_COLORS, defaultVisibility, type Dash, type Visibility } from '../stores/drawings'
-import { hasLineStyle, hasText, isPosition, type DrawingsLayer } from '../chart/drawings'
+import { hasLineStyle, hasText, isPosition, TEXT_SIZES, type DrawingsLayer } from '../chart/drawings'
 import { riskReward } from '../chart/position'
 import { toast } from '../stores/app'
 
@@ -12,11 +12,14 @@ const props = defineProps<{ layer: DrawingsLayer; maxX: number; precision: numbe
 const d = computed(() => props.layer.selected())
 const styled = computed(() => !!d.value && hasLineStyle(d.value.type))
 const position = computed(() => !!d.value && isPosition(d.value.type) && d.value.pts.length >= 3)
+const isText = computed(() => d.value?.type === 'text')
+// цвет выбирается и у линий, и у текста
+const colored = computed(() => styled.value || isText.value)
 const pos = computed(() => {
   const a = props.layer.anchor.value
   if (!a) return null
   const width = position.value ? 330 : 250
-  return { left: Math.max(6, Math.min(props.maxX - width, a.x)) + 'px', top: Math.max(34, a.y - (styled.value ? 84 : position.value ? 108 : 46)) + 'px' }
+  return { left: Math.max(6, Math.min(props.maxX - width, a.x)) + 'px', top: Math.max(34, a.y - (colored.value ? 84 : position.value ? 108 : 46)) + 'px' }
 })
 
 const WIDTHS = [1, 2, 3, 4]
@@ -70,7 +73,7 @@ function duplicate() {
 
 <template>
   <div v-if="d && pos" class="dbar" :style="pos" @pointerdown.stop @keydown.stop>
-    <div v-if="styled" class="row">
+    <div v-if="colored" class="row">
       <button
         v-for="c in DRAW_COLORS"
         :key="c"
@@ -128,6 +131,17 @@ function duplicate() {
         <span class="sep" />
         <button v-if="hasText(d.type)" class="btn sm" :class="{ on: !!d.text }" title="Подпись" @click="editText"><Icon name="text" :size="15" /></button>
         <button class="btn sm" title="Сделать стилем по умолчанию для этого инструмента" @click="makeDefault"><Icon name="pin" :size="15" /></button>
+      </template>
+      <template v-if="isText">
+        <button class="btn sm" title="Изменить текст (двойной щелчок)" @click="layer.editText(d)"><Icon name="pencil" :size="15" /></button>
+        <select class="field vis" title="Размер шрифта" :value="d.size ?? 12" @change="layer.setTextStyle({ size: Number(($event.target as HTMLSelectElement).value) })">
+          <option v-for="n in TEXT_SIZES" :key="n" :value="n">{{ n }} px</option>
+        </select>
+        <button class="btn sm" :class="{ on: !!d.bg }" title="Подложка под текстом" @click="layer.setTextStyle({ bg: !d.bg })"><Icon name="rect" :size="15" /></button>
+        <button class="btn sm" :class="{ on: !!d.pin }" title="Закрепить на экране: текст не уезжает при прокрутке и виден в том же месте на всех интервалах" @click="layer.togglePin()">
+          <Icon name="pin" :size="15" />
+        </button>
+        <span class="sep" />
       </template>
       <template v-if="position">
         <b class="kind" :class="d.type === 'long' ? 'up' : 'down'">{{ d.type === 'long' ? 'Лонг' : 'Шорт' }}</b>

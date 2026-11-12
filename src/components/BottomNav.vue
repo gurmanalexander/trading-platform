@@ -47,6 +47,15 @@ const activeAlerts = computed(() => alerts.filter((a) => a.active).length)
 .bnav button.on {
   color: var(--accent);
 }
+/* телефон набок: высота на вес золота — оставляем одни значки */
+@media (max-height: 499px) {
+  .bnav button {
+    height: 36px;
+  }
+  .bnav button > span:last-child {
+    display: none;
+  }
+}
 .ico {
   position: relative;
 }

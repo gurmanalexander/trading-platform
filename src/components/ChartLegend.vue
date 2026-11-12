@@ -21,6 +21,8 @@ const props = defineProps<{
   compact: boolean
   paneTops: number[]
   indPane: Record<string, number>
+  /** совсем мало места (несколько окон на телефоне): только самое нужное */
+  tiny: boolean
 }>()
 
 const tf = computed(() => getTf(props.pane.tf))
@@ -100,22 +102,24 @@ function pickSymbol() {
         <span class="muted">· {{ tf.label }} · {{ EXCHANGE_NAMES[pane.symbol.exchange] }} {{ MARKET_NAMES[pane.symbol.market] }}</span>
       </button>
       <span v-if="legend" class="ohlc" :class="legend.up ? 'up' : 'down'">
-        <span><i>О</i>{{ fmtPrice(legend.o, precision) }}</span>
-        <span><i>В</i>{{ fmtPrice(legend.h, precision) }}</span>
-        <span><i>Н</i>{{ fmtPrice(legend.l, precision) }}</span>
-        <span><i>З</i>{{ fmtPrice(legend.c, precision) }}</span>
+        <template v-if="!tiny">
+          <span><i>О</i>{{ fmtPrice(legend.o, precision) }}</span>
+          <span><i>В</i>{{ fmtPrice(legend.h, precision) }}</span>
+          <span><i>Н</i>{{ fmtPrice(legend.l, precision) }}</span>
+        </template>
+        <span><i v-if="!tiny">З</i>{{ fmtPrice(legend.c, precision) }}</span>
         <span :class="legend.chg >= 0 ? 'up' : 'down'">{{ fmtPct(legend.chgPct) }}</span>
       </span>
-      <span v-if="countdown" class="muted countdown" title="До закрытия свечи">{{ countdown }}</span>
+      <span v-if="countdown && !tiny" class="muted countdown" title="До закрытия свечи">{{ countdown }}</span>
     </div>
     <div
       v-if="day"
       class="legend-atr"
       title="ATR — средний диапазон 5 дневных свечей без аномально больших и маленьких. Пройдено за сегодня: от открытия дня / по размаху дня. Стоп — 10% ATR."
     >
-      <span><i>ATR</i>{{ day.atr }} <i>({{ day.pct }}%)</i></span>
-      <span><i>пройдено</i><b :class="day.fromOpenTone">{{ day.fromOpen }}%</b> / <b :class="day.traveledTone">{{ day.traveled }}%</b></span>
-      <span><i>стоп</i>{{ day.stop }}</span>
+      <span><i>ATR</i>{{ day.atr }}<i v-if="!compact"> ({{ day.pct }}%)</i></span>
+      <span><i v-if="!compact">пройдено</i><b :class="day.fromOpenTone">{{ day.fromOpen }}%</b> / <b :class="day.traveledTone">{{ day.traveled }}%</b></span>
+      <span v-if="!tiny"><i>стоп</i>{{ day.stop }}</span>
     </div>
     <div v-if="mainRows.length" class="legend-rows">
       <button v-if="mainRows.length > 1" class="collapse muted" :title="collapsed ? 'Показать индикаторы' : 'Свернуть индикаторы'" @click="collapsed = !collapsed">
