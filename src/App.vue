@@ -6,7 +6,7 @@ import ChartGrid from './components/ChartGrid.vue'
 import SidePanel from './components/SidePanel.vue'
 import BottomNav from './components/BottomNav.vue'
 import Toasts from './components/Toasts.vue'
-import { app, activeIndex, activePane, isPhone, modalOpen, paneCount, theme, cyclePane, openSearch, showPanel, toast, type Tool } from './stores/app'
+import { app, activeIndex, activePane, isPhone, modalOpen, paneCount, theme, cyclePane, openSearch, showPanel, togglePanel, toast, type Tool } from './stores/app'
 import { addWatch, activeList } from './stores/watchlist'
 import { clipboard, redo, selection, undo } from './stores/drawings'
 import { stepSymbol } from './stores/screener'
@@ -23,7 +23,6 @@ const IntervalDialog = defineAsyncComponent(() => import('./components/IntervalD
 const GoToDialog = defineAsyncComponent(() => import('./components/GoToDialog.vue'))
 const HotkeysDialog = defineAsyncComponent(() => import('./components/HotkeysDialog.vue'))
 const TextDialog = defineAsyncComponent(() => import('./components/TextDialog.vue'))
-const ChecklistDialog = defineAsyncComponent(() => import('./components/ChecklistDialog.vue'))
 const TradeTextDialog = defineAsyncComponent(() => import('./components/TradeTextDialog.vue'))
 const ColorsDialog = defineAsyncComponent(() => import('./components/ColorsDialog.vue'))
 const TransferDialog = defineAsyncComponent(() => import('./components/TransferDialog.vue'))
@@ -79,6 +78,7 @@ function onAlt(e: KeyboardEvent): boolean {
   }
   if (ALT_TOOLS[e.code]) app.tool = ALT_TOOLS[e.code]
   else if (e.code === 'KeyW') addToWatchlist()
+  else if (e.code === 'KeyK') togglePanel('checklist')
   else if (e.code === 'KeyA') {
     showPanel('alerts')
     app.alertFocus++
@@ -296,7 +296,6 @@ onBeforeUnmount(() => {
     <GoToDialog v-if="app.gotoOpen" />
     <HotkeysDialog v-if="app.hotkeysOpen" />
     <TextDialog v-if="app.textEdit" :key="app.textEdit.id ?? 'new'" />
-    <ChecklistDialog v-if="app.checklistOpen" />
     <TradeTextDialog v-if="app.tradeTextOpen" />
     <ColorsDialog v-if="app.colorsOpen" />
     <TransferDialog v-if="app.transfer" />

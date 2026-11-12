@@ -6,7 +6,7 @@ import { DEFAULT_FAVORITE_TFS, getTf, isTf, TIMEFRAMES } from '../lib/timeframes
 
 export type ChartType = 'candles' | 'hollow' | 'bars' | 'heikin' | 'line' | 'area'
 export type ScaleMode = 'normal' | 'log' | 'percent'
-export type PanelId = 'screener' | 'watchlist' | 'alerts'
+export type PanelId = 'screener' | 'watchlist' | 'checklist' | 'alerts'
 export type MobileTab = 'chart' | PanelId
 export type Tool = 'cursor' | 'trend' | 'ray' | 'hline' | 'hray' | 'vline' | 'cross' | 'rect' | 'fib' | 'long' | 'short' | 'text' | 'measure'
 export type Theme = 'dark' | 'light'
@@ -194,7 +194,7 @@ interface Saved {
 }
 
 const saved = load<Saved>('app', {})
-const PANELS: PanelId[] = ['screener', 'watchlist', 'alerts']
+const PANELS: PanelId[] = ['screener', 'watchlist', 'checklist', 'alerts']
 
 function sanitizeTemplates(raw: unknown): Template[] {
   if (!Array.isArray(raw)) return []
@@ -263,7 +263,6 @@ export const app = reactive({
   alertFocus: 0,
   /** окно ввода текста: новый текст в точке pt либо правка рисунка id */
   textEdit: null as null | { pane: number; id: string | null; pt: { t: number; p: number } | null; text: string },
-  checklistOpen: false,
   tradeTextOpen: false,
   colorsOpen: false,
   /** окно переноса настроек; code — данные, пришедшие по ссылке с другого устройства */
@@ -319,7 +318,7 @@ export const paneCount = computed(() => layoutCount(app.layout))
 export const activeIndex = computed(() => Math.min(app.active, paneCount.value - 1))
 export const activePane = computed(() => app.panes[activeIndex.value])
 export const modalOpen = computed(
-  () => !!(app.search || app.indicatorsOpen || app.indSettings || app.intervalInput || app.hotkeysOpen || app.gotoOpen || app.textEdit || app.checklistOpen || app.tradeTextOpen || app.colorsOpen || app.transfer),
+  () => !!(app.search || app.indicatorsOpen || app.indSettings || app.intervalInput || app.hotkeysOpen || app.gotoOpen || app.textEdit || app.tradeTextOpen || app.colorsOpen || app.transfer),
 )
 
 // ---------- действия ----------

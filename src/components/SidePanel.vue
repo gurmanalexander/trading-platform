@@ -2,6 +2,7 @@
 import Screener from './Screener.vue'
 import Watchlist from './Watchlist.vue'
 import AlertsPanel from './AlertsPanel.vue'
+import ChecklistPanel from './ChecklistPanel.vue'
 import { app, type PanelId } from '../stores/app'
 
 defineProps<{ tab: PanelId; tabs: boolean }>()
@@ -9,6 +10,7 @@ defineProps<{ tab: PanelId; tabs: boolean }>()
 const TABS: { id: PanelId; label: string }[] = [
   { id: 'screener', label: 'Отбор' },
   { id: 'watchlist', label: 'Список' },
+  { id: 'checklist', label: 'Чеклист' },
   { id: 'alerts', label: 'Оповещения' },
 ]
 </script>
@@ -23,6 +25,7 @@ const TABS: { id: PanelId; label: string }[] = [
     <div class="side-body">
       <Screener v-if="tab === 'screener'" />
       <Watchlist v-else-if="tab === 'watchlist'" />
+      <ChecklistPanel v-else-if="tab === 'checklist'" />
       <AlertsPanel v-else />
     </div>
   </aside>
@@ -42,7 +45,10 @@ const TABS: { id: PanelId; label: string }[] = [
   border-bottom: 1px solid var(--border);
 }
 .side-tabs button {
-  flex: 1;
+  /* ширина по подписи: четыре вкладки равной ширины в узкой панели не помещаются */
+  flex: 1 1 auto;
+  padding: 0 6px;
+  white-space: nowrap;
   height: 38px;
   color: var(--muted);
   border-bottom: 2px solid transparent;

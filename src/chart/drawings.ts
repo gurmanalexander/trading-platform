@@ -249,6 +249,11 @@ export class DrawingsLayer {
   private geometry(d: Drawing, w: number, h: number): Geometry | null {
     if (d.pin) {
       const at = { x: d.pin.x * w, y: d.pin.y * h }
+      if (d.note) {
+        // в окне поменьше легенда занимает больше строк — заметка чеклиста не должна под неё уходить
+        const legend = this.host.el.parentElement?.querySelector<HTMLElement>('.legend')
+        if (legend && at.x < legend.offsetWidth + 8) at.y = Math.max(at.y, legend.offsetHeight + 10)
+      }
       return { sp: [at], handles: [at] }
     }
     const s = d.pts.map((p) => this.toScreen(p))

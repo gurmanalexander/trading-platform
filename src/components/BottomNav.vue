@@ -8,6 +8,7 @@ const TABS: { id: MobileTab; label: string; icon: string }[] = [
   { id: 'chart', label: 'График', icon: 'chart' },
   { id: 'screener', label: 'Отбор', icon: 'filter' },
   { id: 'watchlist', label: 'Список', icon: 'list' },
+  { id: 'checklist', label: 'Чеклист', icon: 'checklist' },
   { id: 'alerts', label: 'Оповещения', icon: 'bell' },
 ]
 const activeAlerts = computed(() => alerts.filter((a) => a.active).length)

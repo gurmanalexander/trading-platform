@@ -1,35 +1,74 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import Icon from './Icon.vue'
-import Modal from './Modal.vue'
-import { symbolKey } from '../types'
-import { app, activeIndex, activePane, toast } from '../stores/app'
+import SideMark from './SideMark.vue'
+import { symbolKey, type SymbolRef } from '../types'
+import { app, activeIndex, activePane, isPhone, setSymbol, toast } from '../stores/app'
 import { checklist, blockVisible, buildText, toggleAnswer, addBlock, removeBlock, moveBlock, resetBlocks, type CheckBlock } from '../stores/checklist'
+import { drawings } from '../stores/drawings'
 import { chartAt } from '../chart/registry'
 
-// Чеклист сделки: отмеченное собирается в заметку на графике. Вторая вкладка — настройка своих блоков.
-const tab = ref<'fill' | 'setup'>('fill')
-const key = computed(() => symbolKey(activePane.value.symbol))
+// Чеклист сделки — отдельный раздел: заполняется рядом с графиком, помнит отмеченное по каждой монете,
+// текст можно скопировать или держать заметкой на графике. Шестерёнка — настройка своих блоков.
+const mode = ref<'fill' | 'setup'>('fill')
+const symbol = computed(() => activePane.value.symbol)
+const key = computed(() => symbolKey(symbol.value))
 // отмеченное запоминается по инструменту
 const sel = computed(() => (checklist.selections[key.value] ??= {}))
 const text = computed(() => buildText(checklist.blocks, sel.value))
 const shown = computed(() => checklist.blocks.filter((b) => blockVisible(b, sel.value)))
+const onChart = computed(() => (drawings[key.value] ?? []).some((d) => d.note))
+const checked = computed(() => shown.value.reduce((n, b) => n + b.answers.filter((a) => (sel.value[b.id] ?? []).includes(a)).length, 0))
 
-function close() {
-  app.checklistOpen = false
+/** Монеты с заполненным чеклистом — чтобы вернуться к любой из них */
+const filled = computed(() => {
+  const out: SymbolRef[] = []
+  for (const [k, v] of Object.entries(checklist.selections)) {
+    if (!buildText(checklist.blocks, v)) continue
+    const [exchange, market, name] = k.split(':')
+    if (name) out.push({ exchange, market, symbol: name } as SymbolRef)
+  }
+  return out
+})
+
+/** Ставит, обновляет или (при пустом тексте) убирает заметку на графике текущей монеты */
+function syncNote(value: string) {
+  chartAt(activeIndex.value)?.draw.upsertNote(value)
+}
+
+function toggle(b: CheckBlock, answer: string) {
+  toggleAnswer(b, sel.value, answer)
+  if (checklist.auto) syncNote(text.value)
+}
+
+function setAuto(on: boolean) {
+  checklist.auto = on
+  if (on) syncNote(text.value)
 }
 
 function place() {
-  const layer = chartAt(activeIndex.value)?.draw
-  if (!layer) return
-  layer.upsertNote(text.value)
-  toast(text.value ? 'Заметка поставлена на график' : 'Заметка убрана с графика')
-  close()
+  syncNote(text.value)
+  if (isPhone.value) app.mobileTab = 'chart'
+}
+
+async function copy() {
+  try {
+    await navigator.clipboard.writeText(text.value)
+    toast('Текст чеклиста скопирован')
+  } catch {
+    toast('Браузер не дал записать в буфер обмена', 'error')
+  }
 }
 
 function reset() {
   delete checklist.selections[key.value]
-  chartAt(activeIndex.value)?.draw.upsertNote('')
+  syncNote('')
+}
+
+function open(ref: SymbolRef) {
+  const keep = app.mobileTab
+  setSymbol(ref)
+  app.mobileTab = keep
 }
 
 // ---------- настройка ----------
@@ -53,35 +92,52 @@ function restore() {
 </script>
 
 <template>
-  <Modal :title="'Чеклист · ' + activePane.symbol.symbol" :width="560" @close="close">
-    <div class="tabs" role="tablist">
-      <button role="tab" :class="{ on: tab === 'fill' }" @click="tab = 'fill'">Заполнить</button>
-      <button role="tab" :class="{ on: tab === 'setup' }" @click="tab = 'setup'">Настроить</button>
-    </div>
+  <div class="cl">
+    <header class="cl-head">
+      <template v-if="mode === 'fill'">
+        <SideMark :item="symbol" />
+        <b class="sym">{{ symbol.symbol }}</b>
+        <span class="muted">{{ checked ? 'отмечено ' + checked : 'ничего не отмечено' }}</span>
+      </template>
+      <b v-else class="sym">Настройка блоков</b>
+      <span class="grow" />
+      <button class="btn sm" :class="{ on: mode === 'setup' }" :title="mode === 'setup' ? 'Вернуться к чеклисту' : 'Настроить блоки и варианты'" @click="mode = mode === 'setup' ? 'fill' : 'setup'">
+        <Icon :name="mode === 'setup' ? 'check' : 'gear'" :size="16" />
+      </button>
+    </header>
 
-    <template v-if="tab === 'fill'">
-      <div class="body scroll">
+    <template v-if="mode === 'fill'">
+      <div class="cl-body scroll">
         <section v-for="b in shown" :key="b.id" class="block">
           <h3>{{ b.question }}</h3>
           <div class="answers" :class="{ line: b.singleLine }">
             <label v-for="a in b.answers" :key="a" class="answer" :class="{ on: (sel[b.id] ?? []).includes(a) }">
-              <input :type="b.type" :name="'cl-' + b.id" :checked="(sel[b.id] ?? []).includes(a)" @click="toggleAnswer(b, sel, a)" />
+              <input :type="b.type" :name="'cl-' + b.id" :checked="(sel[b.id] ?? []).includes(a)" @click="toggle(b, a)" />
               <span>{{ a }}</span>
             </label>
           </div>
         </section>
-        <p v-if="!checklist.blocks.length" class="muted">Блоков нет. Добавьте их на вкладке «Настроить».</p>
+        <p v-if="!checklist.blocks.length" class="muted">Блоков нет. Добавьте их в настройке (шестерёнка).</p>
         <pre v-if="text" class="preview">{{ text }}</pre>
+        <div v-if="filled.length" class="filled">
+          <span class="muted">Заполнены:</span>
+          <button v-for="f in filled" :key="symbolKey(f)" class="chip" :class="{ on: symbolKey(f) === key }" @click="open(f)">{{ f.symbol.replace(/USDT$/, '') }}</button>
+        </div>
       </div>
       <footer class="foot">
-        <button class="btn" title="Снять все отметки и убрать заметку с графика" @click="reset">Сбросить</button>
+        <label class="check" title="Отмеченное сразу появляется заметкой на графике этой монеты и обновляется при каждом изменении">
+          <input type="checkbox" :checked="checklist.auto" @change="setAuto(($event.target as HTMLInputElement).checked)" />на графике
+        </label>
+        <button v-if="!checklist.auto && text" class="btn sm" @click="place">{{ onChart ? 'Обновить' : 'На график' }}</button>
+        <button v-if="!checklist.auto && onChart" class="btn sm" title="Убрать заметку с графика, отметки останутся" @click="syncNote('')">Убрать</button>
         <span class="grow" />
-        <button class="btn primary" @click="place">{{ text ? 'На график' : 'Убрать с графика' }}</button>
+        <button class="btn sm" :disabled="!text" title="Скопировать текст чеклиста" @click="copy"><Icon name="copy" :size="15" /></button>
+        <button class="btn sm" :disabled="!checked && !onChart" title="Снять все отметки у этой монеты и убрать заметку с графика" @click="reset">Сбросить</button>
       </footer>
     </template>
 
     <template v-else>
-      <div class="body scroll">
+      <div class="cl-body scroll">
         <section v-for="(b, i) in checklist.blocks" :key="b.id" class="edit">
           <div class="edit-head">
             <input v-model="b.question" class="field" placeholder="Вопрос" />
@@ -113,36 +169,64 @@ function restore() {
         </section>
       </div>
       <footer class="foot">
-        <button class="btn" @click="restore">По умолчанию</button>
+        <button class="btn sm" @click="restore">По умолчанию</button>
         <span class="grow" />
-        <button class="btn" @click="addBlock"><Icon name="plus" :size="16" />Блок</button>
-        <button class="btn primary" @click="tab = 'fill'">Готово</button>
+        <button class="btn sm" @click="addBlock"><Icon name="plus" :size="15" />Блок</button>
+        <button class="btn sm primary" @click="mode = 'fill'">Готово</button>
       </footer>
     </template>
-  </Modal>
+  </div>
 </template>
 
 <style scoped>
-.tabs {
+.cl {
   display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+.cl-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 38px;
+  padding: 0 8px 0 10px;
   border-bottom: 1px solid var(--border);
   flex: none;
 }
-.tabs button {
-  flex: 1;
-  height: 36px;
-  color: var(--muted);
-  border-bottom: 2px solid transparent;
+.sym {
+  white-space: nowrap;
 }
-.tabs button.on {
-  color: var(--text);
-  border-bottom-color: var(--accent);
+.cl-head .muted {
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.body {
+.filled {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 14px;
+  font-size: 12px;
+}
+.chip {
+  padding: 3px 9px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+}
+.chip:hover {
+  background: var(--hover);
+}
+.chip.on {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.cl-body {
   flex: 1;
-  min-height: 120px;
-  max-height: 62vh;
-  padding: 6px 14px 12px;
+  min-height: 0;
+  padding: 2px 12px 14px;
 }
 .block h3 {
   margin: 10px 0 6px;
@@ -205,8 +289,9 @@ function restore() {
 .foot {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 8px 10px;
   border-top: 1px solid var(--border);
   flex: none;
 }
@@ -246,15 +331,13 @@ function restore() {
   -webkit-user-select: text;
 }
 .check {
+  white-space: nowrap;
   display: inline-flex;
   align-items: center;
   gap: 6px;
   cursor: pointer;
 }
 @media (max-width: 719px) {
-  .body {
-    max-height: none;
-  }
   .answer {
     padding: 9px 8px;
   }

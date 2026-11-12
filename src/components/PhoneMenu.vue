@@ -57,7 +57,6 @@ function saveNew() {
     <template #default="{ close }">
       <div class="pm">
         <button class="menu-item" @click="(app.indicatorsOpen = true), close()"><Icon name="fx" :size="16" />Индикаторы</button>
-        <button class="menu-item" @click="(app.checklistOpen = true), close()"><Icon name="checklist" :size="16" />Чеклист сделки</button>
         <button class="menu-item" @click="(app.tradeTextOpen = true), close()"><Icon name="paste" :size="16" />Вставить текстом</button>
         <button class="menu-item" @click="toList(), close()"><Icon name="star" :size="16" />В список «{{ activeList.name }}»</button>
         <button class="menu-item" @click="(app.gotoOpen = true), close()"><Icon name="skip" :size="16" />Перейти к дате</button>

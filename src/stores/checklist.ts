@@ -2,8 +2,8 @@ import { reactive } from 'vue'
 import { load, persist } from '../lib/storage'
 
 /**
- * Чеклист сделки: блоки вопросов с вариантами. Отмеченное собирается в текст и ставится
- * заметкой на график. Набор блоков каждый настраивает под себя.
+ * Чеклист сделки: блоки вопросов с вариантами. Отмеченное запоминается по монетам и собирается
+ * в текст — его можно скопировать или держать заметкой на графике. Набор блоков каждый настраивает под себя.
  */
 export interface CheckBlock {
   id: string
@@ -105,7 +105,10 @@ export const checklist = reactive({
   blocks: sanitize(load<unknown>('checklist', null)),
   /** отмеченное по инструментам: ключ инструмента -> id блока -> ответы */
   selections: load<Record<string, Selection>>('checklistSel', {}),
+  /** отмеченное сразу ставится заметкой на график и обновляется при каждом изменении */
+  auto: load<boolean>('checklistAuto', true),
 })
+persist('checklistAuto', () => checklist.auto, () => checklist.auto)
 persist('checklist', () => checklist.blocks, () => checklist.blocks)
 persist('checklistSel', () => checklist.selections, () => checklist.selections)
 
