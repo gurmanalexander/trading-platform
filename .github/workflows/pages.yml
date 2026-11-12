@@ -1,6 +1,6 @@
 name: Тесты, сборка и публикация на GitHub Pages
 
-# Тесты и сборка идут на каждый push. Публикуется только ветка master.
+# Тесты и сборка идут на каждый push. Публикуется только ветка main.
 on:
   push:
   workflow_dispatch:
@@ -24,14 +24,14 @@ jobs:
       - run: npm run build
 
       - name: Передать сборку на публикацию
-        if: github.ref_name == 'master'
+        if: github.ref_name == 'main'
         uses: actions/upload-pages-artifact@v5
         with:
           path: dist
 
   deploy:
     needs: build
-    if: github.ref_name == 'master'
+    if: github.ref_name == 'main'
     runs-on: ubuntu-latest
     permissions:
       pages: write
@@ -44,10 +44,5 @@ jobs:
       group: pages
       cancel-in-progress: false
     steps:
-      # Включает Pages в настройках репозитория, если он ещё не включён
-      - uses: actions/configure-pages@v6
-        with:
-          enablement: true
-
       - id: deployment
         uses: actions/deploy-pages@v5

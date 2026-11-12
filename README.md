@@ -62,7 +62,7 @@ server {
 ### GitHub Pages
 
 В репозитории есть workflow `.github/workflows/pages.yml`: на каждый push он запускает тесты и сборку,
-а с ветки `master` ещё и публикует `dist/` на GitHub Pages.
+а с ветки `main` ещё и публикует `dist/` на GitHub Pages.
 
 Включается один раз: **Settings → Pages → Build and deployment → Source: GitHub Actions**.
 После этого сайт появится по адресу `https://<пользователь>.github.io/<репозиторий>/`.
