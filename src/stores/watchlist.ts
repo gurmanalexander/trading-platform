@@ -48,11 +48,9 @@ function defaults(): { all: WatchList[]; activeId: string } {
   return { all, activeId: all[5].id }
 }
 
-function initial() {
-  const saved = load<{ all?: (Omit<WatchList, 'items'> & { items: (SymbolRef & { side?: Side })[] })[]; activeId?: string; filter?: SideFilter; marks?: Record<string, Side>; cols?: ListCol[] } | null>(
-    'lists',
-    null,
-  )
+type SavedLists = { all?: (Omit<WatchList, 'items'> & { items: (SymbolRef & { side?: Side })[] })[]; activeId?: string; filter?: SideFilter; marks?: Record<string, Side>; cols?: ListCol[] } | null
+
+function parse(saved: SavedLists) {
   const marks: Record<string, Side> = {}
   for (const [k, v] of Object.entries(saved?.marks ?? {})) if (v === 'long' || v === 'short') marks[k] = v
   // раньше отметка хранилась в строке списка — переносим её на монету
@@ -77,7 +75,7 @@ function initial() {
  * Списки наблюдения. activeId — текущий список: в него добавляет Alt+W.
  * marks — отметки направления по монетам: одна и та же в отборе, поиске и всех списках.
  */
-export const lists = reactive(initial())
+export const lists = reactive(parse(load<SavedLists>('lists', null)))
 persist('lists', lists, () => lists)
 
 export const activeList = computed(() => lists.all.find((l) => l.id === lists.activeId) ?? lists.all[0])
@@ -178,4 +176,24 @@ export function deleteList(id: string) {
   if (i < 0) return
   lists.all.splice(i, 1)
   if (lists.activeId === id) lists.activeId = lists.all[0].id
+}
+
+// ---------- синхронизация между устройствами ----------
+
+/** Что уходит на другие устройства: сами списки и отметки. Свёрнутость, фильтр и столбцы — у каждого свои */
+export function exportLists() {
+  return { all: lists.all.map((l) => ({ id: l.id, name: l.name, color: l.color, items: l.items })), activeId: lists.activeId, marks: lists.marks }
+}
+
+/** Принимает списки с другого устройства, сохраняя местное состояние (какие списки свёрнуты) */
+export function importLists(raw: unknown) {
+  const next = parse(raw as SavedLists)
+  // пустой или битый набор не принимаем: без списков приложение не работает
+  if (!raw || !Array.isArray((raw as { all?: unknown[] }).all) || !(raw as { all: unknown[] }).all.length || !next.all.length) return
+  const collapsed = new Set(lists.all.filter((l) => l.collapsed).map((l) => l.id))
+  for (const l of next.all) l.collapsed = collapsed.has(l.id)
+  lists.all.splice(0, lists.all.length, ...next.all)
+  for (const k of Object.keys(lists.marks)) delete lists.marks[k]
+  Object.assign(lists.marks, next.marks)
+  lists.activeId = next.activeId
 }

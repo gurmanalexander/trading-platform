@@ -15,6 +15,8 @@ import { chartAt } from './chart/registry'
 import { applyPastedText, applySetup, setupTextFromUrl } from './chart/setup'
 import { applyShare } from './chart/share'
 import { decodeShare } from './lib/share'
+// синхронизация устройств запускается сама, если была включена
+import './stores/cloud'
 import { snapshotAll } from './chart/snapshot'
 import { parseSetup } from './lib/setup'
 
@@ -29,6 +31,7 @@ const TextDialog = defineAsyncComponent(() => import('./components/TextDialog.vu
 const TradeTextDialog = defineAsyncComponent(() => import('./components/TradeTextDialog.vue'))
 const ColorsDialog = defineAsyncComponent(() => import('./components/ColorsDialog.vue'))
 const Dashboard = defineAsyncComponent(() => import('./components/Dashboard.vue'))
+const SyncDialog = defineAsyncComponent(() => import('./components/SyncDialog.vue'))
 const ShareDialog = defineAsyncComponent(() => import('./components/ShareDialog.vue'))
 const ScreenerFilterDialog = defineAsyncComponent(() => import('./components/ScreenerFilterDialog.vue'))
 const TransferDialog = defineAsyncComponent(() => import('./components/TransferDialog.vue'))
@@ -262,6 +265,13 @@ function openFromUrl() {
     app.transfer = { code: location.hash.slice(8) }
     return
   }
+  // ссылка подключения к синхронизации устройств
+  if (location.hash.startsWith('#sync=')) {
+    app.syncCode = location.hash.slice(6)
+    app.syncOpen = true
+    history.replaceState(null, '', new URL('./', location.href).pathname)
+    return
+  }
   // ссылка «Поделиться» с несколькими уровнями или позициями
   if (location.hash.startsWith('#share=')) {
     const pack = decodeShare(location.hash.slice(7))
@@ -280,11 +290,14 @@ function openFromUrl() {
 
 onMounted(() => {
   openFromUrl()
+  // ссылку могли открыть в уже работающем приложении — тогда меняется только часть адреса после решётки
+  window.addEventListener('hashchange', openFromUrl)
   window.addEventListener('keydown', onKey)
   document.addEventListener('copy', onCopy)
   document.addEventListener('paste', onPaste)
 })
 onBeforeUnmount(() => {
+  window.removeEventListener('hashchange', openFromUrl)
   window.removeEventListener('keydown', onKey)
   document.removeEventListener('copy', onCopy)
   document.removeEventListener('paste', onPaste)
@@ -316,6 +329,7 @@ onBeforeUnmount(() => {
     <ColorsDialog v-if="app.colorsOpen" />
     <TransferDialog v-if="app.transfer" />
     <ShareDialog v-if="app.shareOpen" />
+    <SyncDialog v-if="app.syncOpen" />
     <Dashboard v-if="app.dashboardOpen" />
     <ScreenerFilterDialog v-if="app.screenerFilterOpen" />
     <Toasts />

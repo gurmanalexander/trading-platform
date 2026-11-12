@@ -278,6 +278,8 @@ export const app = reactive({
   dashboardOpen: false,
   screenerFilterOpen: false,
   syncOpen: false,
+  /** код синхронизации, пришедший по ссылке: окно синхронизации откроется с ним */
+  syncCode: '',
   colorsOpen: false,
   /** окно переноса настроек; code — данные, пришедшие по ссылке с другого устройства */
   transfer: null as null | { code: string },
@@ -394,12 +396,13 @@ export function setZen(on: boolean) {
   if (!on) zenFullscreen = false
 }
 // из системного полного экрана вышли жестом или кнопкой «назад» — возвращаем и панели
-document.addEventListener('fullscreenchange', () => {
-  if (!document.fullscreenElement && zenFullscreen) {
-    zenFullscreen = false
-    app.zen = false
-  }
-})
+if (typeof document !== 'undefined')
+  document.addEventListener('fullscreenchange', () => {
+    if (!document.fullscreenElement && zenFullscreen) {
+      zenFullscreen = false
+      app.zen = false
+    }
+  })
 
 export function openSearch(query = '') {
   app.search = { query }
@@ -511,4 +514,29 @@ export function toast(text: string, kind: Toast['kind'] = 'info', ms = 4000) {
 export function dismissToast(id: number) {
   const i = toasts.findIndex((t) => t.id === id)
   if (i >= 0) toasts.splice(i, 1)
+}
+
+// ---------- синхронизация между устройствами ----------
+
+/**
+ * Общие настройки, которые одинаковы на всех устройствах: шаблоны, избранные интервалы, цвета,
+ * биржа по умолчанию. Раскладка, открытая монета и тема — у каждого устройства свои.
+ */
+export function exportSettings() {
+  return { favTfs: app.favTfs, templates: app.templates, tabTemplates: app.tabTemplates, colors: app.colors, defaults: app.defaults, atrTable: app.atrTable }
+}
+
+export function importSettings(raw: unknown) {
+  if (!raw || typeof raw !== 'object') return
+  const v = raw as Saved
+  if (Array.isArray(v.favTfs)) app.favTfs = v.favTfs.filter(isTf)
+  if (Array.isArray(v.templates)) {
+    app.templates = sanitizeTemplates(v.templates)
+    if (!app.templates.some((t) => t.id === app.templateId)) app.templateId = null
+  }
+  const has = (id: unknown) => (typeof id === 'string' && app.templates.some((t) => t.id === id) ? id : null)
+  app.tabTemplates = { screener: has(v.tabTemplates?.screener), watchlist: has(v.tabTemplates?.watchlist) }
+  if (v.colors) app.colors = { dark: sanitizeColors(v.colors.dark), light: sanitizeColors(v.colors.light) }
+  if (v.defaults) app.defaults = { exchange: v.defaults.exchange === 'bybit' ? 'bybit' : 'binance', market: v.defaults.market === 'spot' ? 'spot' : 'futures' }
+  if (typeof v.atrTable === 'boolean') app.atrTable = v.atrTable
 }

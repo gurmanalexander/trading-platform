@@ -174,3 +174,19 @@ export function moveBlock(index: number, step: number) {
 export function resetBlocks() {
   checklist.blocks.splice(0, checklist.blocks.length, ...defaultBlocks())
 }
+
+// ---------- синхронизация между устройствами ----------
+
+export function exportChecklist() {
+  return { blocks: checklist.blocks, selections: checklist.selections }
+}
+
+export function importChecklist(raw: unknown) {
+  if (!raw || typeof raw !== 'object') return
+  const v = raw as { blocks?: unknown; selections?: unknown }
+  if (Array.isArray(v.blocks)) checklist.blocks.splice(0, checklist.blocks.length, ...sanitize(v.blocks))
+  if (v.selections && typeof v.selections === 'object') {
+    for (const k of Object.keys(checklist.selections)) delete checklist.selections[k]
+    Object.assign(checklist.selections, v.selections)
+  }
+}

@@ -34,6 +34,7 @@ import {
 } from '../stores/app'
 import { TIMEFRAMES, getTf } from '../lib/timeframes'
 import { unreadAlerts } from '../stores/alerts'
+import { cloud } from '../stores/cloud'
 import { chartAt } from '../chart/registry'
 import { snapshotAll } from '../chart/snapshot'
 
@@ -314,6 +315,15 @@ function fullscreen() {
     <button v-if="!isPhone" class="btn" title="Поделиться: уровни, позиции, ссылка и QR-код" @click="app.shareOpen = true"><Icon name="share" /></button>
     <button v-if="!isPhone" class="btn" title="Обзор по монетам списков (Alt+D)" @click="app.dashboardOpen = true"><Icon name="dashboard" /></button>
 
+    <button
+      v-if="!isPhone && cloud.code"
+      class="btn"
+      :class="cloud.online ? 'sync-on' : 'sync-off'"
+      :title="cloud.online ? 'Синхронизация устройств: на связи' : 'Синхронизация устройств: нет связи'"
+      @click="app.syncOpen = true"
+    >
+      <Icon :name="cloud.online ? 'cloud' : 'cloudOff'" />
+    </button>
     <Dropdown v-if="!isPhone" align="right">
       <template #trigger="{ toggle }">
         <button class="btn" title="Настройки" @click="toggle"><Icon name="gear" /></button>
@@ -447,6 +457,12 @@ function fullscreen() {
   font: 600 10px/15px var(--font);
   font-style: normal;
   text-align: center;
+}
+.sync-on {
+  color: var(--up);
+}
+.sync-off {
+  color: var(--down);
 }
 .tpl-fav {
   min-width: calc(var(--ctl) - 4px);

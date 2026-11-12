@@ -315,7 +315,8 @@ button.tile:hover {
 }
 .sub i {
   font-style: normal;
-  white-space: nowrap;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 .warn {
   color: var(--warn);

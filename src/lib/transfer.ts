@@ -7,7 +7,7 @@ import { freezeStorage } from './storage'
  */
 const PREFIX = 'tvx:'
 /** Запомненные виды графиков завязаны на размер экрана — на другом устройстве они только мешают */
-const LOCAL_ONLY = new Set(['views'])
+const LOCAL_ONLY = new Set(['views', 'cloud', 'cloudMeta'])
 
 export type Snapshot = Record<string, unknown>
 

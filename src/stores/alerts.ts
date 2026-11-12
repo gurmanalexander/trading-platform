@@ -18,7 +18,9 @@ export interface PriceAlert {
   read?: boolean
 }
 
-export const alerts = reactive<PriceAlert[]>(load<PriceAlert[]>('alerts', []).filter((a) => a && a.ref && a.price > 0))
+const clean = (list: unknown): PriceAlert[] => (Array.isArray(list) ? list.filter((a) => a && a.ref && a.ref.symbol && a.price > 0) : [])
+
+export const alerts = reactive<PriceAlert[]>(clean(load<PriceAlert[]>('alerts', [])))
 persist('alerts', alerts, () => alerts)
 
 export function addAlert(ref: SymbolRef, price: number, lastPrice: number) {
@@ -153,4 +155,10 @@ function beep() {
   } catch {
     /* звук недоступен */
   }
+}
+
+/** Принимает оповещения с другого устройства */
+export function importAlerts(raw: unknown) {
+  if (!Array.isArray(raw)) return
+  alerts.splice(0, alerts.length, ...clean(raw))
 }

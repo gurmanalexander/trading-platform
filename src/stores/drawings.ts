@@ -128,3 +128,20 @@ export function addDrawing(key: string, d: Drawing) {
   checkpoint()
   drawingsOf(key).push(d)
 }
+
+// ---------- синхронизация между устройствами ----------
+
+/** Принимает рисунки инструмента с другого устройства: массив заменяется на месте, графики перерисуются сами */
+export function importDrawings(key: string, raw: unknown) {
+  if (!Array.isArray(raw)) return
+  const clean = raw.filter((d) => d && typeof d.id === 'string' && typeof d.type === 'string' && Array.isArray(d.pts) && d.pts.every((p: Pt) => p && isFinite(p.t) && isFinite(p.p)))
+  if (!clean.length && !drawings[key]) return
+  const cur = drawingsOf(key)
+  cur.splice(0, cur.length, ...(clean as Drawing[]))
+}
+
+export function importDrawDefaults(raw: unknown) {
+  if (!raw || typeof raw !== 'object') return
+  for (const k of Object.keys(drawDefaults)) delete drawDefaults[k]
+  Object.assign(drawDefaults, raw)
+}

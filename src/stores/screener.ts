@@ -33,8 +33,7 @@ const DEFAULTS: ScreenerSettings = { exchange: 'binance', market: 'futures', min
 export const MAX_ROWS = 200
 const REFRESH_MS = 20_000
 
-function initial(): ScreenerSettings {
-  const s = load<Partial<ScreenerSettings>>('screener', {})
+function parse(s: Partial<ScreenerSettings>): ScreenerSettings {
   return {
     exchange: s.exchange === 'bybit' ? 'bybit' : 'binance',
     market: s.market === 'spot' ? 'spot' : 'futures',
@@ -47,7 +46,7 @@ function initial(): ScreenerSettings {
   }
 }
 
-export const settings = reactive(initial())
+export const settings = reactive(parse(load<Partial<ScreenerSettings>>('screener', {})))
 persist('screener', settings, () => settings)
 
 /** Возвращает фильтры и сортировку к исходным; набор столбцов не трогает */
@@ -131,4 +130,14 @@ export function stepSymbol(step: number) {
   const keepTab = app.mobileTab
   setSymbol(list[next])
   app.mobileTab = keepTab
+}
+
+/** Принимает условия отбора с другого устройства; столбцы у каждого устройства свои */
+export function importScreener(raw: unknown) {
+  if (!raw || typeof raw !== 'object') return
+  Object.assign(settings, parse(raw as Partial<ScreenerSettings>), { cols: settings.cols })
+}
+export function exportScreener() {
+  const { cols: _cols, ...rest } = settings
+  return rest
 }
