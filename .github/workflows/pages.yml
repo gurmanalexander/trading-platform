@@ -1,6 +1,7 @@
 name: Тесты, сборка и публикация на GitHub Pages
 
-# Тесты и сборка идут на каждый push. Публикуется только ветка main.
+# Тесты и сборка идут на каждый push. Публикуется только основная ветка репозитория:
+# окружение github-pages принимает публикации лишь с неё.
 on:
   push:
   workflow_dispatch:
@@ -24,14 +25,14 @@ jobs:
       - run: npm run build
 
       - name: Передать сборку на публикацию
-        if: github.ref_name == 'main'
+        if: github.ref_name == github.event.repository.default_branch
         uses: actions/upload-pages-artifact@v5
         with:
           path: dist
 
   deploy:
     needs: build
-    if: github.ref_name == 'main'
+    if: github.ref_name == github.event.repository.default_branch
     runs-on: ubuntu-latest
     permissions:
       pages: write
