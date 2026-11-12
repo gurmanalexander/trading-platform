@@ -11,8 +11,9 @@ import { addWatch, activeList } from './stores/watchlist'
 import { clipboard, redo, selection, undo } from './stores/drawings'
 import { stepSymbol } from './stores/screener'
 import { chartAt } from './chart/registry'
-import { applySignal } from './chart/trade'
-import { parseSignal } from './lib/signal'
+import { applyPastedText, applySetup, setupTextFromUrl } from './chart/setup'
+import { snapshotAll } from './chart/snapshot'
+import { parseSetup } from './lib/setup'
 
 // Диалоги нужны не сразу — грузим их код по первому открытию
 const SymbolSearch = defineAsyncComponent(() => import('./components/SymbolSearch.vue'))
@@ -54,6 +55,7 @@ function onAlt(e: KeyboardEvent): boolean {
   const chart = chartAt(activeIndex.value)
   if (e.shiftKey) {
     if (e.code === 'KeyR') app.tool = 'rect'
+    else if (e.code === 'KeyS') snapshotAll()
     else return false
     return true
   }
@@ -178,23 +180,32 @@ function onPaste(e: ClipboardEvent) {
     if (chartAt(activeIndex.value)?.draw.paste()) e.preventDefault()
     return
   }
-  const sig = parseSignal(text)
-  if (!sig) return
-  e.preventDefault()
-  applySignal(sig)
+  // сделка (ТВХ / SL / TP), строка сетапа или несколько строк сетапов
+  if (applyPastedText(text)) e.preventDefault()
+}
+
+/**
+ * Буква или цифра по физической клавише — независимо от раскладки: в русской раскладке
+ * клавиша «И» всё равно даёт «B», и поиск монеты открывается как обычно.
+ */
+function typedChar(e: KeyboardEvent): string {
+  const m = /^(?:Key([A-Z])|(?:Digit|Numpad)(\d))$/.exec(e.code)
+  return m ? (m[1] ?? m[2]) : ''
 }
 
 function onKey(e: KeyboardEvent) {
   const typing = isTyping(e.target)
   const plain = !e.ctrlKey && !e.metaKey && !e.altKey
+  const ch = plain ? typedChar(e) : ''
   // окно поиска или интервала ещё открывается, а пользователь уже печатает — не теряем символы
-  if (!typing && plain && e.key.length === 1) {
-    if (app.search && /^[a-zA-Z0-9]$/.test(e.key)) {
-      app.search.query += e.key.toUpperCase()
+  if (!typing && ch) {
+    if (app.search) {
+      app.search.query += ch
       return
     }
-    if (app.intervalInput && /^[a-zA-Z0-9]$/.test(e.key)) {
-      app.intervalInput.text += e.key
+    if (app.intervalInput) {
+      // регистр важен: m — минуты, M — месяц
+      app.intervalInput.text += e.shiftKey ? ch : ch.toLowerCase()
       return
     }
   }
@@ -205,20 +216,27 @@ function onKey(e: KeyboardEvent) {
   else if (e.altKey) handled = onAlt(e)
   else handled = onPlain(e)
 
-  if (!handled && plain && !e.shiftKey) {
-    // буква открывает поиск инструмента, цифра — выбор интервала
-    if (/^[a-zA-Z]$/.test(e.key)) {
-      openSearch(e.key.toUpperCase())
-      handled = true
-    } else if (/^[0-9]$/.test(e.key)) {
-      app.intervalInput = { text: e.key }
-      handled = true
-    }
+  if (!handled && ch && !e.shiftKey) {
+    // буква открывает поиск инструмента, цифра — выбор интервала (а если это начало тикера — тоже поиск)
+    if (/[A-Z]/.test(ch)) openSearch(ch)
+    else app.intervalInput = { text: ch }
+    handled = true
   }
   if (handled) e.preventDefault()
 }
 
+/** Сетап в адресе страницы: ссылка, которой поделились, или строка, дописанная к адресу руками */
+function openFromUrl() {
+  const text = setupTextFromUrl()
+  if (!text) return
+  const setup = parseSetup(text)
+  if (setup) applySetup(setup)
+  // адрес возвращаем к обычному: при обновлении страницы сетап не должен применяться заново
+  history.replaceState(null, '', new URL('./', location.href).pathname)
+}
+
 onMounted(() => {
+  openFromUrl()
   window.addEventListener('keydown', onKey)
   document.addEventListener('copy', onCopy)
   document.addEventListener('paste', onPaste)

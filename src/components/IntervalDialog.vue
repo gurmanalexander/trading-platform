@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import Modal from './Modal.vue'
-import { app, setTf } from '../stores/app'
+import { app, openSearch, setTf } from '../stores/app'
 import { parseTf } from '../lib/timeframes'
 
 // Интервал с клавиатуры: окно открывается первой набранной цифрой
@@ -15,6 +15,20 @@ const text = computed({
 const parsed = computed(() => parseTf(text.value))
 
 onMounted(() => nextTick(() => input.value?.focus()))
+
+// «1000PEPE» тоже начинается с цифры: как только набранное перестаёт быть началом интервала, это монета
+const UNIT_PREFIX = /^\d*\s*(?:m|mi|min|mo|h|d|w|м|ми|мин|ме|мес|ч|д|н)?$/i
+watch(
+  text,
+  (v) => {
+    if (v && !UNIT_PREFIX.test(v.trim())) {
+      app.intervalInput = null
+      openSearch(v.trim().toUpperCase())
+    }
+  },
+  // буквы могли набрать ещё до появления окна
+  { immediate: true },
+)
 
 function close() {
   app.intervalInput = null

@@ -16,6 +16,10 @@ import {
   type ThemePref,
 } from '../stores/app'
 import { addWatch, activeList } from '../stores/watchlist'
+import { activeIndex } from '../stores/app'
+import { chartAt } from '../chart/registry'
+import { snapshotAll } from '../chart/snapshot'
+import { copyShareLink } from '../chart/share'
 
 // Меню «ещё» для телефона: всё, что на широком экране лежит кнопками на верхней панели
 const pane = activePane
@@ -54,9 +58,13 @@ function saveNew() {
       <div class="pm">
         <button class="menu-item" @click="(app.indicatorsOpen = true), close()"><Icon name="fx" :size="16" />Индикаторы</button>
         <button class="menu-item" @click="(app.checklistOpen = true), close()"><Icon name="checklist" :size="16" />Чеклист сделки</button>
-        <button class="menu-item" @click="(app.tradeTextOpen = true), close()"><Icon name="paste" :size="16" />Сделка текстом</button>
+        <button class="menu-item" @click="(app.tradeTextOpen = true), close()"><Icon name="paste" :size="16" />Вставить текстом</button>
         <button class="menu-item" @click="toList(), close()"><Icon name="star" :size="16" />В список «{{ activeList.name }}»</button>
         <button class="menu-item" @click="(app.gotoOpen = true), close()"><Icon name="skip" :size="16" />Перейти к дате</button>
+        <button class="menu-item" @click="copyShareLink(), close()"><Icon name="share" :size="16" />Поделиться ссылкой</button>
+        <button class="menu-item" @click="(paneCount > 1 && app.phoneStack ? snapshotAll() : chartAt(activeIndex)?.screenshot()), close()">
+          <Icon name="camera" :size="16" />Снимок графика
+        </button>
 
         <div class="menu-title">Вид графика</div>
         <div class="icons">
@@ -87,6 +95,18 @@ function saveNew() {
           <input v-model="app.sync[o.id]" type="checkbox" />
           {{ o.label }}
         </label>
+
+        <div class="menu-title">Монета из вставки или ссылки</div>
+        <div class="defaults">
+          <select v-model="app.defaults.exchange" class="field">
+            <option value="binance">Binance</option>
+            <option value="bybit">Bybit</option>
+          </select>
+          <select v-model="app.defaults.market" class="field">
+            <option value="futures">Фьючерсы</option>
+            <option value="spot">Спот</option>
+          </select>
+        </div>
 
         <div class="menu-title">Тема</div>
         <div class="icons">
@@ -119,6 +139,12 @@ function saveNew() {
 }
 .theme {
   font-size: 12px;
+}
+.defaults {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  padding: 0 8px;
 }
 .check {
   cursor: pointer;

@@ -12,7 +12,6 @@ import {
   paneCount,
   isPhone,
   viewport,
-  theme,
   openSearch,
   showPanel,
   togglePanel,
@@ -34,6 +33,9 @@ import {
   type ThemePref,
 } from '../stores/app'
 import { TIMEFRAMES, getTf } from '../lib/timeframes'
+import { chartAt } from '../chart/registry'
+import { snapshotAll } from '../chart/snapshot'
+import { copyShareLink } from '../chart/share'
 
 const pane = activePane
 const favorites = computed(() => TIMEFRAMES.filter((t) => app.favTfs.includes(t.id)))
@@ -272,13 +274,36 @@ function fullscreen() {
 
     <Dropdown v-if="!isPhone" align="right">
       <template #trigger="{ toggle }">
-        <button class="btn" title="Тема" @click="toggle"><Icon :name="theme === 'dark' ? 'moon' : 'sun'" /></button>
+        <button class="btn" title="Снимок графика" @click="toggle"><Icon name="camera" /></button>
       </template>
       <template #default="{ close }">
-        <button v-for="t in THEMES" :key="t.id" class="menu-item" :class="{ on: app.themePref === t.id }" @click="(app.themePref = t.id), close()">
-          <Icon :name="t.icon" :size="16" />{{ t.label }}
-        </button>
+        <button class="menu-item" @click="chartAt(activeIndex)?.screenshot(), close()"><Icon name="rect" :size="16" />Это окно <span class="muted">Alt+S</span></button>
+        <button class="menu-item" @click="snapshotAll(), close()"><Icon :name="'layout-4'" :size="16" />Все окна одной картинкой <span class="muted">Alt+Shift+S</span></button>
       </template>
+    </Dropdown>
+    <button v-if="!isPhone" class="btn" title="Скопировать ссылку на этот график: монета, направление, выбранный уровень и дата" @click="copyShareLink"><Icon name="share" /></button>
+
+    <Dropdown v-if="!isPhone" align="right">
+      <template #trigger="{ toggle }">
+        <button class="btn" title="Настройки" @click="toggle"><Icon name="gear" /></button>
+      </template>
+      <div class="menu-title">Тема</div>
+      <button v-for="t in THEMES" :key="t.id" class="menu-item" :class="{ on: app.themePref === t.id }" @click="app.themePref = t.id">
+        <Icon :name="t.icon" :size="16" />{{ t.label }}
+      </button>
+      <div class="menu-sep" />
+      <div class="menu-title">Монета из вставки или ссылки</div>
+      <div class="defaults">
+        <select v-model="app.defaults.exchange" class="field" title="Биржа по умолчанию">
+          <option value="binance">Binance</option>
+          <option value="bybit">Bybit</option>
+        </select>
+        <select v-model="app.defaults.market" class="field" title="Рынок по умолчанию">
+          <option value="futures">Фьючерсы</option>
+          <option value="spot">Спот</option>
+        </select>
+      </div>
+      <p class="menu-note muted">На этой бирже и рынке открывается монета, если в строке или ссылке они не указаны.</p>
     </Dropdown>
     <button v-if="canFullscreen && !isPhone" class="btn" title="Во весь экран (Shift+F)" @click="fullscreen"><Icon name="maximize" /></button>
     <button v-if="!isPhone" class="btn" title="Горячие клавиши" @click="app.hotkeysOpen = true"><Icon name="help" /></button>
@@ -382,6 +407,19 @@ function fullscreen() {
   color: var(--muted);
   text-transform: uppercase;
   letter-spacing: 0.04em;
+}
+.defaults {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  padding: 2px 8px 4px;
+}
+.defaults .field {
+  height: 30px;
+}
+.menu-item .muted {
+  margin-left: auto;
+  font-size: 11px;
 }
 .menu-note {
   margin: 0;

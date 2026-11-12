@@ -24,7 +24,8 @@ import { getTf, type Timeframe } from '../lib/timeframes'
 import { setPrecision } from '../lib/format'
 import { indicatorDef, resolveParams, toSource, type IndicatorDef, type IndicatorInstance } from '../lib/indicators'
 import { app, paneCount, theme, type ChartType, type PaneState } from '../stores/app'
-import { crosshairBus, timeBus } from '../stores/sync'
+import { crosshairBus, dateFocus, timeBus } from '../stores/sync'
+import { focusFraction } from '../lib/setup'
 import { dayStats } from '../stores/atr'
 import { clearView, getView, setView, viewKey, type ChartView } from '../stores/views'
 import { chartColors, withAlpha, type ChartColors } from './theme'
@@ -59,6 +60,18 @@ const LOCAL_TZ_SEC = -new Date().getTimezoneOffset() * 60
 const FONT = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif'
 
 const isOhlc = (t: ChartType) => t !== 'line' && t !== 'area'
+
+/** Сохраняет холст как PNG с отметкой времени в имени файла */
+export function downloadCanvas(canvas: HTMLCanvasElement, name: string) {
+  canvas.toBlob((blob) => {
+    if (!blob) return
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(blob)
+    a.download = `${name}-${new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-')}.png`
+    a.click()
+    setTimeout(() => URL.revokeObjectURL(a.href), 5000)
+  })
+}
 
 export class ChartController {
   readonly chart: IChartApi
@@ -104,6 +117,10 @@ export class ChartController {
   private syncIdx = -1
   /** время, к которому панель привязана синхронизацией, пока догружается история */
   private pendingSyncTime: number | null = null
+  /** номер последней выполненной просьбы «показать дату» */
+  private focusDone = 0
+  /** инструмент, чьи свечи сейчас загружены (в настройках окна он может быть уже другим) */
+  private loadedKey = ''
   /** вид графика в момент нажатия — чтобы понять, двигал ли его пользователь */
   private viewAtPress = ''
   private saveViewTimer = 0
@@ -332,6 +349,7 @@ export class ChartController {
     // Внутридневные свечи показываем в местном времени; дневные и старше — по датам биржи (UTC)
     this.tz = this.tf.sec >= 86400 ? 0 : LOCAL_TZ_SEC
     this.bars = []
+    this.loadedKey = ''
     this.shown = []
     this.noMore = false
     this.loadingMore = false
@@ -347,13 +365,16 @@ export class ChartController {
       if (token !== this.token) return
       if (!res.bars.length) throw new Error('Нет данных по инструменту')
       this.bars = res.bars
+      this.loadedKey = symbolKey(symbol)
       this.setPrecision(res.precision)
       this.rebuildShown()
       this.setAll()
       this.chart.priceScale('right').applyOptions({ autoScale: true })
       this.chart.timeScale().scrollToPosition(6, false)
+      this.ui.loading = false
+      // просьба показать дату важнее запомненного вида
       const saved = getView(viewKey(symbolKey(symbol), this.tf.id))
-      if (saved) this.restoreView(saved)
+      if (!this.applyDateFocus() && saved) this.restoreView(saved)
       this.offLive = adapter.subscribeKline(
         symbol.market,
         symbol.symbol,
@@ -637,23 +658,54 @@ export class ChartController {
   /**
    * Ставит момент t в центр экрана, не меняя масштаб. spacing — ширина свечи, если её только что
    * задали: на свежесозданном графике библиотека сообщает новое значение не сразу.
+   * frac — где на экране окажется момент t: 0 — левый край, 0.5 — середина, 1 — правый край.
    */
-  private centerOn(t: number, spacing?: number) {
+  private centerOn(t: number, spacing?: number, frac = 0.5) {
     const ts = this.chart.timeScale()
     const l = this.timeToLogical(t)
     if (l == null) return
     // позиция прокрутки — на сколько свечей правый край экрана правее последней свечи
     const visibleBars = ts.width() / (spacing ?? ts.options().barSpacing)
-    ts.scrollToPosition(l + visibleBars / 2 - (this.bars.length - 1), false)
+    ts.scrollToPosition(l + visibleBars * (1 - frac) - (this.bars.length - 1), false)
+  }
+
+  /**
+   * Показывает дату из вставленного сетапа или ссылки. Место даты на экране зависит от интервала:
+   * на дневке — в правой трети, на часовике — посередине, на младших — в левой трети.
+   */
+  private applyDateFocus() {
+    const f = dateFocus.value
+    if (!f || f.id === this.focusDone || Date.now() - f.at > 120_000) return false
+    // данные должны быть именно этой монеты: при смене инструмента старые свечи ещё на месте
+    if (f.key !== this.loadedKey || !this.bars.length || this.ui.loading) return false
+    this.focusDone = f.id
+    // дневные свечи идут по датам биржи (UTC), внутридневные показаны в местном времени
+    const t = this.tf.sec >= 86400 ? Date.UTC(f.y, f.m - 1, f.d) / 1000 : new Date(f.y, f.m - 1, f.d).getTime() / 1000
+    this.chart.priceScale('right').applyOptions({ autoScale: true })
+    this.goToTime(t, undefined, focusFraction(this.tf.sec)).then(() => this.scheduleSaveView())
+    return true
+  }
+
+  /** Вызывается, когда появилась новая просьба показать дату */
+  onDateFocus() {
+    this.applyDateFocus()
   }
 
   /** Показывает момент t (сек UTC) в центре графика, при необходимости догружая историю */
-  async goToTime(t: number, spacing?: number) {
+  async goToTime(t: number, spacing?: number, frac = 0.5) {
     const token = this.token
     for (let i = 0; i < 40 && this.bars.length && this.bars[0].time > t && !this.noMore; i++) {
       if (!(await this.loadMore()) || token !== this.token) break
     }
-    if (token === this.token) this.centerOn(t, spacing)
+    if (token === this.token) this.centerOn(t, spacing, frac)
+  }
+
+  /** Момент в центре экрана, если график отмотан в прошлое; null — график у текущей цены */
+  viewedTime(): number | null {
+    const ts = this.chart.timeScale()
+    const r = ts.getVisibleLogicalRange()
+    if (!r || !this.bars.length || ts.scrollPosition() > -3) return null
+    return this.logicalToTime((r.from + r.to) / 2)
   }
 
   /** Синхронизация времени: другая панель показывает момент t */
@@ -694,14 +746,19 @@ export class ChartController {
     this.scheduleLegend()
   }
 
-  /** Сохраняет снимок графика в PNG */
-  screenshot() {
+  /** Элемент окна графика — по нему общий снимок узнаёт, где окно стоит на экране */
+  get element(): HTMLElement {
+    return this.host
+  }
+
+  /** Картинка графика с подписью «монета · интервал · биржа» */
+  capture(): HTMLCanvasElement | null {
     const src = this.chart.takeScreenshot(true)
     const out = document.createElement('canvas')
     out.width = src.width
     out.height = src.height
     const ctx = out.getContext('2d')
-    if (!ctx) return
+    if (!ctx) return null
     ctx.drawImage(src, 0, 0)
     const k = src.width / Math.max(1, this.host.clientWidth)
     const s = this.pane.symbol
@@ -709,14 +766,13 @@ export class ChartController {
     ctx.fillStyle = this.colors.text
     ctx.textBaseline = 'top'
     ctx.fillText(`${s.symbol} · ${this.tf.label} · ${EXCHANGE_NAMES[s.exchange]}`, 8 * k, 8 * k)
-    out.toBlob((blob) => {
-      if (!blob) return
-      const a = document.createElement('a')
-      a.href = URL.createObjectURL(blob)
-      a.download = `tvx-${s.symbol}-${this.tf.id}-${new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-')}.png`
-      a.click()
-      setTimeout(() => URL.revokeObjectURL(a.href), 5000)
-    })
+    return out
+  }
+
+  /** Сохраняет снимок графика в PNG */
+  screenshot() {
+    const canvas = this.capture()
+    if (canvas) downloadCanvas(canvas, `tvx-${this.pane.symbol.symbol}-${this.tf.id}`)
   }
 
   /** Возврат к виду по умолчанию; запомненный для монеты вид забывается */

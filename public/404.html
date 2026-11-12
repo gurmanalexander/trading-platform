@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>tvx</title>
+    <script>
+      // Ссылка вида /папка/10.11.2026 #1000PEPEUSDT Long 0,0053656 — такой страницы на сервере нет.
+      // Забираем «хвост» адреса и открываем приложение, передав его параметром q.
+      ;(function () {
+        var path = location.pathname
+        var parts = path.split('/')
+        // GitHub Pages: приложение лежит в первой папке сайта; на своём сервере — в папке этой страницы
+        var base = /\.github\.io$/.test(location.hostname) && parts.length > 2 ? '/' + parts[1] + '/' : parts.slice(0, -1).join('/') + '/'
+        var rest = ''
+        try {
+          rest = decodeURIComponent(path.slice(base.length))
+        } catch (e) {}
+        var hash = ''
+        try {
+          hash = location.hash.length > 1 ? ' #' + decodeURIComponent(location.hash.slice(1)) : ''
+        } catch (e) {}
+        var q = (rest + hash).trim()
+        location.replace(base + (q ? '?q=' + encodeURIComponent(q) : ''))
+      })()
+    </script>
+  </head>
+  <body></body>
+</html>

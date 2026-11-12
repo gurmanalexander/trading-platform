@@ -11,3 +11,6 @@ export function registerChart(index: number, ctrl: ChartController): () => void 
 }
 
 export const chartAt = (index: number) => controllers.get(index)
+
+/** Все созданные графики по порядку окон */
+export const allCharts = () => [...controllers.entries()].sort((a, b) => a[0] - b[0]).map((e) => e[1])

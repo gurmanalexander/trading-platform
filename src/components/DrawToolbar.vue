@@ -44,7 +44,7 @@ function clearAll() {
     </template>
     <span class="sep" />
     <button class="btn" title="Чеклист сделки: заметка на график из отмеченных пунктов" @click="app.checklistOpen = true"><Icon name="checklist" /></button>
-    <button class="btn" title="Сделка текстом: ТВХ / SL / TP → позиция (Ctrl+V)" @click="app.tradeTextOpen = true"><Icon name="paste" /></button>
+    <button class="btn" title="Вставить текстом: сделка (ТВХ / SL / TP) или сетапы — то же, что Ctrl+V" @click="app.tradeTextOpen = true"><Icon name="paste" /></button>
     <span class="sep" />
     <button class="btn" title="Отменить (Ctrl+Z)" @click="undo()"><Icon name="undo" /></button>
     <button class="btn" title="Вернуть (Ctrl+Y)" @click="redo()"><Icon name="redo" /></button>

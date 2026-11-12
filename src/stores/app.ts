@@ -173,6 +173,7 @@ interface Saved {
   searchFilter?: { exchange?: ExchangeId | 'all'; market?: MarketId | 'all' }
   drawingsHidden?: boolean
   phoneStack?: boolean
+  defaults?: { exchange?: ExchangeId; market?: MarketId }
 }
 
 const saved = load<Saved>('app', {})
@@ -219,6 +220,11 @@ export const app = reactive({
     market: (saved.searchFilter?.market ?? 'futures') as MarketId | 'all',
   },
   drawingsHidden: saved.drawingsHidden ?? false,
+  /** биржа и рынок, на которых открывается монета из вставленной строки или ссылки */
+  defaults: {
+    exchange: (saved.defaults?.exchange === 'bybit' ? 'bybit' : 'binance') as ExchangeId,
+    market: (saved.defaults?.market === 'spot' ? 'spot' : 'futures') as MarketId,
+  },
   /** телефон: показывать все окна раскладки сразу (столбцом), а не одно */
   phoneStack: saved.phoneStack ?? false,
 
@@ -244,7 +250,7 @@ export const app = reactive({
 
 persist(
   'app',
-  () => [app.themePref, app.layout, app.panes, app.active, app.panel, app.panelOpen, app.magnet, app.sync, app.favTfs, app.templates, app.templateId, app.tabTemplates, app.searchFilter, app.drawingsHidden, app.phoneStack],
+  () => [app.themePref, app.layout, app.panes, app.active, app.panel, app.panelOpen, app.magnet, app.sync, app.favTfs, app.templates, app.templateId, app.tabTemplates, app.searchFilter, app.drawingsHidden, app.phoneStack, app.defaults],
   () => ({
     themePref: app.themePref,
     layout: app.layout,
@@ -261,6 +267,7 @@ persist(
     searchFilter: app.searchFilter,
     drawingsHidden: app.drawingsHidden,
     phoneStack: app.phoneStack,
+    defaults: app.defaults,
   }),
 )
 

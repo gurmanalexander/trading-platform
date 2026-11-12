@@ -7,6 +7,7 @@ import { app, setSymbol } from '../stores/app'
 import ListPicker from './ListPicker.vue'
 import { SOURCES, loadSymbols, withUsdVolume, type SymbolVolume } from '../exchanges'
 import { autoPrecision, fmtCompact, fmtPct, fmtPrice } from '../lib/format'
+import { fromRuLayout } from '../lib/setup'
 
 type Item = SymbolVolume
 
@@ -16,7 +17,8 @@ const MAX_SHOWN = 80
 const query = computed({
   get: () => app.search?.query ?? '',
   set: (v) => {
-    if (app.search) app.search.query = v
+    // набрано в русской раскладке — переводим в латиницу по клавишам: «иес» → «btc»
+    if (app.search) app.search.query = fromRuLayout(v)
   },
 })
 // выбранные биржа и рынок запоминаются между открытиями

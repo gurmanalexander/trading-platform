@@ -10,7 +10,7 @@ import { app, activeIndex, paneCount, isPhone, theme, toast, type ScaleMode } fr
 import { tickers, useTickers } from '../stores/tickers'
 import { alerts, addAlert } from '../stores/alerts'
 import { clearDrawings, drawings, drawingsOf, selection } from '../stores/drawings'
-import { crosshairBus, timeBus } from '../stores/sync'
+import { crosshairBus, dateFocus, timeBus } from '../stores/sync'
 import { useDayStats } from '../stores/atr'
 import { fmtPrice } from '../lib/format'
 
@@ -78,6 +78,7 @@ watch(crosshairBus, (v) => {
   // цену показываем только на том же инструменте: у другого она ничего не значит
   else if (v.pane !== props.index) c.showSyncCrosshair(v.time, v.key === key.value ? v.price : NaN)
 })
+watch(dateFocus, () => ctrl.value?.onDateFocus())
 watch(timeBus, (v) => {
   if (v && app.sync.time && v.pane !== props.index) ctrl.value?.syncToTime(v.time, v.realtime)
 })
