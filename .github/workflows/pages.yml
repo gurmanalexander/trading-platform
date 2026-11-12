@@ -1,7 +1,8 @@
 name: Тесты, сборка и публикация на GitHub Pages
 
-# Тесты и сборка идут на каждый push. Публикуется только основная ветка репозитория:
-# окружение github-pages принимает публикации лишь с неё.
+# Тесты и сборка идут на каждый push. Публикуется основная ветка репозитория, а при ручном
+# запуске (Run workflow) — выбранная ветка. Какие ветки вправе публиковать, решает окружение
+# github-pages: Settings → Environments → github-pages → Deployment branches.
 on:
   push:
   workflow_dispatch:
@@ -25,14 +26,14 @@ jobs:
       - run: npm run build
 
       - name: Передать сборку на публикацию
-        if: github.ref_name == github.event.repository.default_branch
+        if: github.ref_name == github.event.repository.default_branch || github.event_name == 'workflow_dispatch'
         uses: actions/upload-pages-artifact@v5
         with:
           path: dist
 
   deploy:
     needs: build
-    if: github.ref_name == github.event.repository.default_branch
+    if: github.ref_name == github.event.repository.default_branch || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     permissions:
       pages: write
