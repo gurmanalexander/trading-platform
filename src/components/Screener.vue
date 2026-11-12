@@ -2,15 +2,15 @@
 import { computed, nextTick, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import Icon from './Icon.vue'
 import { sameSymbol, symbolKey, EXCHANGE_NAMES, MARKET_NAMES, type SymbolRef } from '../types'
-import { activePane, setSymbol } from '../stores/app'
-import { settings, state, view, total, sortBy, refresh, resetSettings, startAutoRefresh, MAX_ROWS, type SortKey } from '../stores/screener'
+import { app, activePane, setSymbol } from '../stores/app'
+import { settings, state, view, total, universe, filterCount, sortBy, refresh, startAutoRefresh, MAX_ROWS, SCREENER_COLS, type ScreenerCol, type SortKey } from '../stores/screener'
 import SideMark from './SideMark.vue'
 import ListPicker from './ListPicker.vue'
 import ListMenu from './ListMenu.vue'
 import Dropdown from './Dropdown.vue'
+import ColumnsMenu from './ColumnsMenu.vue'
 import { fmtPct, fmtPriceShort, fmtVolume } from '../lib/format'
 
-const showSettings = ref(false)
 const stop = startAutoRefresh()
 onBeforeUnmount(stop)
 
@@ -134,72 +134,28 @@ function unbindMenu() {
 }
 onBeforeUnmount(unbindMenu)
 
-const COLS: { id: SortKey; label: string }[] = [
-  { id: 'symbol', label: 'Инструмент' },
-  { id: 'price', label: 'Цена' },
-  { id: 'change', label: '24ч' },
-  { id: 'volume', label: 'Объём' },
-]
+// Столбцы: название — всегда, остальные выбираются. Ширины — общие для заголовка и строк.
+const HEAD: Record<ScreenerCol, string> = { price: 'Цена', change: '24ч', volume: 'Объём' }
+const WIDTH: Record<ScreenerCol, string> = { price: 'minmax(62px, auto)', change: '58px', volume: '54px' }
+const cols = computed(() => SCREENER_COLS.filter((c) => settings.cols.includes(c.id)))
+const grid = computed(() => ({ gridTemplateColumns: ['minmax(88px, 1fr)', ...cols.value.map((c) => WIDTH[c.id]), '20px'].join(' ') }))
+/** Цвет цены — по изменению за сутки: рост, падение или без изменений */
+const tone = (pct: number) => (pct > 0 ? 'up' : pct < 0 ? 'down' : 'muted')
+const head = (id: SortKey) => settings.sort === id
 </script>
 
 <template>
   <div class="sc">
     <div class="sc-top">
-      <button class="btn sm filter" :class="{ on: showSettings }" title="Настройки отбора" @click="showSettings = !showSettings">
-        <Icon name="filter" :size="15" />
+      <button class="btn sm filter" title="Условия отбора: биржа, рынок, объём, изменение цены" @click="app.screenerFilterOpen = true">
+        <Icon name="funnel" :size="16" />
         <span>{{ EXCHANGE_NAMES[settings.exchange] }} · {{ MARKET_NAMES[settings.market] }} · от {{ settings.minVolume }} млн $</span>
+        <i v-if="filterCount" class="badge" title="Условий изменено">{{ filterCount }}</i>
       </button>
-      <span class="muted count" :title="state.updatedAt ? 'Обновлено ' + new Date(state.updatedAt).toLocaleTimeString('ru-RU') : ''">{{ total.length }}</span>
-      <button class="btn sm" title="Обновить" :disabled="state.loading" @click="refresh()"><Icon name="refresh" :size="15" /></button>
+      <span class="muted count" :title="`Подходит ${total.length} из ${universe}` + (state.updatedAt ? ' · обновлено ' + new Date(state.updatedAt).toLocaleTimeString('ru-RU') : '')">{{ total.length }}</span>
+      <ColumnsMenu :model-value="settings.cols" :options="SCREENER_COLS" @update:model-value="settings.cols = $event as ScreenerCol[]" />
+      <button class="btn sm" title="Обновить" :disabled="state.loading" @click="refresh()"><Icon name="refresh" :size="16" /></button>
     </div>
-
-    <form v-if="showSettings" class="sc-form" @submit.prevent>
-      <label>
-        <span>Биржа</span>
-        <select v-model="settings.exchange" class="field">
-          <option value="binance">Binance</option>
-          <option value="bybit">Bybit</option>
-        </select>
-      </label>
-      <label>
-        <span>Рынок</span>
-        <select v-model="settings.market" class="field">
-          <option value="futures">Фьючерсы</option>
-          <option value="spot">Спот</option>
-        </select>
-      </label>
-      <label>
-        <span>Объём за 24ч от, млн $</span>
-        <input v-model.number="settings.minVolume" class="field" type="number" min="0" step="5" inputmode="decimal" />
-      </label>
-      <label>
-        <span>Изменение за 24ч от, % (по модулю)</span>
-        <input v-model.number="settings.minChange" class="field" type="number" min="0" step="1" inputmode="decimal" />
-      </label>
-      <label>
-        <span>Валюта котировки</span>
-        <select v-model="settings.quote" class="field">
-          <option value="USDT">Только USDT</option>
-          <option value="all">Любая</option>
-        </select>
-      </label>
-      <label>
-        <span>Сортировка</span>
-        <span class="pair">
-          <select v-model="settings.sort" class="field">
-            <option value="volume">Объём</option>
-            <option value="change">Изменение за 24ч</option>
-            <option value="price">Цена</option>
-            <option value="symbol">Название</option>
-          </select>
-          <select v-model="settings.dir" class="field">
-            <option value="desc">По убыванию</option>
-            <option value="asc">По возрастанию</option>
-          </select>
-        </span>
-      </label>
-      <button type="button" class="btn sm reset" @click="resetSettings">Сбросить настройки</button>
-    </form>
 
     <div v-if="chosen.length" class="sc-sel">
       <b>Выбрано: {{ chosen.length }}</b>
@@ -213,10 +169,14 @@ const COLS: { id: SortKey; label: string }[] = [
       <button class="btn sm" title="Снять выбор" @click="clearPicked"><Icon name="close" :size="14" /></button>
     </div>
 
-    <div class="sc-head">
-      <button v-for="c in COLS" :key="c.id" class="muted" :class="{ on: settings.sort === c.id, num: c.id !== 'symbol', first: c.id === 'symbol' }" @click="sortBy(c.id)">
-        {{ c.label }}
-        <Icon v-if="settings.sort === c.id" :name="settings.dir === 'asc' ? 'sortUp' : 'sortDown'" :size="12" />
+    <div class="sc-head" :style="grid">
+      <button class="muted first" :class="{ on: head('symbol') }" @click="sortBy('symbol')">
+        Тикер
+        <Icon v-if="head('symbol')" :name="settings.dir === 'asc' ? 'sortUp' : 'sortDown'" :size="12" />
+      </button>
+      <button v-for="c in cols" :key="c.id" class="muted num" :class="{ on: head(c.sort) }" :title="c.label" @click="sortBy(c.sort)">
+        {{ HEAD[c.id] }}
+        <Icon v-if="head(c.sort)" :name="settings.dir === 'asc' ? 'sortUp' : 'sortDown'" :size="12" />
       </button>
       <span />
     </div>
@@ -227,6 +187,7 @@ const COLS: { id: SortKey; label: string }[] = [
         :key="symbolKey(r)"
         class="sc-row"
         :class="{ active: sameSymbol(r, activePane.symbol), picked: isPicked(r) }"
+        :style="grid"
         role="button"
         tabindex="0"
         title="Ctrl+щелчок — выбрать несколько, Shift+щелчок — выбрать подряд, правая кнопка — в список"
@@ -239,9 +200,11 @@ const COLS: { id: SortKey; label: string }[] = [
         @contextmenu.prevent="onContext($event, r)"
       >
         <span class="name"><SideMark :item="r" /><b>{{ r.symbol }}</b></span>
-        <span class="num">{{ fmtPriceShort(r.last) }}</span>
-        <span class="num" :class="r.changePct >= 0 ? 'up' : 'down'">{{ fmtPct(r.changePct) }}</span>
-        <span class="num muted">{{ fmtVolume(r.usdVolume) }}</span>
+        <template v-for="c in cols" :key="c.id">
+          <span v-if="c.id === 'price'" class="num" :class="tone(r.changePct)" :title="'За сутки ' + fmtPct(r.changePct)">{{ fmtPriceShort(r.last) }}</span>
+          <span v-else-if="c.id === 'change'" class="num" :class="tone(r.changePct)">{{ fmtPct(r.changePct) }}</span>
+          <span v-else class="num muted">{{ fmtVolume(r.usdVolume) }}</span>
+        </template>
         <ListPicker :item="r" :group="targetsOf(r)" />
       </div>
       <p v-if="state.error" class="note muted">{{ state.error }}</p>
@@ -287,40 +250,21 @@ const COLS: { id: SortKey; label: string }[] = [
   font-size: 12px;
   padding: 0 4px;
 }
-.sc-form {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 10px 12px;
-  border-bottom: 1px solid var(--border);
+.badge {
   flex: none;
-  max-height: 60%;
-  overflow-y: auto;
-}
-.sc-form label {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  font-size: 12px;
-  color: var(--muted);
-}
-.sc-form .field {
-  height: 30px;
-  color: var(--text);
-}
-.pair {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 6px;
-}
-.reset {
-  align-self: flex-start;
-  color: var(--muted);
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: var(--accent);
+  color: #fff;
+  font: 600 10px/16px var(--font);
+  font-style: normal;
+  text-align: center;
 }
 .sc-head,
 .sc-row {
   display: grid;
-  grid-template-columns: minmax(84px, 1fr) minmax(0, auto) 52px 52px 22px;
   align-items: center;
   column-gap: 6px;
   padding: 0 4px 0 4px;

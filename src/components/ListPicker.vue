@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import Icon from './Icon.vue'
 import Dropdown from './Dropdown.vue'
 import ListMenu from './ListMenu.vue'
 import type { SymbolRef } from '../types'
@@ -26,9 +25,9 @@ const title = computed(() =>
   <Dropdown align="right">
     <template #trigger="{ toggle }">
       <button class="btn sm picker" :class="{ in: member.length > 0 }" :title="title" @click.stop="toggle">
-        <!-- цвет флажка — цвет первого списка, где есть монета; второй флажок — если списков несколько -->
-        <Icon name="flag" :size="14" :style="member.length ? { color: member[0].color } : undefined" />
-        <i v-if="member.length > 1" :style="{ background: member[1].color }" />
+        <!-- точка — цвет списка, где лежит монета; вторая — если списков несколько; пустое кольцо — монеты нет ни в одном -->
+        <i class="dot" :style="member.length ? { background: member[0].color, borderColor: member[0].color } : undefined" />
+        <i v-if="member.length > 1" class="dot second" :style="{ background: member[1].color, borderColor: member[1].color }" />
       </button>
     </template>
     <ListMenu :items="targets" />
@@ -38,20 +37,25 @@ const title = computed(() =>
 <style scoped>
 .picker {
   position: relative;
-  min-width: 22px;
+  min-width: 20px;
+  width: 20px;
   padding: 0;
-  color: var(--muted);
 }
-.picker.in :deep(path) {
-  fill: currentColor;
-  fill-opacity: 0.85;
+.dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  border: 1.5px solid var(--border);
 }
-.picker i {
+.picker:hover .dot {
+  border-color: var(--muted);
+}
+.dot.second {
   position: absolute;
-  right: 1px;
-  top: 3px;
+  right: 0;
+  top: 5px;
   width: 6px;
   height: 6px;
-  border-radius: 50%;
+  border-width: 0;
 }
 </style>

@@ -7,6 +7,14 @@ import { visibleItems } from './watchlist'
 
 export type SortKey = 'volume' | 'change' | 'price' | 'symbol'
 
+/** Столбцы отбора, кроме названия: оно показывается всегда */
+export type ScreenerCol = 'price' | 'change' | 'volume'
+export const SCREENER_COLS: { id: ScreenerCol; label: string; sort: SortKey }[] = [
+  { id: 'price', label: 'Цена', sort: 'price' },
+  { id: 'change', label: 'Изменение за 24ч', sort: 'change' },
+  { id: 'volume', label: 'Объём за 24ч', sort: 'volume' },
+]
+
 export interface ScreenerSettings {
   exchange: ExchangeId
   market: MarketId
@@ -17,9 +25,11 @@ export interface ScreenerSettings {
   quote: 'USDT' | 'all'
   sort: SortKey
   dir: 'asc' | 'desc'
+  cols: ScreenerCol[]
 }
 
-const DEFAULTS: ScreenerSettings = { exchange: 'binance', market: 'futures', minVolume: 30, minChange: 0, quote: 'USDT', sort: 'volume', dir: 'desc' }
+const DEFAULT_COLS: ScreenerCol[] = ['price', 'volume']
+const DEFAULTS: ScreenerSettings = { exchange: 'binance', market: 'futures', minVolume: 30, minChange: 0, quote: 'USDT', sort: 'volume', dir: 'desc', cols: DEFAULT_COLS }
 export const MAX_ROWS = 200
 const REFRESH_MS = 20_000
 
@@ -33,15 +43,22 @@ function initial(): ScreenerSettings {
     quote: s.quote === 'all' ? 'all' : 'USDT',
     sort: (['volume', 'change', 'price', 'symbol'] as SortKey[]).includes(s.sort as SortKey) ? (s.sort as SortKey) : 'volume',
     dir: s.dir === 'asc' ? 'asc' : 'desc',
+    cols: Array.isArray(s.cols) ? SCREENER_COLS.map((c) => c.id).filter((c) => s.cols!.includes(c)) : DEFAULT_COLS.slice(),
   }
 }
 
 export const settings = reactive(initial())
 persist('screener', settings, () => settings)
 
+/** Возвращает фильтры и сортировку к исходным; набор столбцов не трогает */
 export function resetSettings() {
-  Object.assign(settings, DEFAULTS)
+  Object.assign(settings, DEFAULTS, { cols: settings.cols })
 }
+
+/** Сколько условий отбора отличается от исходных — для метки на кнопке фильтра */
+export const filterCount = computed(() => +(settings.minVolume !== DEFAULTS.minVolume) + +(settings.minChange > 0) + +(settings.quote !== DEFAULTS.quote))
+/** Всего инструментов на выбранной бирже и рынке — до фильтров */
+export const universe = computed(() => rows.value.length)
 
 export const state = reactive({ loading: false, error: '', updatedAt: 0 })
 const rows = shallowRef<SymbolVolume[]>([])

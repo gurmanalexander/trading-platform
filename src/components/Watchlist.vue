@@ -1,12 +1,14 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, reactive, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import Icon from './Icon.vue'
 import Dropdown from './Dropdown.vue'
 import SideMark from './SideMark.vue'
+import ColumnsMenu from './ColumnsMenu.vue'
 import { EXCHANGE_NAMES, MARKET_NAMES, sameSymbol, symbolKey } from '../types'
-import { activePane, openSearch, setSymbol } from '../stores/app'
+import { app, activePane, openSearch, setSymbol } from '../stores/app'
 import { tickers, useTickers } from '../stores/tickers'
-import { dayStats, useDayStats } from '../stores/atr'
+import { dayStats, dayProgress, useDayStats } from '../stores/atr'
+import { spentTone } from '../lib/atr'
 import { drawings } from '../stores/drawings'
 import { tracked, currentR, useTrackedPositions } from '../stores/positions'
 import {
@@ -19,22 +21,41 @@ import {
   createList,
   deleteList,
   LIST_COLORS,
+  LIST_COLS,
+  type ListCol,
   type SideFilter,
   type WatchItem,
   type WatchList,
 } from '../stores/watchlist'
-import { fmtPct, fmtPrice, precisionOf } from '../lib/format'
+import { fmtPct, fmtPrice, fmtVolume, precisionOf } from '../lib/format'
 import { fmtR } from '../chart/position'
 
 useTickers(() => visibleItems.value)
 useDayStats(() => visibleItems.value)
 useTrackedPositions(() => visibleItems.value)
 
-const FILTERS: { id: SideFilter; label: string }[] = [
-  { id: 'all', label: 'Все' },
-  { id: 'long', label: 'Лонги' },
-  { id: 'short', label: 'Шорты' },
+const FILTERS: { id: SideFilter; label: string; title: string }[] = [
+  { id: 'all', label: 'Все', title: 'Показывать все монеты' },
+  { id: 'long', label: '▲ Лонг', title: 'Скрыть монеты, отмеченные как шорт' },
+  { id: 'short', label: '▼ Шорт', title: 'Скрыть монеты, отмеченные как лонг' },
 ]
+
+// Столбцы: название — всегда, остальные выбираются
+const HEAD: Record<ListCol, string> = { price: 'Цена', change: '24ч', volume: 'Объём', result: 'Итог', atr: 'ATR' }
+const WIDTH: Record<ListCol, string> = { price: 'minmax(58px, auto)', change: '56px', volume: '50px', result: '54px', atr: '40px' }
+const cols = computed(() => LIST_COLS.filter((c) => lists.cols.includes(c.id)))
+const grid = computed(() => ({ gridTemplateColumns: ['16px', 'minmax(0, 1fr)', ...cols.value.map((c) => WIDTH[c.id]), '18px'].join(' ') }))
+const tone = (pct: number | undefined) => (!pct ? 'muted' : pct > 0 ? 'up' : 'down')
+
+/** Сколько дневного ATR пройдено от открытия дня */
+function atrCell(r: WatchItem) {
+  const key = symbolKey(r)
+  const s = dayStats[key]
+  const last = tickers[key]?.last
+  if (!s || !last) return null
+  const v = dayProgress(s, last).fromOpen
+  return { text: v.toFixed(0) + '%', cls: spentTone(v) }
+}
 
 function price(r: WatchItem) {
   const key = symbolKey(r)
@@ -93,9 +114,22 @@ function status(r: WatchItem): Status | null {
 
 // ---------- списки ----------
 
+// новый список — строкой прямо в панели: название и цвет
+const draft = reactive({ open: false, name: '', color: LIST_COLORS[0] })
+const draftInput = ref<HTMLInputElement>()
+function startList() {
+  draft.open = !draft.open
+  if (!draft.open) return
+  draft.name = ''
+  draft.color = LIST_COLORS[lists.all.length % LIST_COLORS.length]
+  nextTick(() => draftInput.value?.focus())
+}
 function addList() {
-  const name = prompt('Название нового списка', `Список ${lists.all.length + 1}`)?.trim()
-  if (name) createList(name.slice(0, 40))
+  const name = draft.name.trim()
+  if (!name) return draftInput.value?.focus()
+  createList(name.slice(0, 40), draft.color)
+  draft.open = false
+  nextTick(() => scroller.value?.scrollTo({ top: scroller.value.scrollHeight, behavior: 'smooth' }))
 }
 function rename(l: WatchList) {
   const name = prompt('Название списка', l.name)?.trim()
@@ -263,55 +297,88 @@ function listMark(listId: string, i: number): string {
 <template>
   <div class="wl" :class="{ dragging: drag.active }">
     <div class="wl-top">
-      <button v-for="f in FILTERS" :key="f.id" class="btn sm" :class="{ on: lists.filter === f.id }" @click="lists.filter = f.id">{{ f.label }}</button>
+      <div class="seg" role="group" aria-label="Фильтр по направлению">
+        <button v-for="f in FILTERS" :key="f.id" :class="{ on: lists.filter === f.id, [f.id]: true }" :title="f.title" @click="lists.filter = f.id">{{ f.label }}</button>
+      </div>
       <span class="grow" />
-      <button class="btn sm" title="Новый список" @click="addList"><Icon name="plus" :size="16" /></button>
+      <button class="btn sm" title="Вставить из буфера: строки с монетами попадут в текущий список" @click="app.tradeTextOpen = true"><Icon name="paste" :size="16" /></button>
+      <ColumnsMenu :model-value="lists.cols" :options="LIST_COLS" @update:model-value="lists.cols = $event as ListCol[]" />
+      <button class="btn sm" :class="{ on: draft.open }" title="Новый список" @click="startList"><Icon name="listPlus" :size="16" /></button>
+    </div>
+
+    <form v-if="draft.open" class="draft" @submit.prevent="addList" @keydown.esc.stop="draft.open = false">
+      <input ref="draftInput" v-model="draft.name" class="field" maxlength="40" placeholder="Название списка" autocomplete="off" />
+      <div class="draft-row">
+        <button
+          v-for="c in LIST_COLORS"
+          :key="c"
+          type="button"
+          class="swatch"
+          :class="{ on: c === draft.color }"
+          :style="{ background: c }"
+          :aria-label="'Цвет ' + c"
+          @click="draft.color = c"
+        />
+        <span class="grow" />
+        <button type="button" class="btn sm" @click="draft.open = false">Отмена</button>
+        <button class="btn sm primary" type="submit" :disabled="!draft.name.trim()">Создать</button>
+      </div>
+    </form>
+
+    <div class="wl-cols" :style="grid">
+      <span />
+      <span>Тикер</span>
+      <span v-for="c in cols" :key="c.id" class="num" :title="c.hint || c.label">{{ HEAD[c.id] }}</span>
+      <span />
     </div>
 
     <div ref="scroller" class="wl-list scroll">
       <section v-for="(l, li) in lists.all" :key="l.id" class="list" :class="listMark(l.id, li)" :data-list="l.id" :style="{ '--list': l.color }">
         <header
           class="list-head"
-          :class="{ current: l.id === lists.activeId, moving: drag.active && drag.kind === 'list' && drag.listId === l.id }"
+          :class="{ current: l.id === lists.activeId, closed: l.collapsed, moving: drag.active && drag.kind === 'list' && drag.listId === l.id }"
+          :title="l.id === lists.activeId ? 'Текущий список: сюда добавляют Alt+W и вставка' : ''"
           @pointerdown="onDown($event, 'list', l.id, li, l.name)"
           @click="toggle(l, $event)"
         >
-          <Icon name="chevron" :size="14" :style="{ transform: l.collapsed ? 'rotate(-90deg)' : '' }" />
-          <Icon name="flag" :size="14" class="flag" />
+          <Icon name="chevron" :size="13" class="chev" />
+          <i class="dot" />
           <b>{{ l.name }}</b>
-          <span class="muted count">{{ l.items.length }}</span>
-          <span v-if="l.id === lists.activeId" class="cur" title="Текущий список: сюда добавляют Alt+W и звёздочка">★</span>
+          <span class="count">{{ l.items.length }}</span>
+          <span v-if="l.id === lists.activeId" class="cur">★</span>
           <span class="grow" />
-          <Dropdown align="right">
-            <template #trigger="{ toggle: open }">
-              <button class="btn sm more" title="Действия со списком" @click.stop="open"><Icon name="sliders" :size="14" /></button>
-            </template>
-            <template #default="{ close }">
-              <button class="menu-item" @click="addTo(l), close()"><Icon name="plus" :size="16" />Добавить инструмент…</button>
-              <button class="menu-item" :class="{ on: l.id === lists.activeId }" @click="(lists.activeId = l.id), close()">
-                <Icon name="star" :size="16" />Текущий (для Alt+W и ★)
-              </button>
-              <button class="menu-item" @click="rename(l), close()"><Icon name="pencil" :size="16" />Переименовать…</button>
-              <div class="colors">
-                <button
-                  v-for="c in LIST_COLORS"
-                  :key="c"
-                  class="swatch"
-                  :class="{ on: c === l.color }"
-                  :style="{ background: c }"
-                  :aria-label="'Цвет ' + c"
-                  @click="l.color = c"
-                />
-                <label class="swatch custom" title="Свой цвет">
-                  <input type="color" :value="l.color" @change="l.color = ($event.target as HTMLInputElement).value" />
-                </label>
-              </div>
-              <template v-if="lists.all.length > 1">
-                <div class="menu-sep" />
-                <button class="menu-item" @click="remove(l), close()"><Icon name="trash" :size="16" />Удалить список</button>
+          <span class="head-tools">
+            <button class="btn sm" title="Добавить монету в этот список" @click.stop="addTo(l)"><Icon name="plus" :size="15" /></button>
+            <Dropdown align="right">
+              <template #trigger="{ toggle: open }">
+                <button class="btn sm" title="Настройки списка" @click.stop="open"><Icon name="more" :size="15" /></button>
               </template>
-            </template>
-          </Dropdown>
+              <template #default="{ close }">
+                <button class="menu-item" :class="{ on: l.id === lists.activeId }" @click="(lists.activeId = l.id), close()">
+                  <Icon name="star" :size="16" />Сделать текущим
+                </button>
+                <button class="menu-item" @click="rename(l), close()"><Icon name="pencil" :size="16" />Переименовать…</button>
+                <div class="colors">
+                  <button
+                    v-for="c in LIST_COLORS"
+                    :key="c"
+                    class="swatch"
+                    :class="{ on: c === l.color }"
+                    :style="{ background: c }"
+                    :aria-label="'Цвет ' + c"
+                    @click="l.color = c"
+                  />
+                  <label class="swatch custom" title="Свой цвет">
+                    <input type="color" :value="l.color" @change="l.color = ($event.target as HTMLInputElement).value" />
+                  </label>
+                </div>
+                <template v-if="lists.all.length > 1">
+                  <div class="menu-sep" />
+                  <button class="menu-item" @click="remove(l), close()"><Icon name="trash" :size="16" />Удалить список</button>
+                </template>
+              </template>
+            </Dropdown>
+          </span>
         </header>
 
         <template v-if="!l.collapsed">
@@ -323,6 +390,7 @@ function listMark(listId: string, i: number): string {
                 rowMark(l.id, i, l.items.length),
                 { active: sameSymbol(r, activePane.symbol), moving: drag.active && drag.kind === 'item' && drag.listId === l.id && drag.index === i },
               ]"
+              :style="grid"
               :data-row="i"
               :title="`${EXCHANGE_NAMES[r.exchange]} · ${MARKET_NAMES[r.market]}`"
               role="button"
@@ -333,13 +401,16 @@ function listMark(listId: string, i: number): string {
             >
               <SideMark :item="r" />
               <b class="sym">{{ r.symbol }}<i v-if="r.exchange !== 'binance' || r.market !== 'futures'">{{ r.exchange === 'bybit' ? 'bb' : 'bn' }}{{ r.market === 'spot' ? '·с' : '' }}</i></b>
-              <span class="num">{{ price(r) }}</span>
-              <span class="num" :class="(tickers[symbolKey(r)]?.changePct ?? 0) >= 0 ? 'up' : 'down'">{{ fmtPct(tickers[symbolKey(r)]?.changePct) }}</span>
-              <span class="num st" :class="status(r)?.cls" :title="status(r)?.title">{{ status(r)?.text ?? '' }}</span>
+              <template v-for="c in cols" :key="c.id">
+                <span v-if="c.id === 'price'" class="num" :class="tone(tickers[symbolKey(r)]?.changePct)" :title="'За сутки ' + fmtPct(tickers[symbolKey(r)]?.changePct)">{{ price(r) }}</span>
+                <span v-else-if="c.id === 'change'" class="num" :class="tone(tickers[symbolKey(r)]?.changePct)">{{ fmtPct(tickers[symbolKey(r)]?.changePct) }}</span>
+                <span v-else-if="c.id === 'volume'" class="num muted">{{ fmtVolume(tickers[symbolKey(r)]?.quoteVolume) }}</span>
+                <span v-else-if="c.id === 'result'" class="num st" :class="status(r)?.cls" :title="status(r)?.title">{{ status(r)?.text ?? '' }}</span>
+                <span v-else class="num" :class="atrCell(r)?.cls" title="Дневной ATR исчерпан от открытия дня">{{ atrCell(r)?.text ?? '' }}</span>
+              </template>
               <button class="btn sm rm" title="Убрать из списка" @click.stop="removeItem(l.id, i)"><Icon name="x" :size="13" /></button>
             </div>
           </template>
-          <p v-if="!l.items.length" class="empty muted">Пусто — перетащите сюда инструмент</p>
         </template>
       </section>
     </div>
@@ -363,19 +434,70 @@ function listMark(listId: string, i: number): string {
   display: flex;
   align-items: center;
   gap: 2px;
-  padding: 5px 6px 5px 8px;
-  border-bottom: 1px solid var(--border);
+  padding: 6px 6px 6px 8px;
   flex: none;
 }
-.wl-top .btn {
-  padding: 0 9px;
-  color: var(--muted);
+/* фильтр по направлению — переключатель из трёх положений */
+.seg {
+  display: flex;
+  padding: 2px;
+  border-radius: 7px;
+  background: var(--hover);
 }
-.wl-top .btn.on {
-  color: var(--accent);
+.seg button {
+  height: 24px;
+  padding: 0 9px;
+  border-radius: 5px;
+  font-size: 12px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.seg button.on {
+  background: var(--panel);
+  color: var(--text);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.14);
+}
+.seg button.on.long {
+  color: var(--up);
+}
+.seg button.on.short {
+  color: var(--down);
 }
 .grow {
   flex: 1;
+}
+.draft {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0 8px 8px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  flex: none;
+}
+.draft .field {
+  height: 30px;
+}
+.draft-row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.draft-row .swatch {
+  width: 16px;
+  height: 16px;
+}
+.wl-cols {
+  display: grid;
+  align-items: center;
+  column-gap: 5px;
+  padding: 0 4px 4px;
+  font-size: 10.5px;
+  color: var(--muted);
+  border-bottom: 1px solid var(--border);
+  flex: none;
 }
 .wl-list {
   flex: 1;
@@ -384,55 +506,80 @@ function listMark(listId: string, i: number): string {
 .list {
   position: relative;
 }
+/* заголовок списка — как раздел: без подложки, только название и метка цвета */
 .list-head {
   display: flex;
   align-items: center;
-  gap: 6px;
-  height: 30px;
-  padding: 0 4px 0 6px;
-  background: var(--panel-2);
-  border-bottom: 1px solid var(--border);
+  gap: 5px;
+  height: 28px;
+  padding: 0 2px 0 3px;
+  background: var(--panel);
   cursor: pointer;
   position: sticky;
   top: 0;
   z-index: 2;
 }
-/* цвет списка — только флажок, как метка, а не заливка */
-.flag {
-  color: var(--list);
+.chev {
+  color: var(--muted);
+  transition: transform 0.12s;
 }
-.flag :deep(path) {
-  fill: var(--list);
-  fill-opacity: 0.85;
+.list-head.closed .chev {
+  transform: rotate(-90deg);
+}
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--list);
+  flex: none;
 }
 .list-head b {
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--muted);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.list-head:hover b,
+.list-head.current b {
+  color: var(--text);
+}
 .count {
-  font-size: 11px;
+  font-size: 10.5px;
+  color: var(--muted);
 }
 .cur {
   color: var(--warn);
-  font-size: 11px;
+  font-size: 10px;
 }
-.more {
+.head-tools {
+  display: flex;
+}
+.head-tools .btn {
   color: var(--muted);
   height: 24px;
   min-width: 24px;
+  padding: 0;
+}
+@media (hover: hover) {
+  .head-tools {
+    visibility: hidden;
+  }
+  .list-head:hover .head-tools,
+  .head-tools:focus-within {
+    visibility: visible;
+  }
 }
 .wl-row {
   display: grid;
-  grid-template-columns: 18px minmax(0, 1fr) auto 50px 54px 18px;
   align-items: center;
   column-gap: 5px;
-  padding: 0 4px 0 4px;
+  padding: 0 4px;
   height: 30px;
   font-size: 12.5px;
-  border-bottom: 1px solid color-mix(in srgb, var(--border) 55%, transparent);
   cursor: pointer;
   position: relative;
 }
@@ -441,6 +588,7 @@ function listMark(listId: string, i: number): string {
 }
 .wl-row.active {
   background: var(--accent-soft);
+  box-shadow: inset 2px 0 0 var(--accent);
 }
 .moving {
   opacity: 0.35;
@@ -482,6 +630,7 @@ function listMark(listId: string, i: number): string {
 .num {
   text-align: right;
   white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
 .st {
   font-weight: 600;
@@ -499,11 +648,6 @@ function listMark(listId: string, i: number): string {
   .wl-row:hover .rm {
     visibility: visible;
   }
-}
-.empty {
-  margin: 0;
-  padding: 7px 10px;
-  font-size: 12px;
 }
 .colors {
   display: flex;
@@ -550,7 +694,6 @@ function listMark(listId: string, i: number): string {
 @media (max-width: 719px) {
   .wl-row {
     height: 40px;
-    grid-template-columns: 26px minmax(0, 1fr) auto 54px 58px 26px;
   }
   .list-head {
     height: 38px;

@@ -1,32 +1,54 @@
 import { describe, expect, it } from 'vitest'
-import { robustAtr } from '../src/lib/atr'
+import { atrBounds, atrSpent, dailyAtr, dailyRisk, fiveMinRisk, spentTone, wilderAtr } from '../src/lib/atr'
 import { formatSignal, parseSignal } from '../src/lib/signal'
-import { evaluatePosition, fmtR, latestPosition, setPositionPrices } from '../src/chart/position'
+import { barStart, evaluatePosition, fmtR, latestPosition, setPositionPrices } from '../src/chart/position'
 import type { Drawing } from '../src/stores/drawings'
 
-describe('ATR без аномальных свечей', () => {
-  it('обычные дни — простое среднее пяти последних', () => {
-    expect(robustAtr([10, 12, 8, 11, 9])).toBe(10)
-    expect(robustAtr([100, 10, 12, 8, 11, 9])).toBe(10)
+describe('ATR по формулам индикатора Trader Assistant', () => {
+  it('дневной ATR — среднее диапазонов пяти предыдущих дневных свечей', () => {
+    expect(dailyAtr([10, 12, 8, 11, 9])).toBe(10)
+    expect(dailyAtr([100, 10, 12, 8, 11, 9])).toBe(10) // более старые свечи не участвуют
+    // фильтра аномальных свечей в формуле индикатора нет: большая свеча входит в среднее
+    expect(dailyAtr([10, 12, 8, 50, 20])).toBe(20)
+    expect(dailyAtr([10, 14])).toBe(12)
+    expect(dailyAtr([])).toBe(0)
   })
 
-  it('аномально большая свеча не учитывается, вместо неё берётся более ранняя', () => {
-    // 50 > 150% от опорного значения — пропускаем и добираем пятую свечу из прошлого
-    expect(robustAtr([10, 10, 12, 8, 50, 11, 9])).toBe(10)
+  it('стоп — 10% ATR, тейк — 4 стопа, люфт — 10% стопа', () => {
+    const r = dailyRisk(2000)
+    expect(r.stop).toBe(200)
+    expect(r.take).toBe(800)
+    expect(r.slip).toBe(20)
   })
 
-  it('аномально маленькая свеча не учитывается', () => {
-    expect(robustAtr([10, 10, 12, 8, 1, 11, 9])).toBe(10)
+  it('стоп по пятиминуткам — два ATR(30)', () => {
+    // у ровных свечей без разрывов истинный диапазон равен high − low
+    const bars = Array.from({ length: 60 }, () => ({ high: 105, low: 100, close: 102 }))
+    expect(wilderAtr(bars)).toBeCloseTo(5)
+    const r = fiveMinRisk(5)
+    expect(r.stop).toBe(10)
+    expect(r.take).toBe(40)
+    expect(r.slip).toBe(1)
   })
 
-  it('несколько аномалий подряд не сбивают опорное значение', () => {
-    expect(robustAtr([10, 10, 10, 10, 10, 40, 45])).toBe(10)
+  it('истинный диапазон учитывает разрыв от прошлого закрытия', () => {
+    expect(wilderAtr([{ high: 10, low: 9, close: 9 }, { high: 15, low: 14, close: 15 }], 2)).toBe((1 + 6) / 2)
   })
 
-  it('мало данных и пустой ввод', () => {
-    expect(robustAtr([10, 14])).toBe(12)
-    expect(robustAtr([])).toBe(0)
-    expect(robustAtr([0, 0])).toBe(0)
+  it('исчерпание ATR: от открытия дня и по размаху', () => {
+    const day = { open: 100, high: 108, low: 98 }
+    const s = atrSpent(20, day, 104)
+    expect(s.fromOpen).toBe(20)
+    expect(s.traveled).toBe(50)
+    expect(spentTone(s.fromOpen)).toBe('up') // меньше 30% — запас хода
+    expect(spentTone(75)).toBe('down') // больше 70% — ход на исходе
+    expect(spentTone(50)).toBe('')
+    // цена вышла за записанный максимум дня — размах считается по ней
+    expect(atrSpent(20, day, 110).traveled).toBe(60)
+  })
+
+  it('границы дня по ATR', () => {
+    expect(atrBounds(20, { open: 100, high: 108, low: 98 }, 104)).toEqual({ maxFromOpen: 120, minFromOpen: 80, maxFromLow: 118, minFromHigh: 88 })
   })
 })
 
@@ -129,5 +151,14 @@ describe('ход сделки', () => {
     expect(fmtR(-0.5)).toBe('-0.5R')
     expect(fmtR(0.01)).toBe('0R')
     expect(fmtR(12.4)).toBe('+12R')
+  })
+})
+
+describe('время позиции привязано к свече', () => {
+  it('момент внутри свечи округляется вниз до её начала', () => {
+    const t = Date.UTC(2026, 10, 12, 17, 12, 40) / 1000
+    expect(new Date(barStart(t, 300) * 1000).toISOString()).toBe('2026-11-12T17:10:00.000Z')
+    expect(new Date(barStart(t, 3600) * 1000).toISOString()).toBe('2026-11-12T17:00:00.000Z')
+    expect(barStart(Date.UTC(2026, 10, 12, 17, 10) / 1000, 300)).toBe(Date.UTC(2026, 10, 12, 17, 10) / 1000)
   })
 })

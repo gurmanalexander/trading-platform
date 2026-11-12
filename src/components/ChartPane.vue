@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, onMounted, reactive, ref, shallowRef, watch 
 import Icon from './Icon.vue'
 import ChartLegend from './ChartLegend.vue'
 import DrawingBar from './DrawingBar.vue'
+import AtrTable from './AtrTable.vue'
 import { ChartController } from '../chart/controller'
 import { registerChart } from '../chart/registry'
 import { symbolKey } from '../types'
@@ -13,6 +14,7 @@ import { clearDrawings, drawings, drawingsOf, selection } from '../stores/drawin
 import { crosshairBus, dateFocus, timeBus } from '../stores/sync'
 import { useDayStats } from '../stores/atr'
 import { fmtPrice } from '../lib/format'
+import { getTf } from '../lib/timeframes'
 
 const props = defineProps<{ index: number }>()
 const pane = app.panes[props.index]
@@ -25,6 +27,10 @@ const isActive = computed(() => activeIndex.value === props.index)
 const precision = computed(() => ctrl.value?.ui.precision ?? 2)
 
 const menu = reactive({ open: false, x: 0, y: 0, price: 0 })
+
+// таблица ATR — на «рабочих» интервалах (15 минут и младше): там, где выбирают вход
+const atrCapable = computed(() => getTf(pane.tf).sec <= 900)
+const showAtr = computed(() => atrCapable.value && app.atrTable && !(isPhone.value && app.phoneStack && paneCount.value > 1))
 
 // живая цена инструмента панели: и для списка, и для «докраски» последней свечи
 useTickers(() => [pane.symbol])
@@ -195,11 +201,13 @@ function toggleScale(id: ScaleMode) {
       :compact="isPhone || (paneCount > 1 && !app.maximized)"
     />
 
+    <AtrTable v-if="ctrl && showAtr" class="pane-atr" :symbol="pane.symbol" :precision="precision" />
     <div v-if="ctrl" class="pane-tools">
       <button class="chip" title="Сбросить масштаб (Alt+R)" @click="ctrl.resetView()">авто</button>
       <button v-for="s in SCALES" :key="s.id" class="chip" :class="{ on: pane.scale === s.id }" :title="s.title" @click="toggleScale(s.id)">
         {{ s.label }}
       </button>
+      <button v-if="atrCapable" class="chip" :class="{ on: app.atrTable }" title="Таблица ATR: стоп, тейк, люфт, границы дня" @click="app.atrTable = !app.atrTable">ATR</button>
       <button
         v-if="paneCount > 1 && !isPhone"
         class="chip"
@@ -259,6 +267,18 @@ function toggleScale(id: ScaleMode) {
 .chart-host.over-drawing :deep(canvas) {
   cursor: pointer !important;
 }
+.chart-host[data-cursor='move'] :deep(canvas) {
+  cursor: move !important;
+}
+.chart-host[data-cursor='ns-resize'] :deep(canvas) {
+  cursor: ns-resize !important;
+}
+.chart-host[data-cursor='ew-resize'] :deep(canvas) {
+  cursor: ew-resize !important;
+}
+.chart-host[data-cursor='grab'] :deep(canvas) {
+  cursor: grab !important;
+}
 .draw-overlay {
   position: absolute;
   left: 0;
@@ -276,6 +296,13 @@ function toggleScale(id: ScaleMode) {
   display: flex;
   gap: 4px;
   opacity: 0.75;
+}
+.pane-atr {
+  position: absolute;
+  left: 8px;
+  bottom: 62px;
+  z-index: 4;
+  opacity: 0.92;
 }
 .pane-tools:hover {
   opacity: 1;

@@ -171,6 +171,8 @@ export interface Template {
   layout: LayoutState
   panes: PaneState[]
   sync: SyncState
+  /** избранный: кнопка шаблона (первая буква названия) стоит прямо на верхней панели */
+  fav?: boolean
 }
 
 interface Saved {
@@ -191,6 +193,7 @@ interface Saved {
   phoneStack?: boolean
   defaults?: { exchange?: ExchangeId; market?: MarketId }
   colors?: Partial<Record<Theme, CustomColors>>
+  atrTable?: boolean
 }
 
 const saved = load<Saved>('app', {})
@@ -204,6 +207,7 @@ function sanitizeTemplates(raw: unknown): Template[] {
       id: String(t.id),
       name: t.name,
       withSymbols: t.withSymbols === true,
+      fav: t.fav !== false,
       layout: sanitizeLayout(t.layout),
       panes: t.panes.map((p: Partial<PaneState>, i: number) => sanitizePane(p, i)),
       sync: { symbol: t.sync?.symbol !== false, interval: t.sync?.interval === true, crosshair: t.sync?.crosshair !== false, time: t.sync?.time === true },
@@ -244,6 +248,8 @@ export const app = reactive({
     exchange: (saved.defaults?.exchange === 'bybit' ? 'bybit' : 'binance') as ExchangeId,
     market: (saved.defaults?.market === 'spot' ? 'spot' : 'futures') as MarketId,
   },
+  /** таблица ATR (стоп, тейк, люфт, границы дня) на младших интервалах */
+  atrTable: saved.atrTable ?? true,
   /** телефон: показывать все окна раскладки сразу (столбцом), а не одно */
   phoneStack: saved.phoneStack ?? false,
 
@@ -264,6 +270,10 @@ export const app = reactive({
   /** окно ввода текста: новый текст в точке pt либо правка рисунка id */
   textEdit: null as null | { pane: number; id: string | null; pt: { t: number; p: number } | null; text: string },
   tradeTextOpen: false,
+  shareOpen: false,
+  dashboardOpen: false,
+  screenerFilterOpen: false,
+  syncOpen: false,
   colorsOpen: false,
   /** окно переноса настроек; code — данные, пришедшие по ссылке с другого устройства */
   transfer: null as null | { code: string },
@@ -271,7 +281,7 @@ export const app = reactive({
 
 persist(
   'app',
-  () => [app.themePref, app.layout, app.panes, app.active, app.panel, app.panelOpen, app.magnet, app.sync, app.favTfs, app.templates, app.templateId, app.tabTemplates, app.searchFilter, app.drawingsHidden, app.phoneStack, app.defaults, app.colors],
+  () => [app.themePref, app.layout, app.panes, app.active, app.panel, app.panelOpen, app.magnet, app.sync, app.favTfs, app.templates, app.templateId, app.tabTemplates, app.searchFilter, app.drawingsHidden, app.phoneStack, app.defaults, app.colors, app.atrTable],
   () => ({
     themePref: app.themePref,
     layout: app.layout,
@@ -290,6 +300,7 @@ persist(
     phoneStack: app.phoneStack,
     defaults: app.defaults,
     colors: app.colors,
+    atrTable: app.atrTable,
   }),
 )
 
@@ -318,7 +329,7 @@ export const paneCount = computed(() => layoutCount(app.layout))
 export const activeIndex = computed(() => Math.min(app.active, paneCount.value - 1))
 export const activePane = computed(() => app.panes[activeIndex.value])
 export const modalOpen = computed(
-  () => !!(app.search || app.indicatorsOpen || app.indSettings || app.intervalInput || app.hotkeysOpen || app.gotoOpen || app.textEdit || app.tradeTextOpen || app.colorsOpen || app.transfer),
+  () => !!(app.search || app.indicatorsOpen || app.indSettings || app.intervalInput || app.hotkeysOpen || app.gotoOpen || app.textEdit || app.tradeTextOpen || app.shareOpen || app.dashboardOpen || app.screenerFilterOpen || app.syncOpen || app.colorsOpen || app.transfer),
 )
 
 // ---------- действия ----------
@@ -384,10 +395,11 @@ export function showPanel(id: PanelId) {
 
 // ---------- шаблоны ----------
 
-const snapshot = (name: string, withSymbols: boolean, id: string): Template => ({
+const snapshot = (name: string, withSymbols: boolean, id: string, fav = true): Template => ({
   id,
   name,
   withSymbols,
+  fav,
   layout: sanitizeLayout(JSON.parse(JSON.stringify(app.layout))),
   panes: app.panes.slice(0, paneCount.value).map(clonePane),
   sync: { ...app.sync },
@@ -404,7 +416,7 @@ export function updateTemplate(id: string) {
   const i = app.templates.findIndex((t) => t.id === id)
   if (i < 0) return
   const old = app.templates[i]
-  app.templates[i] = snapshot(old.name, old.withSymbols, old.id)
+  app.templates[i] = snapshot(old.name, old.withSymbols, old.id, old.fav !== false)
   app.templateId = id
 }
 

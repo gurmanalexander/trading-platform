@@ -7,6 +7,7 @@ import { formatSignal, type Signal } from '../lib/signal'
 import { fmtPct, fmtPrice, fmtSpan } from '../lib/format'
 import { withAlpha, type ChartColors } from './theme'
 import { evaluatePosition, fmtR, movePositionHandle, riskReward, setPositionPrices } from './position'
+import { STOP_PART, TAKE_RATIO } from '../lib/atr'
 
 /** Что слою рисунков нужно знать о графике */
 export interface DrawHost {
@@ -52,9 +53,9 @@ export const TEXT_SIZES = [10, 12, 14, 18, 24]
 export const hasText = (t: DrawingType) => t === 'hline' || t === 'hray' || t === 'trend' || t === 'ray' || t === 'rect'
 const uid = () => Math.random().toString(36).slice(2, 10)
 
-// Новая позиция: стоп — 10% дневного ATR, цель — вчетверо дальше
-const STOP_ATR = 0.1
-const DEFAULT_RR = 4
+// Новая позиция: стоп — 10% дневного ATR, цель — вчетверо дальше (как в индикаторе, см. lib/atr.ts)
+const STOP_ATR = STOP_PART
+const DEFAULT_RR = TAKE_RATIO
 const MONTHS = ['янв', 'фев', 'мар', 'апр', 'мая', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек']
 
 /** Тёмный или светлый текст — что читается на фоне bg */
@@ -104,6 +105,7 @@ export class DrawingsLayer {
   private draft: Drawing | null = null
   private measure: Drawing | null = null
   private hoverId: string | null = null
+  private hoverCursor = ''
   private pressing = false
   private downAt: XY = { x: 0, y: 0 }
   private drag: { d: Drawing; handle: number; start: XY; orig: XY[]; moved: boolean; copy: boolean } | null = null
@@ -334,7 +336,14 @@ export class DrawingsLayer {
     on(el, 'pointermove', (e) => {
       if (e.pointerType !== 'mouse' || app.tool !== 'cursor' || this.drag) return
       const p = rel(e)
-      const id = this.hit(p.x, p.y, 6)?.d.id ?? null
+      const hit = this.hit(p.x, p.y, 6)
+      const id = hit?.d.id ?? null
+      // над маркером выбранного рисунка курсор показывает, куда его можно тянуть
+      const cur = hit && hit.handle >= 0 ? this.handleCursor(hit.d, hit.handle) : hit && hit.d.id === this.selectedId.value ? 'move' : ''
+      if (cur !== this.hoverCursor) {
+        this.hoverCursor = cur
+        el.dataset.cursor = cur
+      }
       if (id !== this.hoverId) {
         this.hoverId = id
         el.classList.toggle('over-drawing', !!id)
@@ -596,6 +605,14 @@ export class DrawingsLayer {
     this.redraw()
   }
 
+  /** Курсор над маркером: у позиции стоп и цель двигаются по вертикали, правый край — по горизонтали */
+  private handleCursor(d: Drawing, handle: number): string {
+    if (isPosition(d.type)) return handle === 0 ? 'move' : handle === 3 ? 'ew-resize' : 'ns-resize'
+    if (d.type === 'hline' || d.type === 'hray') return 'ns-resize'
+    if (d.type === 'vline') return 'ew-resize'
+    return 'grab'
+  }
+
   /** Сдвиг выбранного рисунка клавишами: на свечи по времени и на шаги цены по вертикали */
   nudge(bars: number, ticks: number): boolean {
     const d = this.selected()
@@ -603,7 +620,11 @@ export class DrawingsLayer {
     checkpoint()
     const prec = this.host.precision()
     const tick = 1 / 10 ** prec
-    const dt = bars * this.host.tfSec()
+    // по времени рисунок встаёт на границу свечи: сдвиг с 17:12 влево даёт 17:10, а не 17:07
+    const tf = this.host.tfSec()
+    const t0 = d.pts[0]?.t ?? 0
+    const snapped = bars > 0 ? Math.floor(t0 / tf) * tf + bars * tf : bars < 0 ? Math.ceil(t0 / tf) * tf + bars * tf : t0
+    const dt = snapped - t0
     if (d.pin) {
       // закреплённый текст сдвигается по экрану: шаг — 4 пикселя
       const size = this.host.chart.paneSize(0)
@@ -1058,9 +1079,12 @@ export class DrawingsLayer {
         const outside = x2 - x1 < Math.max(...texts.map((t) => ctx.measureText(t).width)) + 40
         const x = outside ? x2 + 10 : (x1 + x2) / 2
         const up = d.type === 'long' ? -1 : 1
+        // позиция не в фокусе — подписи приглушены, чтобы не закрывать свечи
+        ctx.globalAlpha = handles ? 1 : hover ? 0.85 : 0.35
         this.tag(ctx, [texts[0]], x, yT + up * 13, c.up, w, h, outside)
         this.tag(ctx, [texts[1]], x, yS - up * 13, c.down, w, h, outside)
         this.tag(ctx, [texts[2]], x, yE, c.muted, w, h, outside)
+        ctx.globalAlpha = 1
         break
       }
       case 'measure': {

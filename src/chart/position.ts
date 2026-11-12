@@ -9,6 +9,11 @@ export function riskReward(d: Drawing): number {
   return risk ? Math.abs(d.pts[1].p - d.pts[0].p) / risk : 0
 }
 
+/** Начало свечи, в которую попадает момент t (секунды), для интервала sec. Недели и месяцы не выравниваются */
+export function barStart(t: number, sec: number): number {
+  return sec > 0 && sec <= 86_400 ? Math.floor(t / sec) * sec : t
+}
+
 /**
  * Перемещение маркера позиции с сохранением порядка уровней: у длинной цель выше входа, стоп ниже,
  * у короткой наоборот. handle: 0 — вход, 1 — цель, 2 — стоп, 3 — правый край.

@@ -12,6 +12,8 @@ import { clipboard, redo, selection, undo } from './stores/drawings'
 import { stepSymbol } from './stores/screener'
 import { chartAt } from './chart/registry'
 import { applyPastedText, applySetup, setupTextFromUrl } from './chart/setup'
+import { applyShare } from './chart/share'
+import { decodeShare } from './lib/share'
 import { snapshotAll } from './chart/snapshot'
 import { parseSetup } from './lib/setup'
 
@@ -25,6 +27,8 @@ const HotkeysDialog = defineAsyncComponent(() => import('./components/HotkeysDia
 const TextDialog = defineAsyncComponent(() => import('./components/TextDialog.vue'))
 const TradeTextDialog = defineAsyncComponent(() => import('./components/TradeTextDialog.vue'))
 const ColorsDialog = defineAsyncComponent(() => import('./components/ColorsDialog.vue'))
+const ShareDialog = defineAsyncComponent(() => import('./components/ShareDialog.vue'))
+const ScreenerFilterDialog = defineAsyncComponent(() => import('./components/ScreenerFilterDialog.vue'))
 const TransferDialog = defineAsyncComponent(() => import('./components/TransferDialog.vue'))
 
 watch(
@@ -255,6 +259,14 @@ function openFromUrl() {
     app.transfer = { code: location.hash.slice(8) }
     return
   }
+  // ссылка «Поделиться» с несколькими уровнями или позициями
+  if (location.hash.startsWith('#share=')) {
+    const pack = decodeShare(location.hash.slice(7))
+    if (pack) applyShare(pack)
+    else toast('Ссылка повреждена: не удалось прочитать, чем поделились', 'error')
+    history.replaceState(null, '', new URL('./', location.href).pathname)
+    return
+  }
   const text = setupTextFromUrl()
   if (!text) return
   const setup = parseSetup(text)
@@ -299,6 +311,8 @@ onBeforeUnmount(() => {
     <TradeTextDialog v-if="app.tradeTextOpen" />
     <ColorsDialog v-if="app.colorsOpen" />
     <TransferDialog v-if="app.transfer" />
+    <ShareDialog v-if="app.shareOpen" />
+    <ScreenerFilterDialog v-if="app.screenerFilterOpen" />
     <Toasts />
   </div>
 </template>

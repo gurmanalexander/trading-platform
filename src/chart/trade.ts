@@ -5,7 +5,7 @@ import { getTf } from '../lib/timeframes'
 import type { Signal } from '../lib/signal'
 import { chartAt } from './registry'
 import { isPosition } from './drawings'
-import { setPositionPrices } from './position'
+import { barStart, setPositionPrices } from './position'
 
 /**
  * Применяет сделку из текста: цены раскладываются по выбранной позиции, а если позиция
@@ -27,8 +27,9 @@ export function applySignal(sig: Signal): boolean {
   }
   const pane = activePane.value
   const ref: SymbolRef = { exchange: pane.symbol.exchange, market: pane.symbol.market, symbol: sig.symbol ?? pane.symbol.symbol }
-  // вход — текущая минута; ширина — сутки на интервале до часа, чтобы позицию было видно на любом внутридневном графике
-  const t = Math.floor(Date.now() / 60_000) * 60
+  // вход — начало текущей свечи активного окна (17:12 на пятиминутках — это свеча 17:10);
+  // ширина — сутки на интервале до часа, чтобы позицию было видно на любом внутридневном графике
+  const t = barStart(Math.floor(Date.now() / 1000), getTf(pane.tf).sec)
   const d: Drawing = {
     id: Math.random().toString(36).slice(2, 10),
     type: 'long',

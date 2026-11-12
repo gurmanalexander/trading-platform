@@ -9,6 +9,7 @@ import { fmtCompact, fmtDuration, fmtPct, fmtPrice } from '../lib/format'
 import { indicatorDef, indicatorTitle } from '../lib/indicators'
 import { nowSec } from '../lib/now'
 import { dayStats, dayProgress } from '../stores/atr'
+import { dailyRisk, spentTone } from '../lib/atr'
 import { tickers } from '../stores/tickers'
 import type { Legend } from '../chart/controller'
 
@@ -40,8 +41,7 @@ const day = computed(() => {
   const last = tickers[key]?.last
   if (!s || !last) return null
   const p = dayProgress(s, last)
-  // меньше 30% — запас хода большой, больше 70% — дневной ход почти выбран
-  const tone = (v: number) => (v < 30 ? 'up' : v > 70 ? 'down' : '')
+  const tone = spentTone
   return {
     atr: fmtPrice(s.atr, props.precision),
     pct: ((s.atr / last) * 100).toFixed(2),
@@ -49,7 +49,7 @@ const day = computed(() => {
     fromOpenTone: tone(p.fromOpen),
     traveled: p.traveled.toFixed(0),
     traveledTone: tone(p.traveled),
-    stop: fmtPrice(s.atr * 0.1, props.precision),
+    stop: fmtPrice(dailyRisk(s.atr).stop, props.precision),
   }
 })
 
@@ -115,7 +115,7 @@ function pickSymbol() {
     <div
       v-if="day"
       class="legend-atr"
-      title="ATR — средний диапазон 5 дневных свечей без аномально больших и маленьких. Пройдено за сегодня: от открытия дня / по размаху дня. Стоп — 10% ATR."
+      title="ATR — средний диапазон пяти предыдущих дневных свечей. Исчерпан за сегодня: от открытия дня / по размаху дня. Стоп — 10% ATR. Подробнее — в таблице ATR на младших интервалах."
     >
       <span><i>ATR</i>{{ day.atr }}<i v-if="!compact"> ({{ day.pct }}%)</i></span>
       <span><i v-if="!compact">пройдено</i><b :class="day.fromOpenTone">{{ day.fromOpen }}%</b> / <b :class="day.traveledTone">{{ day.traveled }}%</b></span>

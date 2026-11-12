@@ -24,7 +24,7 @@ const row = (symbol: string, last: number, changePct: number, quoteVolume: numbe
   changePct,
   quoteVolume,
 })
-const base: Settings = { exchange: 'binance', market: 'futures', minVolume: 30, minChange: 0, quote: 'USDT', sort: 'volume', dir: 'desc' }
+const base: Settings = { exchange: 'binance', market: 'futures', minVolume: 30, minChange: 0, quote: 'USDT', sort: 'volume', dir: 'desc', cols: ['price', 'volume'] }
 
 describe('отбор', () => {
   const list = withUsdVolume([row('BTCUSDT', 70000, -1, 9e9), row('ETHUSDT', 2000, 2.5, 4e9), row('DOGEUSDT', 0.1, -6, 5e7), row('TINYUSDT', 1, 12, 2e7), row('BTCUSDC', 70000, -1, 8e8)])

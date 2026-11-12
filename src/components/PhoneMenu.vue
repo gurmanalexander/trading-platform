@@ -19,7 +19,6 @@ import { addWatch, activeList } from '../stores/watchlist'
 import { activeIndex } from '../stores/app'
 import { chartAt } from '../chart/registry'
 import { snapshotAll } from '../chart/snapshot'
-import { copyShareLink } from '../chart/share'
 
 // Меню «ещё» для телефона: всё, что на широком экране лежит кнопками на верхней панели
 const pane = activePane
@@ -60,7 +59,7 @@ function saveNew() {
         <button class="menu-item" @click="(app.tradeTextOpen = true), close()"><Icon name="paste" :size="16" />Вставить текстом</button>
         <button class="menu-item" @click="toList(), close()"><Icon name="star" :size="16" />В список «{{ activeList.name }}»</button>
         <button class="menu-item" @click="(app.gotoOpen = true), close()"><Icon name="skip" :size="16" />Перейти к дате</button>
-        <button class="menu-item" @click="copyShareLink(), close()"><Icon name="share" :size="16" />Поделиться ссылкой</button>
+        <button class="menu-item" @click="(app.shareOpen = true), close()"><Icon name="share" :size="16" />Поделиться…</button>
         <button class="menu-item" @click="(paneCount > 1 && app.phoneStack ? snapshotAll() : chartAt(activeIndex)?.screenshot()), close()">
           <Icon name="camera" :size="16" />Снимок графика
         </button>

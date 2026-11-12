@@ -35,7 +35,6 @@ import {
 import { TIMEFRAMES, getTf } from '../lib/timeframes'
 import { chartAt } from '../chart/registry'
 import { snapshotAll } from '../chart/snapshot'
-import { copyShareLink } from '../chart/share'
 
 const pane = activePane
 const favorites = computed(() => TIMEFRAMES.filter((t) => app.favTfs.includes(t.id)))
@@ -45,6 +44,9 @@ const tfInMenu = computed(() => !inlineTfs.value || !app.favTfs.includes(pane.va
 const chartType = computed(() => CHART_TYPES.find((t) => t.id === pane.value.chartType) ?? CHART_TYPES[0])
 const canFullscreen = !!document.documentElement.requestFullscreen
 const template = computed(() => app.templates.find((t) => t.id === app.templateId))
+const favTemplates = computed(() => app.templates.filter((t) => t.fav !== false))
+/** Подпись кнопки избранного шаблона — первый символ названия */
+const initial = (name: string) => [...name.trim()][0]?.toUpperCase() ?? '?'
 
 const THEMES: { id: ThemePref; label: string; icon: string }[] = [
   { id: 'system', label: 'Как в системе', icon: 'monitor' },
@@ -175,20 +177,72 @@ function fullscreen() {
     <span class="grow" />
     <PhoneMenu v-if="isPhone" />
 
-    <Dropdown v-if="!isPhone" align="right">
-      <template #trigger="{ toggle }">
-        <button class="btn" title="Синхронизация окон" @click="toggle"><Icon name="link" /></button>
-      </template>
-      <div class="menu-title">Синхронизация окон</div>
-      <label v-for="o in SYNC" :key="o.id" class="menu-item check" :title="o.hint">
-        <input v-model="app.sync[o.id]" type="checkbox" />
-        {{ o.label }}
-      </label>
-    </Dropdown>
+    <!-- шаблоны: избранные — кнопками (первая буква названия), остальное — в меню -->
+    <template v-if="!isPhone">
+      <button
+        v-for="t in favTemplates"
+        :key="t.id"
+        class="btn tpl-fav"
+        :class="{ on: t.id === app.templateId }"
+        :title="'Шаблон «' + t.name + '»'"
+        @click="applyTemplate(t.id)"
+      >
+        {{ initial(t.name) }}
+      </button>
+      <Dropdown align="right">
+        <template #trigger="{ toggle }">
+          <button class="btn" title="Шаблоны: раскладка и настройки всех окон" @click="toggle">
+            <Icon name="template" /><Icon name="chevron" :size="13" class="caret" />
+          </button>
+        </template>
+        <template #default="{ close }">
+          <div class="menu-title">Шаблоны</div>
+          <div v-for="t in app.templates" :key="t.id" class="tpl-row">
+            <button
+              class="btn sm star"
+              :class="{ on: t.fav !== false }"
+              :title="t.fav !== false ? 'Убрать кнопку шаблона с верхней панели' : 'Показывать кнопкой на верхней панели'"
+              @click="t.fav = t.fav === false"
+            >
+              <Icon name="star" :size="16" />
+            </button>
+            <button class="menu-item" :class="{ on: t.id === app.templateId }" :title="t.withSymbols ? 'С инструментами' : 'Для текущего инструмента'" @click="applyTemplate(t.id), close()">
+              {{ t.name }}
+            </button>
+            <button
+              class="btn sm"
+              :class="{ on: app.tabTemplates.screener === t.id }"
+              title="Включать этот шаблон при открытии вкладки «Отбор»"
+              @click="bindTemplate('screener', t.id)"
+            >
+              <Icon name="filter" :size="16" />
+            </button>
+            <button
+              class="btn sm"
+              :class="{ on: app.tabTemplates.watchlist === t.id }"
+              title="Включать этот шаблон при открытии вкладки «Список»"
+              @click="bindTemplate('watchlist', t.id)"
+            >
+              <Icon name="list" :size="16" />
+            </button>
+            <button class="btn sm" title="Перезаписать текущим состоянием" @click="overwrite(t.id, t.name)"><Icon name="save" :size="16" /></button>
+            <button class="btn sm" title="Удалить" @click="remove(t.id, t.name)"><Icon name="trash" :size="16" /></button>
+          </div>
+          <p class="menu-note muted">
+            Шаблон запоминает раскладку, интервалы, вид графиков, индикаторы и синхронизацию окон.
+            <template v-if="app.templates.length">Звёздочка ставит кнопку шаблона на верхнюю панель; воронка и список привязывают его к вкладке.</template>
+          </p>
+          <div class="menu-sep" />
+          <button class="menu-item" @click="saveNew(), close()"><Icon name="plus" :size="16" />Сохранить как новый…</button>
+        </template>
+      </Dropdown>
+      <span class="sep" />
+    </template>
 
+    <!-- раскладка окон и их синхронизация -->
     <Dropdown v-if="!isPhone" align="right">
       <template #trigger="{ toggle }">
-        <button class="btn" title="Раскладка окон" @click="toggle"><LayoutIcon :def="app.layout" /></button>
+        <button class="btn" title="Раскладка и синхронизация окон" @click="toggle"><LayoutIcon :def="app.layout" /><Icon name="chevron" :size="13" class="caret" /></button>
       </template>
       <template #default="{ close }">
         <div class="menu-title">Раскладка</div>
@@ -229,59 +283,32 @@ function fullscreen() {
             <button class="btn primary sm" @click="setLayout(custom), close()">Применить</button>
           </div>
         </div>
-      </template>
-    </Dropdown>
-
-    <Dropdown v-if="!isPhone" align="right">
-      <template #trigger="{ toggle }">
-        <button class="btn" title="Шаблоны: раскладка и настройки всех окон" @click="toggle">
-          <Icon name="bookmark" /><span v-if="template" class="wide tpl-name">{{ template.name }}</span>
-        </button>
-      </template>
-      <template #default="{ close }">
-        <div class="menu-title">Шаблоны</div>
-        <div v-for="t in app.templates" :key="t.id" class="tpl-row">
-          <button class="menu-item" :class="{ on: t.id === app.templateId }" :title="t.withSymbols ? 'С инструментами' : 'Для текущего инструмента'" @click="applyTemplate(t.id), close()">
-            {{ t.name }}
-          </button>
-          <button
-            class="btn sm"
-            :class="{ on: app.tabTemplates.screener === t.id }"
-            title="Включать этот шаблон при открытии вкладки «Отбор»"
-            @click="bindTemplate('screener', t.id)"
-          >
-            <Icon name="filter" :size="15" />
-          </button>
-          <button
-            class="btn sm"
-            :class="{ on: app.tabTemplates.watchlist === t.id }"
-            title="Включать этот шаблон при открытии вкладки «Список»"
-            @click="bindTemplate('watchlist', t.id)"
-          >
-            <Icon name="list" :size="15" />
-          </button>
-          <button class="btn sm" title="Перезаписать текущим состоянием" @click="overwrite(t.id, t.name)"><Icon name="save" :size="15" /></button>
-          <button class="btn sm" title="Удалить" @click="remove(t.id, t.name)"><Icon name="trash" :size="15" /></button>
-        </div>
-        <p class="menu-note muted">
-          Шаблон запоминает раскладку, интервалы, вид графиков, индикаторы и синхронизацию.
-          <template v-if="app.templates.length">Кнопки с воронкой и списком привязывают шаблон к вкладке: он включится сам, когда вы её откроете.</template>
-        </p>
         <div class="menu-sep" />
-        <button class="menu-item" @click="saveNew(), close()"><Icon name="plus" :size="16" />Сохранить как новый…</button>
+        <div class="menu-title">Синхронизация окон</div>
+        <div class="sync">
+          <label v-for="o in SYNC" :key="o.id" class="menu-item check" :title="o.hint">
+            <input v-model="app.sync[o.id]" type="checkbox" />
+            {{ o.label }}
+          </label>
+        </div>
       </template>
     </Dropdown>
 
-    <Dropdown v-if="!isPhone" align="right">
-      <template #trigger="{ toggle }">
-        <button class="btn" title="Снимок графика" @click="toggle"><Icon name="camera" /></button>
-      </template>
-      <template #default="{ close }">
-        <button class="menu-item" @click="chartAt(activeIndex)?.screenshot(), close()"><Icon name="rect" :size="16" />Это окно <span class="muted">Alt+S</span></button>
-        <button class="menu-item" @click="snapshotAll(), close()"><Icon :name="'layout-4'" :size="16" />Все окна одной картинкой <span class="muted">Alt+Shift+S</span></button>
-      </template>
-    </Dropdown>
-    <button v-if="!isPhone" class="btn" title="Скопировать ссылку на этот график: монета, направление, выбранный уровень и дата" @click="copyShareLink"><Icon name="share" /></button>
+    <!-- снимок: нажатие сразу снимает активное окно, стрелка — другие варианты -->
+    <div v-if="!isPhone" class="split-btn">
+      <button class="btn" title="Снимок этого окна в PNG (Alt+S)" @click="chartAt(activeIndex)?.screenshot()"><Icon name="camera" /></button>
+      <Dropdown align="right">
+        <template #trigger="{ toggle }">
+          <button class="btn caret-btn" title="Другие варианты снимка" @click="toggle"><Icon name="chevron" :size="13" /></button>
+        </template>
+        <template #default="{ close }">
+          <button class="menu-item" @click="chartAt(activeIndex)?.screenshot(), close()"><Icon name="rect" :size="16" />Это окно <span class="muted">Alt+S</span></button>
+          <button class="menu-item" @click="snapshotAll(), close()"><Icon name="windows" :size="16" />Все окна одной картинкой <span class="muted">Alt+Shift+S</span></button>
+        </template>
+      </Dropdown>
+    </div>
+    <button v-if="!isPhone" class="btn" title="Поделиться: уровни, позиции, ссылка и QR-код" @click="app.shareOpen = true"><Icon name="share" /></button>
+    <button v-if="!isPhone" class="btn" title="Обзор по монетам списков (Alt+D)" @click="app.dashboardOpen = true"><Icon name="dashboard" /></button>
 
     <Dropdown v-if="!isPhone" align="right">
       <template #trigger="{ toggle }">
@@ -294,7 +321,8 @@ function fullscreen() {
         </button>
         <button class="menu-item" @click="(app.colorsOpen = true), close()"><Icon name="pencil" :size="16" />Свои цвета…</button>
         <div class="menu-sep" />
-        <button class="menu-item" @click="(app.transfer = { code: '' }), close()"><Icon name="share" :size="16" />Перенос на другое устройство…</button>
+        <button class="menu-item" @click="(app.syncOpen = true), close()"><Icon name="cloud" :size="16" />Синхронизация устройств…</button>
+        <button class="menu-item" @click="(app.transfer = { code: '' }), close()"><Icon name="phone" :size="16" />Разовый перенос (QR, ссылка, файл)…</button>
         <div class="menu-sep" />
         <div class="menu-title">Монета из вставки или ссылки</div>
         <div class="defaults">
@@ -307,11 +335,14 @@ function fullscreen() {
             <option value="spot">Спот</option>
           </select>
         </div>
-  <p class="menu-note muted">На этой бирже и рынке открывается монета, если в строке или ссылке они не указаны.</p>
+        <p class="menu-note muted">На этой бирже и рынке открывается монета, если в строке или ссылке они не указаны.</p>
+        <template v-if="canFullscreen">
+          <div class="menu-sep" />
+          <button class="menu-item" @click="fullscreen(), close()"><Icon name="maximize" :size="16" />Во весь экран <span class="muted">Shift+F</span></button>
+        </template>
       </template>
     </Dropdown>
-    <button v-if="canFullscreen && !isPhone" class="btn" title="Во весь экран (Shift+F)" @click="fullscreen"><Icon name="maximize" /></button>
-    <button v-if="!isPhone" class="btn" title="Горячие клавиши" @click="app.hotkeysOpen = true"><Icon name="help" /></button>
+    <button v-if="!isPhone" class="btn" title="Горячие клавиши (?)" @click="app.hotkeysOpen = true"><Icon name="keyboard" /></button>
     <button v-if="!isPhone" class="btn" :class="{ on: app.panelOpen }" title="Боковая панель" @click="togglePanel(app.panel)">
       <Icon name="panel" />
     </button>
@@ -390,6 +421,41 @@ function fullscreen() {
   overflow: hidden;
   text-overflow: ellipsis;
   display: block;
+}
+.tpl-fav {
+  min-width: calc(var(--ctl) - 4px);
+  height: calc(var(--ctl) - 4px);
+  padding: 0 6px;
+  border: 1px solid var(--border);
+  font-weight: 600;
+  font-size: 13px;
+}
+.tpl-fav.on {
+  border-color: var(--accent);
+}
+.caret {
+  margin-left: -4px;
+  color: var(--muted);
+}
+.split-btn {
+  display: flex;
+  flex: none;
+}
+.split-btn .btn:first-child {
+  border-radius: 6px 0 0 6px;
+}
+.caret-btn {
+  min-width: 16px;
+  width: 16px;
+  padding: 0;
+  margin-left: -2px;
+  border-radius: 0 6px 6px 0;
+  color: var(--muted);
+}
+.sync {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  padding: 0 2px 4px;
 }
 .star {
   color: var(--muted);

@@ -17,6 +17,17 @@ export interface WatchList {
   items: WatchItem[]
 }
 
+/** Столбцы списка, кроме названия: цена, изменение, объём, результат сделки / расстояние до уровня, исчерпание ATR */
+export type ListCol = 'price' | 'change' | 'volume' | 'result' | 'atr'
+export const LIST_COLS: { id: ListCol; label: string; hint: string }[] = [
+  { id: 'price', label: 'Цена', hint: 'Последняя цена; цвет — рост или падение за сутки' },
+  { id: 'change', label: 'Изменение за 24ч', hint: '' },
+  { id: 'volume', label: 'Объём за 24ч', hint: '' },
+  { id: 'result', label: 'Результат', hint: 'Идёт сделка — её результат в R; иначе расстояние до ближайшего уровня в ATR' },
+  { id: 'atr', label: 'ATR исчерпан', hint: 'Сколько дневного ATR пройдено от открытия дня' },
+]
+const DEFAULT_LIST_COLS: ListCol[] = ['price', 'result']
+
 export const LIST_COLORS = ['#e8a838', '#1fb28a', '#4c8dff', '#a78bfa', '#f0566b', '#3fa7a3', '#d86bb0', '#7d8799']
 
 const uid = () => Math.random().toString(36).slice(2, 10)
@@ -38,7 +49,7 @@ function defaults(): { all: WatchList[]; activeId: string } {
 }
 
 function initial() {
-  const saved = load<{ all?: (Omit<WatchList, 'items'> & { items: (SymbolRef & { side?: Side })[] })[]; activeId?: string; filter?: SideFilter; marks?: Record<string, Side> } | null>(
+  const saved = load<{ all?: (Omit<WatchList, 'items'> & { items: (SymbolRef & { side?: Side })[] })[]; activeId?: string; filter?: SideFilter; marks?: Record<string, Side>; cols?: ListCol[] } | null>(
     'lists',
     null,
   )
@@ -58,7 +69,8 @@ function initial() {
         .map((r) => ({ exchange: r.exchange, market: r.market, symbol: r.symbol })),
     }))
   const base = all.length ? { all, activeId: all.some((l) => l.id === saved?.activeId) ? saved!.activeId! : all[0].id } : defaults()
-  return { ...base, filter: (saved?.filter === 'long' || saved?.filter === 'short' ? saved.filter : 'all') as SideFilter, marks }
+  const cols = Array.isArray(saved?.cols) ? LIST_COLS.map((c) => c.id).filter((c) => saved!.cols!.includes(c)) : DEFAULT_LIST_COLS.slice()
+  return { ...base, filter: (saved?.filter === 'long' || saved?.filter === 'short' ? saved.filter : 'all') as SideFilter, marks, cols }
 }
 
 /**
@@ -154,8 +166,8 @@ export function moveList(fromIndex: number, toIndex: number) {
   lists.all.splice(Math.max(0, Math.min(lists.all.length, toIndex)), 0, list)
 }
 
-export function createList(name: string) {
-  const list: WatchList = { id: uid(), name, color: LIST_COLORS[lists.all.length % LIST_COLORS.length], collapsed: false, items: [] }
+export function createList(name: string, color?: string) {
+  const list: WatchList = { id: uid(), name, color: color ?? LIST_COLORS[lists.all.length % LIST_COLORS.length], collapsed: false, items: [] }
   lists.all.push(list)
   lists.activeId = list.id
 }

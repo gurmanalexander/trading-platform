@@ -45,7 +45,7 @@ function toggle(l: WatchList) {
     </div>
     <div class="menu-sep" />
     <button v-for="l in lists.all" :key="l.id" class="menu-item" :class="{ on: countIn(l) === items.length }" @click="toggle(l)">
-      <Icon name="flag" :size="15" class="lp-flag" :style="{ color: l.color }" />
+      <i class="lp-dot" :style="{ background: l.color }" />
       <span class="lp-name">{{ l.name }}</span>
       <Icon v-if="countIn(l) === items.length" name="check" :size="15" />
       <span v-else-if="countIn(l)" class="muted lp-part" title="В списке только часть выбранных монет">{{ countIn(l) }} из {{ items.length }}</span>
@@ -74,9 +74,12 @@ function toggle(l: WatchList) {
   border-color: currentColor;
   background: var(--accent-soft);
 }
-.lp-flag :deep(path) {
-  fill: currentColor;
-  fill-opacity: 0.85;
+.lp-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex: none;
+  margin: 0 3px;
 }
 .lp-name {
   flex: 1;

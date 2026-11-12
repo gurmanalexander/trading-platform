@@ -1,9 +1,9 @@
 import { sameSymbol, symbolKey, type SymbolRef } from '../types'
-import { app, activeIndex, activePane, isPhone, paneCount, toast } from '../stores/app'
+import { app, activePane, isPhone, paneCount, toast } from '../stores/app'
 import { addDrawing, drawings, selection, styleFor } from '../stores/drawings'
-import { activeList, lists, listsOf, markOf, setMark } from '../stores/watchlist'
+import { activeList, lists, listsOf, setMark } from '../stores/watchlist'
 import { dateFocus } from '../stores/sync'
-import { formatSetup, parseLines, parseSetup, type Setup } from '../lib/setup'
+import { parseLines, parseSetup, type Setup } from '../lib/setup'
 import { parseSignal, type Signal } from '../lib/signal'
 import { chartAt } from './registry'
 import { applySignal } from './trade'
@@ -152,26 +152,6 @@ export function applyPastedText(text: string): boolean {
   else if (r.kind === 'batch') applyBatch(r.list, r.skipped)
   else applyPastedSetup(r.setup)
   return true
-}
-
-/** Ссылка на то, что сейчас открыто: монета, отметка направления, выбранный уровень и дата, если график отмотан */
-export function shareLink(): string {
-  const pane = activePane.value
-  const ref = pane.symbol
-  const chart = chartAt(activeIndex.value)
-  const setup: Setup = { symbol: ref.symbol }
-  if (ref.exchange !== app.defaults.exchange) setup.exchange = ref.exchange
-  if (ref.market !== app.defaults.market) setup.market = ref.market
-  const mark = markOf(ref)
-  if (mark) setup.side = mark
-  const sel = chart?.draw.selected()
-  if (sel && (sel.type === 'hline' || sel.type === 'hray')) setup.level = sel.pts[0].p
-  const t = chart?.viewedTime()
-  if (t) {
-    const d = new Date(t * 1000)
-    setup.date = { y: d.getFullYear(), m: d.getMonth() + 1, d: d.getDate() }
-  }
-  return new URL('./', location.href).href + '?q=' + encodeURIComponent(formatSetup(setup))
 }
 
 /** Текст сетапа из адреса страницы: параметр q, «хвост» пути и часть после решётки */
