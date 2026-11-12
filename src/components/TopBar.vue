@@ -287,23 +287,28 @@ function fullscreen() {
       <template #trigger="{ toggle }">
         <button class="btn" title="Настройки" @click="toggle"><Icon name="gear" /></button>
       </template>
-      <div class="menu-title">Тема</div>
-      <button v-for="t in THEMES" :key="t.id" class="menu-item" :class="{ on: app.themePref === t.id }" @click="app.themePref = t.id">
-        <Icon :name="t.icon" :size="16" />{{ t.label }}
-      </button>
-      <div class="menu-sep" />
-      <div class="menu-title">Монета из вставки или ссылки</div>
-      <div class="defaults">
-        <select v-model="app.defaults.exchange" class="field" title="Биржа по умолчанию">
-          <option value="binance">Binance</option>
-          <option value="bybit">Bybit</option>
-        </select>
-        <select v-model="app.defaults.market" class="field" title="Рынок по умолчанию">
-          <option value="futures">Фьючерсы</option>
-          <option value="spot">Спот</option>
-        </select>
-      </div>
-      <p class="menu-note muted">На этой бирже и рынке открывается монета, если в строке или ссылке они не указаны.</p>
+      <template #default="{ close }">
+        <div class="menu-title">Тема</div>
+        <button v-for="t in THEMES" :key="t.id" class="menu-item" :class="{ on: app.themePref === t.id }" @click="app.themePref = t.id">
+          <Icon :name="t.icon" :size="16" />{{ t.label }}
+        </button>
+        <button class="menu-item" @click="(app.colorsOpen = true), close()"><Icon name="pencil" :size="16" />Свои цвета…</button>
+        <div class="menu-sep" />
+        <button class="menu-item" @click="(app.transfer = { code: '' }), close()"><Icon name="share" :size="16" />Перенос на другое устройство…</button>
+        <div class="menu-sep" />
+        <div class="menu-title">Монета из вставки или ссылки</div>
+        <div class="defaults">
+          <select v-model="app.defaults.exchange" class="field" title="Биржа по умолчанию">
+            <option value="binance">Binance</option>
+            <option value="bybit">Bybit</option>
+          </select>
+          <select v-model="app.defaults.market" class="field" title="Рынок по умолчанию">
+            <option value="futures">Фьючерсы</option>
+            <option value="spot">Спот</option>
+          </select>
+        </div>
+  <p class="menu-note muted">На этой бирже и рынке открывается монета, если в строке или ссылке они не указаны.</p>
+      </template>
     </Dropdown>
     <button v-if="canFullscreen && !isPhone" class="btn" title="Во весь экран (Shift+F)" @click="fullscreen"><Icon name="maximize" /></button>
     <button v-if="!isPhone" class="btn" title="Горячие клавиши" @click="app.hotkeysOpen = true"><Icon name="help" /></button>

@@ -108,6 +108,9 @@ function saveNew() {
           </select>
         </div>
 
+        <button class="menu-item" @click="(app.transfer = { code: '' }), close()"><Icon name="share" :size="16" />Перенос с другого устройства</button>
+        <button class="menu-item" @click="(app.colorsOpen = true), close()"><Icon name="pencil" :size="16" />Свои цвета</button>
+
         <div class="menu-title">Тема</div>
         <div class="icons">
           <button v-for="t in THEMES" :key="t.id" class="btn theme" :class="{ on: app.themePref === t.id }" @click="app.themePref = t.id">

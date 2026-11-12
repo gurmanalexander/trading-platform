@@ -66,7 +66,7 @@ watch(
 watch(() => pane.chartType, () => ctrl.value?.setChartType())
 watch(() => [pane.scale, pane.invert], () => ctrl.value?.applyScale())
 watch(() => pane.indicators, () => ctrl.value?.syncIndicators(), { deep: true })
-watch(theme, () => ctrl.value?.applyTheme())
+watch([theme, () => app.colors], () => ctrl.value?.applyTheme(), { deep: true })
 watch(() => app.drawingsHidden, () => ctrl.value?.draw.redraw())
 
 // ---------- синхронизация с другими панелями ----------

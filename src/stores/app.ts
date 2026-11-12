@@ -12,6 +12,22 @@ export type Tool = 'cursor' | 'trend' | 'ray' | 'hline' | 'hray' | 'vline' | 'cr
 export type Theme = 'dark' | 'light'
 export type ThemePref = 'system' | Theme
 
+/** Цвета, которые можно задать самому — отдельно для тёмной и светлой темы */
+export type ColorKey = 'up' | 'down' | 'bg' | 'grid' | 'text' | 'accent'
+export type CustomColors = Partial<Record<ColorKey, string>>
+const COLOR_KEYS: ColorKey[] = ['up', 'down', 'bg', 'grid', 'text', 'accent']
+
+function sanitizeColors(raw: unknown): CustomColors {
+  const out: CustomColors = {}
+  if (raw && typeof raw === 'object') {
+    for (const k of COLOR_KEYS) {
+      const v = (raw as Record<string, unknown>)[k]
+      if (typeof v === 'string' && /^#[0-9a-f]{6}$/i.test(v)) out[k] = v
+    }
+  }
+  return out
+}
+
 export interface PaneState {
   symbol: SymbolRef
   tf: string
@@ -174,6 +190,7 @@ interface Saved {
   drawingsHidden?: boolean
   phoneStack?: boolean
   defaults?: { exchange?: ExchangeId; market?: MarketId }
+  colors?: Partial<Record<Theme, CustomColors>>
 }
 
 const saved = load<Saved>('app', {})
@@ -220,6 +237,8 @@ export const app = reactive({
     market: (saved.searchFilter?.market ?? 'futures') as MarketId | 'all',
   },
   drawingsHidden: saved.drawingsHidden ?? false,
+  /** свои цвета поверх стандартных, по темам */
+  colors: { dark: sanitizeColors(saved.colors?.dark), light: sanitizeColors(saved.colors?.light) } as Record<Theme, CustomColors>,
   /** биржа и рынок, на которых открывается монета из вставленной строки или ссылки */
   defaults: {
     exchange: (saved.defaults?.exchange === 'bybit' ? 'bybit' : 'binance') as ExchangeId,
@@ -246,11 +265,14 @@ export const app = reactive({
   textEdit: null as null | { pane: number; id: string | null; pt: { t: number; p: number } | null; text: string },
   checklistOpen: false,
   tradeTextOpen: false,
+  colorsOpen: false,
+  /** окно переноса настроек; code — данные, пришедшие по ссылке с другого устройства */
+  transfer: null as null | { code: string },
 })
 
 persist(
   'app',
-  () => [app.themePref, app.layout, app.panes, app.active, app.panel, app.panelOpen, app.magnet, app.sync, app.favTfs, app.templates, app.templateId, app.tabTemplates, app.searchFilter, app.drawingsHidden, app.phoneStack, app.defaults],
+  () => [app.themePref, app.layout, app.panes, app.active, app.panel, app.panelOpen, app.magnet, app.sync, app.favTfs, app.templates, app.templateId, app.tabTemplates, app.searchFilter, app.drawingsHidden, app.phoneStack, app.defaults, app.colors],
   () => ({
     themePref: app.themePref,
     layout: app.layout,
@@ -268,6 +290,7 @@ persist(
     drawingsHidden: app.drawingsHidden,
     phoneStack: app.phoneStack,
     defaults: app.defaults,
+    colors: app.colors,
   }),
 )
 
@@ -296,7 +319,7 @@ export const paneCount = computed(() => layoutCount(app.layout))
 export const activeIndex = computed(() => Math.min(app.active, paneCount.value - 1))
 export const activePane = computed(() => app.panes[activeIndex.value])
 export const modalOpen = computed(
-  () => !!(app.search || app.indicatorsOpen || app.indSettings || app.intervalInput || app.hotkeysOpen || app.gotoOpen || app.textEdit || app.checklistOpen || app.tradeTextOpen),
+  () => !!(app.search || app.indicatorsOpen || app.indSettings || app.intervalInput || app.hotkeysOpen || app.gotoOpen || app.textEdit || app.checklistOpen || app.tradeTextOpen || app.colorsOpen || app.transfer),
 )
 
 // ---------- действия ----------

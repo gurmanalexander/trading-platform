@@ -11,7 +11,18 @@ export function load<T>(key: string, fallback: T): T {
   }
 }
 
+let frozen = false
+
+/**
+ * Запрещает дальнейшую запись: после импорта настроек с другого устройства страница
+ * перезагружается, и отложенные сохранения не должны затереть только что принятые данные.
+ */
+export function freezeStorage() {
+  frozen = true
+}
+
 export function save(key: string, value: unknown) {
+  if (frozen) return
   try {
     localStorage.setItem(PREFIX + key, JSON.stringify(value))
   } catch {

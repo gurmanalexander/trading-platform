@@ -25,14 +25,32 @@ const HotkeysDialog = defineAsyncComponent(() => import('./components/HotkeysDia
 const TextDialog = defineAsyncComponent(() => import('./components/TextDialog.vue'))
 const ChecklistDialog = defineAsyncComponent(() => import('./components/ChecklistDialog.vue'))
 const TradeTextDialog = defineAsyncComponent(() => import('./components/TradeTextDialog.vue'))
+const ColorsDialog = defineAsyncComponent(() => import('./components/ColorsDialog.vue'))
+const TransferDialog = defineAsyncComponent(() => import('./components/TransferDialog.vue'))
 
 watch(
   theme,
   (t) => {
     document.documentElement.dataset.theme = t
-    document.querySelector('meta[name=theme-color]')?.setAttribute('content', t === 'dark' ? '#141821' : '#f6f7f9')
+    document.querySelector('meta[name=theme-color]')?.setAttribute('content', t === 'dark' ? '#161a23' : '#f6f7f9')
   },
   { immediate: true },
+)
+
+// Свои цвета перекрывают переменные темы; сброшенный цвет возвращается к стандартному
+const CSS_VARS = { up: '--up', down: '--down', bg: '--bg', accent: '--accent' } as const
+watch(
+  [theme, () => app.colors],
+  () => {
+    const custom = app.colors[theme.value]
+    const style = document.documentElement.style
+    for (const [key, name] of Object.entries(CSS_VARS)) {
+      const v = custom[key as keyof typeof CSS_VARS]
+      if (v) style.setProperty(name, v)
+      else style.removeProperty(name)
+    }
+  },
+  { immediate: true, deep: true },
 )
 
 // ---------- горячие клавиши ----------
@@ -227,6 +245,11 @@ function onKey(e: KeyboardEvent) {
 
 /** Сетап в адресе страницы: ссылка, которой поделились, или строка, дописанная к адресу руками */
 function openFromUrl() {
+  // ссылка переноса данных с другого устройства
+  if (location.hash.startsWith('#import=')) {
+    app.transfer = { code: location.hash.slice(8) }
+    return
+  }
   const text = setupTextFromUrl()
   if (!text) return
   const setup = parseSetup(text)
@@ -270,6 +293,8 @@ onBeforeUnmount(() => {
     <TextDialog v-if="app.textEdit" :key="app.textEdit.id ?? 'new'" />
     <ChecklistDialog v-if="app.checklistOpen" />
     <TradeTextDialog v-if="app.tradeTextOpen" />
+    <ColorsDialog v-if="app.colorsOpen" />
+    <TransferDialog v-if="app.transfer" />
     <Toasts />
   </div>
 </template>
