@@ -17,6 +17,7 @@ import {
 } from '../stores/app'
 import { addWatch, activeList } from '../stores/watchlist'
 import { activeIndex } from '../stores/app'
+import { pasteFromClipboard } from '../chart/setup'
 import { chartAt } from '../chart/registry'
 import { snapshotAll } from '../chart/snapshot'
 
@@ -55,8 +56,9 @@ function saveNew() {
     </template>
     <template #default="{ close }">
       <div class="pm">
+        <button class="menu-item" @click="(app.dashboardOpen = true), close()"><Icon name="dashboard" :size="16" />Обзор по спискам</button>
         <button class="menu-item" @click="(app.indicatorsOpen = true), close()"><Icon name="fx" :size="16" />Индикаторы</button>
-        <button class="menu-item" @click="(app.tradeTextOpen = true), close()"><Icon name="paste" :size="16" />Вставить текстом</button>
+        <button class="menu-item" @click="pasteFromClipboard(), close()"><Icon name="paste" :size="16" />Вставить из буфера (сделка, сетапы)</button>
         <button class="menu-item" @click="toList(), close()"><Icon name="star" :size="16" />В список «{{ activeList.name }}»</button>
         <button class="menu-item" @click="(app.gotoOpen = true), close()"><Icon name="skip" :size="16" />Перейти к дате</button>
         <button class="menu-item" @click="(app.shareOpen = true), close()"><Icon name="share" :size="16" />Поделиться…</button>
@@ -84,7 +86,7 @@ function saveNew() {
 
         <div class="menu-title">Шаблоны</div>
         <button v-for="t in app.templates" :key="t.id" class="menu-item" :class="{ on: t.id === app.templateId }" @click="applyTemplate(t.id), close()">
-          <Icon name="bookmark" :size="16" />{{ t.name }}
+          <Icon name="template" :size="16" />{{ t.name }}
         </button>
         <button class="menu-item" @click="saveNew(), close()"><Icon name="plus" :size="16" />Сохранить текущее как шаблон…</button>
 

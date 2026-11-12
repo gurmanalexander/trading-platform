@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import Icon from './components/Icon.vue'
 import { defineAsyncComponent, onBeforeUnmount, onMounted, watch } from 'vue'
 import TopBar from './components/TopBar.vue'
 import DrawToolbar from './components/DrawToolbar.vue'
@@ -6,7 +7,7 @@ import ChartGrid from './components/ChartGrid.vue'
 import SidePanel from './components/SidePanel.vue'
 import BottomNav from './components/BottomNav.vue'
 import Toasts from './components/Toasts.vue'
-import { app, activeIndex, activePane, isPhone, modalOpen, paneCount, theme, cyclePane, openSearch, showPanel, togglePanel, toast, type Tool } from './stores/app'
+import { app, activeIndex, activePane, isPhone, modalOpen, paneCount, theme, cyclePane, openSearch, setZen, showPanel, togglePanel, toast, type Tool } from './stores/app'
 import { addWatch, activeList } from './stores/watchlist'
 import { clipboard, redo, selection, undo } from './stores/drawings'
 import { stepSymbol } from './stores/screener'
@@ -27,6 +28,7 @@ const HotkeysDialog = defineAsyncComponent(() => import('./components/HotkeysDia
 const TextDialog = defineAsyncComponent(() => import('./components/TextDialog.vue'))
 const TradeTextDialog = defineAsyncComponent(() => import('./components/TradeTextDialog.vue'))
 const ColorsDialog = defineAsyncComponent(() => import('./components/ColorsDialog.vue'))
+const Dashboard = defineAsyncComponent(() => import('./components/Dashboard.vue'))
 const ShareDialog = defineAsyncComponent(() => import('./components/ShareDialog.vue'))
 const ScreenerFilterDialog = defineAsyncComponent(() => import('./components/ScreenerFilterDialog.vue'))
 const TransferDialog = defineAsyncComponent(() => import('./components/TransferDialog.vue'))
@@ -83,6 +85,7 @@ function onAlt(e: KeyboardEvent): boolean {
   if (ALT_TOOLS[e.code]) app.tool = ALT_TOOLS[e.code]
   else if (e.code === 'KeyW') addToWatchlist()
   else if (e.code === 'KeyK') togglePanel('checklist')
+  else if (e.code === 'KeyD') app.dashboardOpen = true
   else if (e.code === 'KeyA') {
     showPanel('alerts')
     app.alertFocus++
@@ -290,16 +293,17 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="app" :class="{ phone: isPhone }">
-    <TopBar />
+    <TopBar v-if="!app.zen" />
     <div class="body">
-      <DrawToolbar v-if="!isPhone || app.drawBarOpen" :horizontal="isPhone" />
+      <DrawToolbar v-if="!app.zen && (!isPhone || app.drawBarOpen)" :horizontal="isPhone" />
       <ChartGrid />
-      <SidePanel v-if="!isPhone && app.panelOpen" class="side-dock" :tab="app.panel" tabs />
-      <div v-if="isPhone && app.mobileTab !== 'chart'" class="sheet">
+      <SidePanel v-if="!isPhone && app.panelOpen && !app.zen" class="side-dock" :tab="app.panel" tabs />
+      <div v-if="isPhone && app.mobileTab !== 'chart' && !app.zen" class="sheet">
         <SidePanel :tab="app.mobileTab" :tabs="false" />
       </div>
+      <button v-if="app.zen" class="zen-exit" title="Вернуть панели" @click="setZen(false)"><Icon name="minimize" :size="18" /></button>
     </div>
-    <BottomNav v-if="isPhone" />
+    <BottomNav v-if="isPhone && !app.zen" />
 
     <SymbolSearch v-if="app.search" />
     <IndicatorsDialog v-if="app.indicatorsOpen" />
@@ -312,6 +316,7 @@ onBeforeUnmount(() => {
     <ColorsDialog v-if="app.colorsOpen" />
     <TransferDialog v-if="app.transfer" />
     <ShareDialog v-if="app.shareOpen" />
+    <Dashboard v-if="app.dashboardOpen" />
     <ScreenerFilterDialog v-if="app.screenerFilterOpen" />
     <Toasts />
   </div>
@@ -337,6 +342,21 @@ onBeforeUnmount(() => {
 }
 .app.phone .drawbar {
   order: 2;
+}
+.zen-exit {
+  position: absolute;
+  top: calc(6px + env(safe-area-inset-top));
+  right: 74px;
+  z-index: 30;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--panel) 82%, transparent);
+  color: var(--text);
+  backdrop-filter: blur(4px);
 }
 .side-dock {
   width: 340px;

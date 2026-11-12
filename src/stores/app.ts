@@ -270,6 +270,10 @@ export const app = reactive({
   /** окно ввода текста: новый текст в точке pt либо правка рисунка id */
   textEdit: null as null | { pane: number; id: string | null; pt: { t: number; p: number } | null; text: string },
   tradeTextOpen: false,
+  /** текст, с которым открывается окно вставки (например, не распознанный автоматически) */
+  pasteDraft: '',
+  /** режим «только график»: панели и навигация скрыты (на телефоне — вместе с системным полным экраном) */
+  zen: false,
   shareOpen: false,
   dashboardOpen: false,
   screenerFilterOpen: false,
@@ -372,6 +376,30 @@ export function cyclePane(step: number) {
   const n = paneCount.value
   app.active = (activeIndex.value + step + n) % n
 }
+
+// ---------- режим «только график» ----------
+
+let zenFullscreen = false
+/** Убирает панели и навигацию, оставляя одни графики; где браузер умеет — ещё и на весь экран */
+export function setZen(on: boolean) {
+  app.zen = on
+  if (on) {
+    app.mobileTab = 'chart'
+    app.drawBarOpen = false
+    document.documentElement
+      .requestFullscreen?.()
+      .then(() => (zenFullscreen = true))
+      .catch(() => {})
+  } else if (zenFullscreen && document.fullscreenElement) document.exitFullscreen().catch(() => {})
+  if (!on) zenFullscreen = false
+}
+// из системного полного экрана вышли жестом или кнопкой «назад» — возвращаем и панели
+document.addEventListener('fullscreenchange', () => {
+  if (!document.fullscreenElement && zenFullscreen) {
+    zenFullscreen = false
+    app.zen = false
+  }
+})
 
 export function openSearch(query = '') {
   app.search = { query }

@@ -33,6 +33,7 @@ import {
   type ThemePref,
 } from '../stores/app'
 import { TIMEFRAMES, getTf } from '../lib/timeframes'
+import { unreadAlerts } from '../stores/alerts'
 import { chartAt } from '../chart/registry'
 import { snapshotAll } from '../chart/snapshot'
 
@@ -146,6 +147,7 @@ function fullscreen() {
       >
         {{ getTf(app.panes[i - 1].tf).label }}
       </button>
+      <button class="all" :class="{ on: app.phoneStack }" title="Показывать все окна сразу" @click="app.phoneStack = !app.phoneStack"><Icon name="windows" :size="16" /></button>
     </div>
 
     <span v-if="!isPhone" class="sep" />
@@ -170,7 +172,9 @@ function fullscreen() {
     <button v-if="!isPhone" class="btn" title="Индикаторы (/)" @click="app.indicatorsOpen = true">
       <Icon name="fx" /><span class="wide">Индикаторы</span>
     </button>
-    <button v-if="!isPhone" class="btn" title="Оповещения (Alt+A)" @click="showPanel('alerts')"><Icon name="bell" /></button>
+    <button v-if="!isPhone" class="btn bell" :title="unreadAlerts ? `Оповещения: непрочитанных ${unreadAlerts}` : 'Оповещения (Alt+A)'" @click="showPanel('alerts')">
+      <Icon :name="unreadAlerts ? 'bellRing' : 'bell'" /><i v-if="unreadAlerts" class="count">{{ unreadAlerts }}</i>
+    </button>
     <button v-if="isPhone" class="btn" :class="{ on: app.drawBarOpen }" title="Рисование" @click="app.drawBarOpen = !app.drawBarOpen">
       <Icon name="pencil" />
     </button>
@@ -391,6 +395,11 @@ function fullscreen() {
 .pane-tabs button + button {
   border-left: 1px solid var(--border);
 }
+.pane-tabs button.all {
+  padding: 0 7px;
+  display: grid;
+  place-items: center;
+}
 .pane-tabs button.on {
   color: var(--accent);
   background: var(--accent-soft);
@@ -421,6 +430,23 @@ function fullscreen() {
   overflow: hidden;
   text-overflow: ellipsis;
   display: block;
+}
+.bell {
+  position: relative;
+}
+.bell .count {
+  position: absolute;
+  top: 2px;
+  right: 0;
+  min-width: 15px;
+  height: 15px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: var(--warn);
+  color: #111;
+  font: 600 10px/15px var(--font);
+  font-style: normal;
+  text-align: center;
 }
 .tpl-fav {
   min-width: calc(var(--ctl) - 4px);

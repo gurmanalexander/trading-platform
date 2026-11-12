@@ -4,7 +4,8 @@ import Icon from './Icon.vue'
 import { DRAW_COLORS, defaultVisibility, type Dash, type Visibility } from '../stores/drawings'
 import { hasLineStyle, hasText, isPosition, TEXT_SIZES, type DrawingsLayer } from '../chart/drawings'
 import { riskReward } from '../chart/position'
-import { toast } from '../stores/app'
+import { isPhone, toast } from '../stores/app'
+import { pasteFromClipboard } from '../chart/setup'
 
 // Панель выбранного рисунка: у линий — цвет, толщина, вид и подпись; у позиции — вход, стоп и цель числами
 const props = defineProps<{ layer: DrawingsLayer; maxX: number; precision: number }>()
@@ -65,6 +66,15 @@ function editText() {
 function makeDefault() {
   props.layer.saveAsDefault()
   toast('Стиль сохранён: новые рисунки этого инструмента будут такими же')
+}
+async function copyTrade() {
+  const text = props.layer.copyText()
+  try {
+    await navigator.clipboard.writeText(text)
+    toast('Позиция скопирована текстом')
+  } catch {
+    prompt('Скопируйте вручную', text)
+  }
 }
 function duplicate() {
   if (props.layer.copySelected()) props.layer.paste()
@@ -151,10 +161,14 @@ function duplicate() {
       <select class="field vis" title="На каких интервалах показывать" :value="vis" @change="layer.setVisibility(($event.target as HTMLSelectElement).value as Visibility)">
         <option v-for="v in VIS" :key="v.id" :value="v.id">{{ v.label }}</option>
       </select>
+      <template v-if="position">
+        <button class="btn sm" title="Вставить текст сделки из буфера: ТВХ / SL / TP разложатся по этой позиции" @click="pasteFromClipboard()"><Icon name="paste" :size="16" /></button>
+        <button class="btn sm" title="Скопировать позицию текстом: вход, стоп, тейк" @click="copyTrade"><Icon name="share" :size="16" /></button>
+      </template>
       <button class="btn sm" title="Дублировать (или тяните с Ctrl)" @click="duplicate"><Icon name="copy" :size="15" /></button>
       <button class="btn sm" title="Удалить (Delete)" @click="layer.removeSelected()"><Icon name="trash" :size="15" /></button>
     </div>
-    <p v-if="position" class="hint muted">Ctrl+V — вставить текст сделки (ТВХ / SL / TP), Ctrl+C — скопировать его</p>
+    <p v-if="position && !isPhone" class="hint muted">Ctrl+V — вставить текст сделки (ТВХ / SL / TP), Ctrl+C — скопировать его</p>
   </div>
 </template>
 

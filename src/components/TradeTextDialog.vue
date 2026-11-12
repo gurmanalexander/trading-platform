@@ -8,7 +8,8 @@ import { formatSetup } from '../lib/setup'
 
 // Вставка текстом: то же, что Ctrl+V на графике, но кнопкой — на телефоне клавиатуры с Ctrl нет.
 // Понимает сделку (ТВХ / SL / TP), строку сетапа и несколько строк сетапов.
-const text = ref('')
+const text = ref(app.pasteDraft)
+app.pasteDraft = ''
 const area = ref<HTMLTextAreaElement>()
 const rec = computed(() => recognize(text.value))
 const canRead = !!navigator.clipboard?.readText

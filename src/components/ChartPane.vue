@@ -7,9 +7,9 @@ import AtrTable from './AtrTable.vue'
 import { ChartController } from '../chart/controller'
 import { registerChart } from '../chart/registry'
 import { symbolKey } from '../types'
-import { app, activeIndex, paneCount, isPhone, theme, toast, type ScaleMode } from '../stores/app'
+import { app, activeIndex, paneCount, isPhone, setZen, theme, toast, type ScaleMode } from '../stores/app'
 import { tickers, useTickers } from '../stores/tickers'
-import { alerts, addAlert } from '../stores/alerts'
+import { alerts, addAlert, moveAlert, type PriceAlert } from '../stores/alerts'
 import { clearDrawings, drawings, drawingsOf, selection } from '../stores/drawings'
 import { crosshairBus, dateFocus, timeBus } from '../stores/sync'
 import { useDayStats } from '../stores/atr'
@@ -54,6 +54,7 @@ onMounted(() => {
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', onKey)
   document.removeEventListener('pointerdown', closeMenu, true)
+  onAlertUp()
   if (selection.value?.pane === props.index) selection.value = null
   unregister()
   ctrl.value?.destroy()
@@ -133,6 +134,60 @@ function activate() {
   paneWidth.value = host.value?.clientWidth ?? 0
 }
 
+// ---------- линии оповещений: их можно тянуть мышью или пальцем ----------
+
+const paneAlerts = computed(() => alerts.filter((a) => a.active && symbolKey(a.ref) === key.value))
+const overAlert = ref(false)
+let alertDrag: PriceAlert | null = null
+
+function alertAt(e: PointerEvent): PriceAlert | null {
+  const c = ctrl.value
+  const el = host.value
+  if (!c || !el || !paneAlerts.value.length) return null
+  const r = el.getBoundingClientRect()
+  const x = e.clientX - r.left
+  const y = e.clientY - r.top
+  const size = c.chart.paneSize(0)
+  if (x < 0 || x > size.width || y < 0 || y > size.height) return null
+  const tol = e.pointerType === 'mouse' ? 5 : 12
+  for (const a of paneAlerts.value) {
+    const ay = c.yOf(a.price)
+    if (ay != null && Math.abs(ay - y) <= tol) return a
+  }
+  return null
+}
+function onAlertDown(e: PointerEvent) {
+  // рисунок под курсором важнее: его выбирает и двигает слой рисунков
+  if (app.tool !== 'cursor' || e.button > 0 || host.value?.classList.contains('over-drawing')) return
+  const a = alertAt(e)
+  if (!a) return
+  // график не должен начать прокручиваться, а слой рисунков — снимать выделение
+  e.stopImmediatePropagation()
+  e.preventDefault()
+  alertDrag = a
+  window.addEventListener('pointermove', onAlertMove)
+  window.addEventListener('pointerup', onAlertUp)
+  window.addEventListener('pointercancel', onAlertUp)
+}
+function onAlertMove(e: PointerEvent) {
+  const c = ctrl.value
+  if (!alertDrag || !c || !host.value) return
+  const price = c.priceAt(e.clientY - host.value.getBoundingClientRect().top)
+  if (price == null || !(price > 0)) return
+  moveAlert(alertDrag, +price.toFixed(precision.value), tickers[key.value]?.last ?? price)
+}
+function onAlertUp() {
+  if (alertDrag) toast(`Оповещение перенесено: ${pane.symbol.symbol} ${fmtPrice(alertDrag.price, precision.value)}`)
+  alertDrag = null
+  window.removeEventListener('pointermove', onAlertMove)
+  window.removeEventListener('pointerup', onAlertUp)
+  window.removeEventListener('pointercancel', onAlertUp)
+}
+function onAlertHover(e: PointerEvent) {
+  if (e.pointerType !== 'mouse' || alertDrag) return
+  overAlert.value = app.tool === 'cursor' && !host.value?.classList.contains('over-drawing') && !!alertAt(e)
+}
+
 // ---------- контекстное меню ----------
 
 function onContext(e: MouseEvent) {
@@ -182,7 +237,10 @@ function toggleScale(id: ScaleMode) {
     <div
       ref="host"
       class="chart-host"
-      :class="{ drawing: app.tool !== 'cursor' }"
+      :class="{ drawing: app.tool !== 'cursor', 'over-alert': overAlert }"
+      @pointerdown.capture="onAlertDown"
+      @pointermove="onAlertHover"
+      @pointerleave="overAlert = false"
       @contextmenu.prevent="onContext"
     >
       <div v-show="app.tool !== 'cursor'" ref="overlay" class="draw-overlay" />
@@ -208,6 +266,7 @@ function toggleScale(id: ScaleMode) {
         {{ s.label }}
       </button>
       <button v-if="atrCapable" class="chip" :class="{ on: app.atrTable }" title="Таблица ATR: стоп, тейк, люфт, границы дня" @click="app.atrTable = !app.atrTable">ATR</button>
+      <button v-if="isPhone && !app.zen" class="chip" title="Только график: убрать панели, на весь экран" @click="setZen(true)"><Icon name="maximize" :size="13" /></button>
       <button
         v-if="paneCount > 1 && !isPhone"
         class="chip"
@@ -266,6 +325,9 @@ function toggleScale(id: ScaleMode) {
 }
 .chart-host.over-drawing :deep(canvas) {
   cursor: pointer !important;
+}
+.chart-host.over-alert :deep(canvas) {
+  cursor: ns-resize !important;
 }
 .chart-host[data-cursor='move'] :deep(canvas) {
   cursor: move !important;

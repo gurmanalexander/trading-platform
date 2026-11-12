@@ -4,6 +4,7 @@ import Watchlist from './Watchlist.vue'
 import AlertsPanel from './AlertsPanel.vue'
 import ChecklistPanel from './ChecklistPanel.vue'
 import { app, type PanelId } from '../stores/app'
+import { unreadAlerts } from '../stores/alerts'
 
 defineProps<{ tab: PanelId; tabs: boolean }>()
 
@@ -20,6 +21,7 @@ const TABS: { id: PanelId; label: string }[] = [
     <div v-if="tabs" class="side-tabs" role="tablist">
       <button v-for="t in TABS" :key="t.id" role="tab" :aria-selected="tab === t.id" :class="{ on: tab === t.id }" @click="app.panel = t.id">
         {{ t.label }}
+        <i v-if="t.id === 'alerts' && unreadAlerts" class="badge" title="Непрочитанные оповещения">{{ unreadAlerts }}</i>
       </button>
     </div>
     <div class="side-body">
@@ -52,6 +54,19 @@ const TABS: { id: PanelId; label: string }[] = [
   height: 38px;
   color: var(--muted);
   border-bottom: 2px solid transparent;
+}
+.badge {
+  display: inline-block;
+  min-width: 16px;
+  height: 16px;
+  margin-left: 2px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: var(--warn);
+  color: #111;
+  font: 600 10px/16px var(--font);
+  text-align: center;
+  vertical-align: 1px;
 }
 .side-tabs button:hover {
   color: var(--text);

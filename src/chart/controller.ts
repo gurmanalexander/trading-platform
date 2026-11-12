@@ -578,6 +578,11 @@ export class ChartController {
     return b[i].time
   }
 
+  /** Вертикальная координата цены в области графика; null — цена за пределами данных */
+  yOf(price: number): number | null {
+    return this.main.priceToCoordinate(price) as number | null
+  }
+
   /** Цена под вертикальной координатой области цены */
   priceAt(y: number): number | null {
     if (y > this.chart.paneSize(0).height) return null
@@ -819,7 +824,7 @@ export class ChartController {
         lineWidth: 1,
         lineStyle: LineStyle.Dashed,
         axisLabelVisible: true,
-        title: '🔔',
+        title: '🔔 ⇅',
       }),
     )
   }

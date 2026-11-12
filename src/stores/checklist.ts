@@ -21,6 +21,17 @@ export type Selection = Record<string, string[]>
 
 const uid = () => Math.random().toString(36).slice(2, 9)
 
+/** Точки входа: пробойные и от ложного пробоя / отбоя */
+const ENTRY_POINTS = [
+  'ТВХ - первичный пробой',
+  'ТВХ - пробой после поджатия',
+  'ТВХ - ретест уровня после пробоя',
+  'ТВХ - ложный пробой одним баром',
+  'ТВХ - ложный пробой двумя барами',
+  'ТВХ - сложный ложный пробой',
+  'ТВХ - отбой от уровня',
+]
+
 export function defaultBlocks(): CheckBlock[] {
   return [
     { id: 'style', question: 'Стиль торговли', answers: ['Пробой', 'Отбой/ЛП'], type: 'radio', singleLine: true },
@@ -79,7 +90,7 @@ export function defaultBlocks(): CheckBlock[] {
       singleLine: false,
       dependsOn: { block: 'style', answer: 'Отбой/ЛП' },
     },
-    { id: 'entry', question: 'ТВХ', answers: ['ТВХ - первичный пробой'], type: 'checkbox', singleLine: true },
+    { id: 'entry', question: 'ТВХ', answers: ENTRY_POINTS.slice(), type: 'checkbox', singleLine: false },
     { id: 'order', question: 'Ордер', answers: ['3к1', '5к1'], type: 'checkbox', singleLine: true },
   ]
 }
@@ -97,6 +108,12 @@ function sanitize(raw: unknown): CheckBlock[] {
       singleLine: b.singleLine === true,
       ...(b.dependsOn && typeof b.dependsOn.block === 'string' ? { dependsOn: { block: b.dependsOn.block, answer: String(b.dependsOn.answer ?? '') } } : {}),
     })
+  }
+  // раньше в блоке «ТВХ» был один вариант — дополняем его остальными точками входа
+  const entry = out.find((b) => b.id === 'entry')
+  if (entry && entry.answers.length === 1 && entry.answers[0] === ENTRY_POINTS[0]) {
+    entry.answers = ENTRY_POINTS.slice()
+    entry.singleLine = false
   }
   return out
 }

@@ -5,7 +5,8 @@ import Dropdown from './Dropdown.vue'
 import SideMark from './SideMark.vue'
 import ColumnsMenu from './ColumnsMenu.vue'
 import { EXCHANGE_NAMES, MARKET_NAMES, sameSymbol, symbolKey } from '../types'
-import { app, activePane, openSearch, setSymbol } from '../stores/app'
+import { activePane, openSearch, setSymbol } from '../stores/app'
+import { pasteFromClipboard } from '../chart/setup'
 import { tickers, useTickers } from '../stores/tickers'
 import { dayStats, dayProgress, useDayStats } from '../stores/atr'
 import { spentTone } from '../lib/atr'
@@ -301,7 +302,7 @@ function listMark(listId: string, i: number): string {
         <button v-for="f in FILTERS" :key="f.id" :class="{ on: lists.filter === f.id, [f.id]: true }" :title="f.title" @click="lists.filter = f.id">{{ f.label }}</button>
       </div>
       <span class="grow" />
-      <button class="btn sm" title="Вставить из буфера: строки с монетами попадут в текущий список" @click="app.tradeTextOpen = true"><Icon name="paste" :size="16" /></button>
+      <button class="btn sm" title="Вставить из буфера: строки с монетами попадут в текущий список" @click="pasteFromClipboard()"><Icon name="paste" :size="16" /></button>
       <ColumnsMenu :model-value="lists.cols" :options="LIST_COLS" @update:model-value="lists.cols = $event as ListCol[]" />
       <button class="btn sm" :class="{ on: draft.open }" title="Новый список" @click="startList"><Icon name="listPlus" :size="16" /></button>
     </div>

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import Icon from './Icon.vue'
 import { app, activePane, showPanel, type Tool } from '../stores/app'
+import { pasteFromClipboard } from '../chart/setup'
 import { symbolKey } from '../types'
 import { clearDrawings, drawings, redo, selection, undo } from '../stores/drawings'
 
@@ -44,7 +45,7 @@ function clearAll() {
     </template>
     <span class="sep" />
     <button class="btn" title="Чеклист сделки (Alt+K)" @click="showPanel('checklist')"><Icon name="checklist" /></button>
-    <button class="btn" title="Вставить текстом: сделка (ТВХ / SL / TP) или сетапы — то же, что Ctrl+V" @click="app.tradeTextOpen = true"><Icon name="paste" /></button>
+    <button class="btn" title="Вставить из буфера: сделка (ТВХ / SL / TP) или сетапы — то же, что Ctrl+V" @click="pasteFromClipboard()"><Icon name="paste" /></button>
     <span class="sep" />
     <button class="btn" title="Отменить (Ctrl+Z)" @click="undo()"><Icon name="undo" /></button>
     <button class="btn" title="Вернуть (Ctrl+Y)" @click="redo()"><Icon name="redo" /></button>

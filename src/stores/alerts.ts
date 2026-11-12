@@ -1,4 +1,4 @@
-import { reactive, watch } from 'vue'
+import { computed, reactive, watch } from 'vue'
 import { symbolKey, type SymbolRef, type Ticker } from '../types'
 import { load, persist } from '../lib/storage'
 import { fmtPrice, precisionOf } from '../lib/format'
@@ -14,6 +14,8 @@ export interface PriceAlert {
   active: boolean
   createdAt: number
   triggeredAt?: number
+  /** сработавшее оповещение уже просмотрено */
+  read?: boolean
 }
 
 export const alerts = reactive<PriceAlert[]>(load<PriceAlert[]>('alerts', []).filter((a) => a && a.ref && a.price > 0))
@@ -40,6 +42,38 @@ export function rearmAlert(a: PriceAlert, lastPrice: number) {
   a.dir = a.price >= lastPrice ? 'up' : 'down'
   a.active = true
   a.triggeredAt = undefined
+  a.read = undefined
+}
+
+/** Переносит оповещение на другую цену (линию тянут мышью по графику) */
+export function moveAlert(a: PriceAlert, price: number, lastPrice: number) {
+  if (!(price > 0)) return
+  a.price = price
+  // сторона пересчитывается сразу: иначе, протащив линию через цену, получили бы мгновенное срабатывание
+  a.dir = price >= lastPrice ? 'up' : 'down'
+}
+
+// ---------- непрочитанные и действия со всеми сразу ----------
+
+const isDone = (a: PriceAlert) => !a.active && !!a.triggeredAt
+/** Сработавшие оповещения, которые ещё не просмотрены */
+export const unreadAlerts = computed(() => alerts.filter((a) => isDone(a) && !a.read).length)
+export const waitingAlerts = computed(() => alerts.filter((a) => a.active).length)
+export const doneAlerts = computed(() => alerts.filter(isDone).length)
+
+export function markAllRead() {
+  for (const a of alerts) if (isDone(a)) a.read = true
+}
+/** Удаляет сработавшие оповещения */
+export function clearDone() {
+  for (let i = alerts.length - 1; i >= 0; i--) if (isDone(alerts[i])) alerts.splice(i, 1)
+}
+export function clearAllAlerts() {
+  alerts.splice(0, alerts.length)
+}
+/** Включает снова все сработавшие; lastOf — текущая цена инструмента */
+export function rearmDone(lastOf: (a: PriceAlert) => number) {
+  for (const a of alerts) if (isDone(a)) rearmAlert(a, lastOf(a))
 }
 
 export const notifySupported = typeof Notification !== 'undefined'
@@ -78,6 +112,7 @@ onTicker((key: string, t: Ticker) => {
 function fire(a: PriceAlert, last: number) {
   a.active = false
   a.triggeredAt = Date.now()
+  a.read = false
   const p = precisionOf(symbolKey(a.ref), a.price)
   const text = `${a.ref.symbol}: цена ${a.dir === 'up' ? 'поднялась до' : 'опустилась до'} ${fmtPrice(a.price, p)} (сейчас ${fmtPrice(last, p)})`
   toast(text, 'alert', 15000)

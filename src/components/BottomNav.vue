@@ -1,8 +1,7 @@
 <script setup lang="ts">
 import Icon from './Icon.vue'
 import { app, type MobileTab } from '../stores/app'
-import { alerts } from '../stores/alerts'
-import { computed } from 'vue'
+import { unreadAlerts } from '../stores/alerts'
 
 const TABS: { id: MobileTab; label: string; icon: string }[] = [
   { id: 'chart', label: 'График', icon: 'chart' },
@@ -11,7 +10,6 @@ const TABS: { id: MobileTab; label: string; icon: string }[] = [
   { id: 'checklist', label: 'Чеклист', icon: 'checklist' },
   { id: 'alerts', label: 'Оповещения', icon: 'bell' },
 ]
-const activeAlerts = computed(() => alerts.filter((a) => a.active).length)
 </script>
 
 <template>
@@ -19,7 +17,7 @@ const activeAlerts = computed(() => alerts.filter((a) => a.active).length)
     <button v-for="t in TABS" :key="t.id" :class="{ on: app.mobileTab === t.id }" @click="app.mobileTab = t.id">
       <span class="ico">
         <Icon :name="t.icon" :size="20" />
-        <i v-if="t.id === 'alerts' && activeAlerts" class="badge">{{ activeAlerts }}</i>
+        <i v-if="t.id === 'alerts' && unreadAlerts" class="badge">{{ unreadAlerts }}</i>
       </span>
       <span>{{ t.label }}</span>
     </button>

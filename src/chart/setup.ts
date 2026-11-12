@@ -118,7 +118,10 @@ export function applyBatch(list: Setup[], skipped: string[] = []) {
     markAndLevel(ref, s)
   }
   const first = list.find((s) => s.symbol)
+  // на телефоне остаёмся там, откуда вставляли (например, в списке): монеты добавились туда
+  const tab = app.mobileTab
   if (first) applySetup(first, true)
+  app.mobileTab = tab
   const parts: string[] = []
   if (added.length) parts.push(`В список «${activeList.value.name}» добавлено ${added.length}: ${added.join(', ')}`)
   if (updated.length) parts.push(`${added.length ? 'у' : 'У'}же в списках, обновлены направление и уровни — ${updated.length}: ${updated.join(', ')}`)
@@ -152,6 +155,22 @@ export function applyPastedText(text: string): boolean {
   else if (r.kind === 'batch') applyBatch(r.list, r.skipped)
   else applyPastedSetup(r.setup)
   return true
+}
+
+/**
+ * Вставка по кнопке (на телефоне нет Ctrl+V): читаем буфер сами и сразу применяем.
+ * Браузер не дал прочитать буфер или текст не распознан — открывается окно, куда текст можно вставить руками.
+ */
+export async function pasteFromClipboard() {
+  let text = ''
+  try {
+    text = (await navigator.clipboard.readText()) ?? ''
+  } catch {
+    /* нет разрешения или буфер недоступен — попросим вставить вручную */
+  }
+  if (text.trim() && applyPastedText(text)) return
+  app.pasteDraft = text.trim().slice(0, 2000)
+  app.tradeTextOpen = true
 }
 
 /** Текст сетапа из адреса страницы: параметр q, «хвост» пути и часть после решётки */
