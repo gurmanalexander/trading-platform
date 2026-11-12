@@ -49,11 +49,15 @@ onMounted(() => {
   c.load()
   window.addEventListener('keydown', onKey)
   document.addEventListener('pointerdown', closeMenu, true)
+  measurePane()
+  sizeObs = new ResizeObserver(measurePane)
+  sizeObs.observe(host.value!)
 })
 
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', onKey)
   document.removeEventListener('pointerdown', closeMenu, true)
+  sizeObs?.disconnect()
   onAlertUp()
   if (selection.value?.pane === props.index) selection.value = null
   unregister()
@@ -118,6 +122,13 @@ watch(alertPrices, (p) => ctrl.value?.setAlertLines(p))
 
 const selected = computed(() => ctrl.value?.draw.selectedId.value ?? null)
 const paneWidth = ref(0)
+const paneHeight = ref(0)
+// размер окна нужен панели рисунка, чтобы не вылезать за край; следим за ним постоянно
+let sizeObs: ResizeObserver | null = null
+function measurePane() {
+  paneWidth.value = host.value?.clientWidth ?? 0
+  paneHeight.value = host.value?.clientHeight ?? 0
+}
 
 function onKey(e: KeyboardEvent) {
   if (!selected.value) return
@@ -131,7 +142,7 @@ function onKey(e: KeyboardEvent) {
 
 function activate() {
   app.active = props.index
-  paneWidth.value = host.value?.clientWidth ?? 0
+  measurePane()
 }
 
 // ---------- линии оповещений: их можно тянуть мышью или пальцем ----------
@@ -282,7 +293,7 @@ function toggleScale(id: ScaleMode) {
       <Icon name="skip" :size="16" />
     </button>
 
-    <DrawingBar v-if="ctrl && selected" :layer="ctrl.draw" :max-x="paneWidth || 9999" :precision="precision" />
+    <DrawingBar v-if="ctrl && selected" :layer="ctrl.draw" :max-x="paneWidth || 9999" :max-y="paneHeight || 9999" :precision="precision" />
 
     <div v-if="menu.open" class="menu ctx-menu" :style="{ left: Math.max(4, menu.x) + 'px', top: Math.max(4, menu.y) + 'px' }">
       <button class="menu-item" @click="menuAlert"><Icon name="bell" :size="16" />Оповещение на {{ fmtPrice(menu.price, precision) }}</button>

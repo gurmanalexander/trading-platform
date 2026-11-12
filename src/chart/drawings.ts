@@ -567,6 +567,12 @@ export class DrawingsLayer {
         if (isPosition(g.d.type)) movePositionHandle(g.d, g.handle, pt, 1 / 10 ** this.host.precision(), this.host.tfSec())
         else g.d.pts[g.handle] = pt
       }
+    } else if (g.d.type === 'hline' || g.d.type === 'hray') {
+      // уровень тянут за любое место: магнит ищет цены той свечи, что под курсором,
+      // а не той, где когда-то поставили точку линии (она может быть далеко за экраном)
+      const snap = this.toPoint(x, g.orig[0].y + dy, magnet)
+      const own = g.d.type === 'hray' ? this.toPoint(g.orig[0].x + dx, g.orig[0].y + dy, false) : null
+      if (snap) g.d.pts[0] = { t: own?.t ?? g.d.pts[0].t, p: snap.p }
     } else {
       g.orig.forEach((o, i) => {
         const pt = this.toPoint(o.x + dx, o.y + dy, magnet)

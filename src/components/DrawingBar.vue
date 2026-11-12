@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onMounted, onUpdated, reactive, ref } from 'vue'
 import Icon from './Icon.vue'
 import { DRAW_COLORS, defaultVisibility, type Dash, type Visibility } from '../stores/drawings'
 import { hasLineStyle, hasText, isPosition, TEXT_SIZES, type DrawingsLayer } from '../chart/drawings'
@@ -8,7 +8,7 @@ import { isPhone, toast } from '../stores/app'
 import { pasteFromClipboard } from '../chart/setup'
 
 // Панель выбранного рисунка: у линий — цвет, толщина, вид и подпись; у позиции — вход, стоп и цель числами
-const props = defineProps<{ layer: DrawingsLayer; maxX: number; precision: number }>()
+const props = defineProps<{ layer: DrawingsLayer; maxX: number; maxY: number; precision: number }>()
 
 const d = computed(() => props.layer.selected())
 const styled = computed(() => !!d.value && hasLineStyle(d.value.type))
@@ -16,11 +16,31 @@ const position = computed(() => !!d.value && isPosition(d.value.type) && d.value
 const isText = computed(() => d.value?.type === 'text')
 // цвет выбирается и у линий, и у текста
 const colored = computed(() => styled.value || isText.value)
+// Панель встаёт над рисунком; если сверху места нет — под ним. Размер берётся настоящий
+// (он зависит от вида рисунка), и панель целиком остаётся внутри окна графика.
+const bar = ref<HTMLElement>()
+const size = reactive({ w: 0, h: 0 })
+function measure() {
+  const el = bar.value
+  if (!el) return
+  size.w = el.offsetWidth
+  size.h = el.offsetHeight
+}
+onMounted(measure)
+onUpdated(measure)
 const pos = computed(() => {
   const a = props.layer.anchor.value
   if (!a) return null
-  const width = position.value ? 330 : 250
-  return { left: Math.max(6, Math.min(props.maxX - width, a.x)) + 'px', top: Math.max(34, a.y - (colored.value ? 84 : position.value ? 108 : 46)) + 'px' }
+  const w = size.w || (position.value ? 330 : 280)
+  const h = size.h || (colored.value ? 80 : position.value ? 104 : 42)
+  const maxX = props.maxX || 9999
+  const maxY = props.maxY || 9999
+  let top = a.y - h - 12
+  // сверху не помещается (или там легенда графика) — ставим под рисунком
+  if (top < 30) top = a.y + 18
+  top = Math.max(4, Math.min(maxY - h - 4, top))
+  const left = Math.max(4, Math.min(maxX - w - 4, a.x))
+  return { left: left + 'px', top: top + 'px' }
 })
 
 const WIDTHS = [1, 2, 3, 4]
@@ -82,7 +102,7 @@ function duplicate() {
 </script>
 
 <template>
-  <div v-if="d && pos" class="dbar" :style="pos" @pointerdown.stop @keydown.stop>
+  <div v-if="d && pos" ref="bar" class="dbar" :style="pos" @pointerdown.stop @keydown.stop>
     <div v-if="colored" class="row">
       <button
         v-for="c in DRAW_COLORS"

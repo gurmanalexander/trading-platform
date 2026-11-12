@@ -142,6 +142,12 @@ const grid = computed(() => ({ gridTemplateColumns: ['minmax(88px, 1fr)', ...col
 /** Цвет цены — по изменению за сутки: рост, падение или без изменений */
 const tone = (pct: number) => (pct > 0 ? 'up' : pct < 0 ? 'down' : 'muted')
 const head = (id: SortKey) => settings.sort === id
+
+// при перелистывании клавишами открытая монета остаётся на виду
+watch(
+  () => symbolKey(activePane.value.symbol),
+  () => nextTick(() => document.querySelector('.sc-row.active')?.scrollIntoView({ block: 'nearest' })),
+)
 </script>
 
 <template>

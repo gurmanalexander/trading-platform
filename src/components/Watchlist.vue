@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import Icon from './Icon.vue'
 import Dropdown from './Dropdown.vue'
 import SideMark from './SideMark.vue'
@@ -294,6 +294,12 @@ function listMark(listId: string, i: number): string {
   const list = lists.all[i]
   return t.listId === listId && (list.collapsed || !list.items.length) ? 'drop-into' : ''
 }
+
+// при перелистывании клавишами открытая монета остаётся на виду
+watch(
+  () => symbolKey(activePane.value.symbol),
+  () => nextTick(() => document.querySelector('.wl-row.active')?.scrollIntoView({ block: 'nearest' })),
+)
 </script>
 
 <template>

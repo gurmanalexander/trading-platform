@@ -144,6 +144,8 @@ function onCtrl(e: KeyboardEvent): boolean {
   else if (e.code === 'KeyK') openSearch()
   else if (e.code === 'ArrowLeft') chart?.scrollBars(-20)
   else if (e.code === 'ArrowRight') chart?.scrollBars(20)
+  else if (e.code === 'ArrowUp') chart?.zoomBy(1.2)
+  else if (e.code === 'ArrowDown') chart?.zoomBy(1 / 1.2)
   else return false
   return true
 }
@@ -176,10 +178,19 @@ function onPlain(e: KeyboardEvent): boolean {
     case 'ArrowRight':
       chart?.scrollBars(1)
       return true
+    // стрелки вверх и вниз листают монеты открытого списка или отбора; масштаб — клавишами «+» и «−»
     case 'ArrowUp':
-      chart?.zoomBy(1.2)
+      stepSymbol(-1)
       return true
     case 'ArrowDown':
+      stepSymbol(1)
+      return true
+    case 'Equal':
+    case 'NumpadAdd':
+      chart?.zoomBy(1.2)
+      return true
+    case 'Minus':
+    case 'NumpadSubtract':
       chart?.zoomBy(1 / 1.2)
       return true
     case 'End':
