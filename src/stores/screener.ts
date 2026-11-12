@@ -3,7 +3,7 @@ import { sameSymbol, type ExchangeId, type MarketId, type SymbolRef } from '../t
 import { load, persist } from '../lib/storage'
 import { loadSymbols, withUsdVolume, type SymbolVolume } from '../exchanges'
 import { app, activePane, isPhone, setSymbol } from './app'
-import { watchlist } from './watchlist'
+import { visibleItems } from './watchlist'
 
 export type SortKey = 'volume' | 'change' | 'price' | 'symbol'
 
@@ -107,7 +107,7 @@ export function startAutoRefresh(): () => void {
 /** Следующий/предыдущий инструмент в том списке, который сейчас открыт (отбор или список наблюдения) */
 export function stepSymbol(step: number) {
   const tab = isPhone.value ? app.mobileTab : app.panel
-  const list: SymbolRef[] = tab === 'screener' ? view.value : watchlist.value
+  const list: SymbolRef[] = tab === 'screener' ? view.value : visibleItems.value
   if (!list.length) return
   const cur = list.findIndex((r) => sameSymbol(r, activePane.value.symbol))
   const next = cur < 0 ? (step > 0 ? 0 : list.length - 1) : (cur + step + list.length) % list.length

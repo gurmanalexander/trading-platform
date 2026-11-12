@@ -4,7 +4,7 @@ import Icon from './Icon.vue'
 import { sameSymbol, symbolKey, EXCHANGE_NAMES, MARKET_NAMES } from '../types'
 import { activePane, setSymbol } from '../stores/app'
 import { settings, state, view, total, sortBy, refresh, resetSettings, startAutoRefresh, MAX_ROWS, type SortKey } from '../stores/screener'
-import { inWatchlist, toggleWatch } from '../stores/watchlist'
+import { activeList, inActiveList, toggleWatch } from '../stores/watchlist'
 import { fmtPct, fmtPriceShort, fmtVolume } from '../lib/format'
 
 const showSettings = ref(false)
@@ -106,8 +106,8 @@ const COLS: { id: SortKey; label: string }[] = [
         <span class="num muted">{{ fmtVolume(r.usdVolume) }}</span>
         <button
           class="btn sm star"
-          :class="{ on: inWatchlist(r) }"
-          :title="inWatchlist(r) ? 'Убрать из списка наблюдения' : 'В список наблюдения'"
+          :class="{ on: inActiveList(r) }"
+          :title="(inActiveList(r) ? 'Убрать из списка «' : 'В список «') + activeList.name + '»'"
           @click.stop="toggleWatch(r)"
         >
           <Icon name="star" :size="14" />

@@ -1,11 +1,12 @@
-import type { IChartApi, IPrimitivePaneRenderer, IPrimitivePaneView, ISeriesApi, ISeriesPrimitive, Logical, SeriesType, Time } from 'lightweight-charts'
+import type { IChartApi, IPrimitivePaneRenderer, IPrimitivePaneView, ISeriesApi, ISeriesPrimitive, ISeriesPrimitiveAxisView, Logical, SeriesType, Time } from 'lightweight-charts'
 import { computed, shallowRef } from 'vue'
 import type { Bar } from '../types'
 import { app } from '../stores/app'
-import { checkpoint, clipboard, selection, setDefaultStyle, styleFor, type Dash, type Drawing, type DrawingType, type Pt } from '../stores/drawings'
+import { checkpoint, clipboard, selection, setDefaultStyle, styleFor, visibleOn, type Dash, type Drawing, type DrawingType, type Pt, type Visibility } from '../stores/drawings'
+import { formatSignal, type Signal } from '../lib/signal'
 import { fmtPct, fmtPrice, fmtSpan } from '../lib/format'
 import { withAlpha, type ChartColors } from './theme'
-import { movePositionHandle, riskReward } from './position'
+import { evaluatePosition, fmtR, movePositionHandle, riskReward, setPositionPrices } from './position'
 
 /** Что слою рисунков нужно знать о графике */
 export interface DrawHost {
@@ -17,6 +18,9 @@ export interface DrawHost {
   tfSec(): number
   tz(): number
   precision(): number
+  symbol(): string
+  /** дневной ATR инструмента, если уже известен */
+  atr(): number | undefined
   colors(): ChartColors
   timeToLogical(t: number): number | null
   logicalToTime(l: number): number
@@ -46,6 +50,25 @@ export const isPosition = (t: DrawingType) => t === 'long' || t === 'short'
 export const hasLineStyle = (t: DrawingType) => !isPosition(t) && t !== 'measure'
 export const hasText = (t: DrawingType) => t === 'hline' || t === 'hray' || t === 'trend' || t === 'ray' || t === 'rect'
 const uid = () => Math.random().toString(36).slice(2, 10)
+
+// Новая позиция: стоп — 10% дневного ATR, цель — вчетверо дальше
+const STOP_ATR = 0.1
+const DEFAULT_RR = 4
+const MONTHS = ['янв', 'фев', 'мар', 'апр', 'мая', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек']
+
+/** Тёмный или светлый текст — что читается на фоне bg */
+function contrast(bg: string): string {
+  if (bg.length !== 7 || bg[0] !== '#') return '#fff'
+  const n = parseInt(bg.slice(1), 16)
+  return ((n >> 16) * 299 + ((n >> 8) & 255) * 587 + (n & 255) * 114) / 1000 > 150 ? '#111' : '#fff'
+}
+
+const axisLabel = (coordinate: number, text: string, bg: string): ISeriesPrimitiveAxisView => ({
+  coordinate: () => coordinate,
+  text: () => text,
+  textColor: () => contrast(bg),
+  backColor: () => bg,
+})
 
 function distToSegment(px: number, py: number, a: XY, b: XY): number {
   const dx = b.x - a.x
@@ -82,7 +105,9 @@ export class DrawingsLayer {
   private hoverId: string | null = null
   private pressing = false
   private downAt: XY = { x: 0, y: 0 }
-  private drag: { d: Drawing; handle: number; start: XY; orig: XY[]; moved: boolean } | null = null
+  private drag: { d: Drawing; handle: number; start: XY; orig: XY[]; moved: boolean; copy: boolean } | null = null
+  private priceLabels: ISeriesPrimitiveAxisView[] = []
+  private timeLabels: ISeriesPrimitiveAxisView[] = []
   /** прокрутка графика отключена на время жеста над рисунком */
   private scrollLocked = false
   private requestUpdate: (() => void) | null = null
@@ -100,7 +125,10 @@ export class DrawingsLayer {
     this.primitive = {
       attached: (p) => (this.requestUpdate = p.requestUpdate),
       detached: () => (this.requestUpdate = null),
+      updateAllViews: () => this.buildAxisLabels(),
       paneViews: () => views,
+      priceAxisViews: () => this.priceLabels,
+      timeAxisViews: () => this.timeLabels,
     }
   }
 
@@ -117,13 +145,63 @@ export class DrawingsLayer {
   }
 
   redraw() {
+    this.buildAxisLabels()
     this.requestUpdate?.()
+  }
+
+  private shown(d: Drawing): boolean {
+    return visibleOn(d, this.host.tfSec())
+  }
+
+  /**
+   * Метки на шкалах. Цена горизонтальных уровней видна на ценовой шкале всегда;
+   * у выбранного рисунка на шкалы проецируются все его цены и моменты времени.
+   */
+  private buildAxisLabels() {
+    const prices: ISeriesPrimitiveAxisView[] = []
+    const times: ISeriesPrimitiveAxisView[] = []
+    const c = this.host.colors()
+    const prec = this.host.precision()
+    const addPrice = (price: number, bg: string) => {
+      const y = this.host.series().priceToCoordinate(price)
+      if (y != null) prices.push(axisLabel(y, fmtPrice(price, prec), bg))
+    }
+    const addTime = (t: number) => {
+      const x = this.xOf(t)
+      if (x != null) times.push(axisLabel(x, this.timeText(t), c.accent))
+    }
+    const sel = this.selectedId.value
+    const items = app.drawingsHidden ? [] : this.list.filter((d) => this.shown(d))
+    if (this.draft) items.push(this.draft)
+    for (const d of items) {
+      const active = d.id === sel || d === this.draft
+      if (d.type === 'hline' || d.type === 'hray' || d.type === 'cross') addPrice(d.pts[0].p, d.color)
+      else if (active && isPosition(d.type) && d.pts.length >= 3) {
+        addPrice(d.pts[1].p, c.up)
+        addPrice(d.pts[2].p, c.down)
+        addPrice(d.pts[0].p, c.crossLabel)
+      } else if (active && d.type !== 'vline') d.pts.forEach((p) => addPrice(p.p, d.color))
+      if (active && d.type !== 'hline') {
+        addTime(d.pts[0].t)
+        if (d.pts.length > 1 && d.pts[1].t !== d.pts[0].t) addTime(d.pts[1].t)
+      }
+    }
+    this.priceLabels = prices
+    this.timeLabels = times
+  }
+
+  /** Подпись времени на шкале — в том же часовом поясе, что и сама шкала */
+  private timeText(t: number): string {
+    const d = new Date((t + this.host.tz()) * 1000)
+    const pad = (n: number) => String(n).padStart(2, '0')
+    const date = `${pad(d.getUTCDate())} ${MONTHS[d.getUTCMonth()]} '${String(d.getUTCFullYear()).slice(2)}`
+    return this.host.tfSec() >= 86400 ? date : `${date}  ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}`
   }
 
   // ---------- координаты ----------
 
-  private toScreen(p: Pt): XY | null {
-    const lg = this.host.timeToLogical(p.t)
+  private xOf(t: number): number | null {
+    const lg = this.host.timeToLogical(t)
     if (lg == null) return null
     // Библиотека переводит в координату только целый номер существующей свечи. Время рисунка
     // может попадать между свечами (другой интервал) или за край данных, поэтому берём
@@ -131,17 +209,23 @@ export class DrawingsLayer {
     const ts = this.host.chart.timeScale()
     const base = Math.min(this.host.bars().length - 1, Math.max(0, Math.round(lg)))
     const x0 = ts.logicalToCoordinate(base as Logical)
-    const y = this.host.series().priceToCoordinate(p.p)
-    if (x0 == null || y == null) return null
-    return { x: x0 + (lg - base) * ts.options().barSpacing, y }
+    return x0 == null ? null : x0 + (lg - base) * ts.options().barSpacing
   }
 
-  private toPoint(x: number, y: number): Pt | null {
+  private toScreen(p: Pt): XY | null {
+    const x = this.xOf(p.t)
+    const y = this.host.series().priceToCoordinate(p.p)
+    if (x == null || y == null) return null
+    return { x, y }
+  }
+
+  /** magnet = false — для позиций: вход, стоп и цель ставятся точно, без притягивания к свече */
+  private toPoint(x: number, y: number, magnet = app.magnet): Pt | null {
     const lg = this.host.chart.timeScale().coordinateToLogical(x)
     let price = this.host.series().coordinateToPrice(y) as number | null
     if (lg == null || price == null) return null
     const idx = Math.round(lg)
-    if (app.magnet) {
+    if (magnet) {
       const bar = this.host.bars()[idx]
       if (bar) {
         let best = 14
@@ -230,7 +314,7 @@ export class DrawingsLayer {
       (e) => {
         if (app.tool !== 'cursor' || e.button > 0) return
         const p = rel(e)
-        this.idleDown(p.x, p.y, e.pointerType === 'mouse' ? 6 : 14, e.shiftKey)
+        this.idleDown(p.x, p.y, e.pointerType === 'mouse' ? 6 : 14, e.shiftKey, e.ctrlKey || e.metaKey)
       },
       { capture: true },
     )
@@ -278,22 +362,31 @@ export class DrawingsLayer {
     return { id: uid(), type, pts, color: st.color, width: st.width, dash: st.dash }
   }
 
-  /** Позиция по умолчанию: цель на ~12% высоты экрана от входа, стоп вдвое ближе, ширина ~15% видимых свечей */
+  /**
+   * Позиция по умолчанию: стоп — 10% дневного ATR, цель — вчетверо дальше, ширина ~15% видимых свечей.
+   * Пока ATR неизвестен, цель ставится на ~12% высоты экрана от входа.
+   */
   private newPosition(type: 'long' | 'short', entry: Pt, x: number): Drawing {
     const sign = type === 'long' ? 1 : -1
     const size = this.host.chart.paneSize(0)
-    const top = this.host.series().coordinateToPrice(0) as number | null
-    const bottom = this.host.series().coordinateToPrice(size.height) as number | null
-    const dist = top != null && bottom != null ? Math.abs(top - bottom) * 0.12 : entry.p * 0.01
-    const right = this.toPoint(x + Math.max(60, size.width * 0.15), 0)
+    const atr = this.host.atr()
+    let stopDist: number
+    if (atr) stopDist = atr * STOP_ATR
+    else {
+      const top = this.host.series().coordinateToPrice(0) as number | null
+      const bottom = this.host.series().coordinateToPrice(size.height) as number | null
+      stopDist = (top != null && bottom != null ? Math.abs(top - bottom) * 0.12 : entry.p * 0.01) / DEFAULT_RR
+    }
+    const round = (v: number) => +v.toFixed(this.host.precision())
+    const right = this.toPoint(x + Math.max(60, size.width * 0.15), 0, false)
     const t2 = Math.max(right?.t ?? 0, entry.t + this.host.tfSec())
-    return this.newDrawing(type, [entry, { t: t2, p: entry.p + sign * dist }, { t: entry.t, p: entry.p - (sign * dist) / 2 }])
+    return this.newDrawing(type, [entry, { t: t2, p: round(entry.p + sign * stopDist * DEFAULT_RR) }, { t: entry.t, p: round(entry.p - sign * stopDist) }])
   }
 
   private toolDown(x: number, y: number) {
     const tool = app.tool
     if (tool === 'cursor') return
-    const pt = this.toPoint(x, y)
+    const pt = this.toPoint(x, y, isPosition(tool) ? false : app.magnet)
     if (!pt) return
     this.measure = null
     if (this.draft) {
@@ -310,18 +403,19 @@ export class DrawingsLayer {
   }
 
   private toolMove(x: number, y: number, isMouse: boolean) {
-    const pt = this.toPoint(x, y)
+    const pt = this.toPoint(x, y, this.draft && isPosition(this.draft.type) ? false : app.magnet)
     if (!pt) return
     if (isMouse) this.syncCrosshair(pt)
     const d = this.draft
     if (!d) return
     if (isPosition(d.type)) {
-      // протяжка задаёт цель и правый край; стоп — вдвое ближе цели
+      // протяжка задаёт цель и правый край; стоп — вчетверо ближе цели
       if (this.pressing && Math.hypot(x - this.downAt.x, y - this.downAt.y) > 8) {
         const sign = d.type === 'long' ? 1 : -1
+        const round = (v: number) => +v.toFixed(this.host.precision())
         const dist = Math.max(Math.abs(pt.p - d.pts[0].p), 1 / 10 ** this.host.precision())
-        d.pts[1] = { t: Math.max(pt.t, d.pts[0].t + this.host.tfSec()), p: d.pts[0].p + sign * dist }
-        d.pts[2].p = d.pts[0].p - (sign * dist) / 2
+        d.pts[1] = { t: Math.max(pt.t, d.pts[0].t + this.host.tfSec()), p: round(d.pts[0].p + sign * dist) }
+        d.pts[2].p = round(d.pts[0].p - (sign * dist) / DEFAULT_RR)
       }
     } else if (isSingle(d.type)) {
       if (this.pressing) d.pts[0] = pt
@@ -376,7 +470,7 @@ export class DrawingsLayer {
     this.host.chart.setCrosshairPosition(pt.p, (pt.t + this.host.tz()) as Time, this.host.series())
   }
 
-  private idleDown(x: number, y: number, tol: number, shift: boolean) {
+  private idleDown(x: number, y: number, tol: number, shift: boolean, ctrl: boolean) {
     if (this.measure) {
       this.measure = null
       this.redraw()
@@ -404,7 +498,8 @@ export class DrawingsLayer {
     }
     selection.value = { pane: this.host.paneIndex, id: h.d.id }
     const orig = h.d.pts.map((p) => this.toScreen(p) ?? { x, y })
-    this.drag = { d: h.d, handle: h.handle, start: { x, y }, orig, moved: false }
+    // с зажатым Ctrl тянется копия: оригинал остаётся на месте
+    this.drag = { d: h.d, handle: ctrl ? -1 : h.handle, start: { x, y }, orig, moved: false, copy: ctrl }
     this.lockScroll(true)
     this.redraw()
   }
@@ -418,16 +513,23 @@ export class DrawingsLayer {
       if (Math.hypot(dx, dy) < 3) return
       g.moved = true
       checkpoint()
+      if (g.copy) {
+        const clone: Drawing = { ...JSON.parse(JSON.stringify(g.d)), id: uid() }
+        this.list.push(clone)
+        g.d = this.list[this.list.length - 1]
+        selection.value = { pane: this.host.paneIndex, id: clone.id }
+      }
     }
+    const magnet = isPosition(g.d.type) ? false : app.magnet
     if (g.handle >= 0) {
-      const pt = this.toPoint(x, y)
+      const pt = this.toPoint(x, y, magnet)
       if (pt) {
         if (isPosition(g.d.type)) movePositionHandle(g.d, g.handle, pt, 1 / 10 ** this.host.precision(), this.host.tfSec())
         else g.d.pts[g.handle] = pt
       }
     } else {
       g.orig.forEach((o, i) => {
-        const pt = this.toPoint(o.x + dx, o.y + dy)
+        const pt = this.toPoint(o.x + dx, o.y + dy, magnet)
         if (pt) g.d.pts[i] = pt
       })
     }
@@ -456,6 +558,54 @@ export class DrawingsLayer {
     this.redraw()
   }
 
+  setVisibility(vis: Visibility) {
+    const d = this.selected()
+    if (!d) return
+    checkpoint()
+    d.vis = vis
+    this.redraw()
+  }
+
+  /** Сдвиг выбранного рисунка клавишами: на свечи по времени и на шаги цены по вертикали */
+  nudge(bars: number, ticks: number): boolean {
+    const d = this.selected()
+    if (!d) return false
+    checkpoint()
+    const prec = this.host.precision()
+    const tick = 1 / 10 ** prec
+    const dt = bars * this.host.tfSec()
+    d.pts = d.pts.map((p) => ({ t: p.t + dt, p: +(p.p + ticks * tick).toFixed(prec) }))
+    this.redraw()
+    return true
+  }
+
+  /** Вход, стоп и цель выбранной позиции числами. false — значения несовместимы */
+  setPosition(entry: number, stop: number, target: number): boolean {
+    const d = this.selected()
+    if (!d || !isPosition(d.type)) return false
+    const copy: Drawing = JSON.parse(JSON.stringify(d))
+    if (!setPositionPrices(copy, entry, stop, target)) return false
+    checkpoint()
+    setPositionPrices(d, entry, stop, target)
+    this.redraw()
+    return true
+  }
+
+  /** Раскладывает цены из текста сделки по выбранной позиции. Недостающие значения остаются прежними */
+  applySignal(sig: Signal): boolean {
+    const d = this.selected()
+    if (!d || !isPosition(d.type)) return false
+    return this.setPosition(sig.entry ?? d.pts[0].p, sig.stop ?? d.pts[2].p, sig.target ?? d.pts[1].p)
+  }
+
+  /** Текст для системного буфера при копировании: у позиции — её цены в формате сделки */
+  copyText(): string {
+    const d = this.selected()
+    if (!d) return ''
+    if (isPosition(d.type)) return formatSignal(this.host.symbol(), d.type as 'long' | 'short', d.pts[0].p, d.pts[2].p, d.pts[1].p, this.host.precision())
+    return `tvx:${d.type}:${d.id}`
+  }
+
   /** Запоминает стиль выбранного рисунка как стиль по умолчанию для этого инструмента */
   saveAsDefault() {
     const d = this.selected()
@@ -478,6 +628,7 @@ export class DrawingsLayer {
     const d = this.selected()
     if (!d) return false
     clipboard.item = JSON.parse(JSON.stringify(d))
+    clipboard.text = this.copyText()
     return true
   }
 
@@ -512,6 +663,7 @@ export class DrawingsLayer {
     const sel = this.selectedId.value
     for (let i = this.list.length - 1; i >= 0; i--) {
       const d = this.list[i]
+      if (!this.shown(d)) continue
       const g = this.geometry(d, size.width, size.height)
       if (!g) continue
       const { sp, handles } = g
@@ -566,6 +718,7 @@ export class DrawingsLayer {
     ctx.lineJoin = 'round'
     if (!app.drawingsHidden) {
       for (const d of this.list) {
+        if (!this.shown(d)) continue
         const pts = this.drawOne(ctx, d, w, h, d.id === this.hoverId, d.id === sel)
         if (d.id === sel && pts) anchor = { x: Math.min(...pts.map((p) => p.x)), y: Math.min(...pts.map((p) => p.y)) }
       }
@@ -636,14 +789,12 @@ export class DrawingsLayer {
       case 'hline': {
         const y = crisp(sp[0].y)
         line({ x: 0, y }, { x: w, y })
-        label(fmtPrice(d.pts[0].p, prec), w - 6, y - 3, 'right')
         if (d.text) label(d.text, 8, y - 3)
         break
       }
       case 'hray': {
         const y = crisp(sp[0].y)
         line({ x: sp[0].x, y }, { x: w, y })
-        label(fmtPrice(d.pts[0].p, prec), w - 6, y - 3, 'right')
         if (d.text) label(d.text, Math.max(8, sp[0].x + 6), y - 3)
         break
       }
@@ -657,7 +808,6 @@ export class DrawingsLayer {
         const y = crisp(sp[0].y)
         line({ x: 0, y }, { x: w, y })
         line({ x, y: 0 }, { x, y: h })
-        label(fmtPrice(d.pts[0].p, prec), w - 6, y - 3, 'right')
         break
       }
       case 'rect': {
@@ -709,16 +859,35 @@ export class DrawingsLayer {
         ctx.fillRect(x1, Math.min(yE, yT), x2 - x1, Math.abs(yT - yE))
         ctx.fillStyle = withAlpha(c.down, hover || handles ? 0.26 : 0.18)
         ctx.fillRect(x1, Math.min(yE, yS), x2 - x1, Math.abs(yS - yE))
+        // Ход сделки: яркая область от входа до текущей цены (или до закрытия по стопу/цели)
+        // и пунктир от точки входа к этой цене — видно, где сделка сейчас и чем закончилась.
+        const bars = this.host.bars()
+        const st = evaluatePosition(d, bars)
+        if (st.status !== 'pending') {
+          const xe = this.xOf(st.exitTime)
+          const ye = this.host.series().priceToCoordinate(st.exitPrice)
+          if (xe != null && ye != null && xe > x1) {
+            const col = (d.type === 'long' ? st.exitPrice >= entry : st.exitPrice <= entry) ? c.up : c.down
+            ctx.fillStyle = withAlpha(col, 0.32)
+            ctx.fillRect(x1, Math.min(yE, ye), xe - x1, Math.abs(ye - yE))
+            ctx.strokeStyle = col
+            ctx.lineWidth = 1
+            ctx.setLineDash([4, 3])
+            line({ x: x1, y: yE }, { x: xe, y: ye })
+            ctx.setLineDash([])
+          }
+        }
         ctx.strokeStyle = c.text
         ctx.lineWidth = 1
         line({ x: x1, y: Math.round(yE) + 0.5 }, { x: x2, y: Math.round(yE) + 0.5 })
         // на мелком масштабе (другой интервал) подписи слиплись бы — показываем их только у выбранной позиции
         if (!hover && !handles && (Math.abs(yT - yS) < 70 || x2 - x1 < 90)) break
         const pct = (v: number) => fmtPct(entry ? ((v - entry) / entry) * 100 : 0)
+        const result = st.status === 'open' ? ` · сейчас ${fmtR(st.r)}` : st.status === 'tp' ? ` · тейк ${fmtR(st.r)}` : st.status === 'sl' ? ' · стоп -1R' : ''
         const texts = [
           `Цель ${fmtPrice(target, prec)} (${pct(target)})`,
           `Стоп ${fmtPrice(stop, prec)} (${pct(stop)})`,
-          `${d.type === 'long' ? 'Лонг' : 'Шорт'} ${fmtPrice(entry, prec)} · R/R ${riskReward(d).toFixed(2)}`,
+          `${d.type === 'long' ? 'Лонг' : 'Шорт'} ${fmtPrice(entry, prec)} · R/R ${riskReward(d).toFixed(2)}${result}`,
         ]
         // узкая позиция: подписи не помещаются между маркерами — выносим их вправо от неё
         const outside = x2 - x1 < Math.max(...texts.map((t) => ctx.measureText(t).width)) + 40

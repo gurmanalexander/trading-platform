@@ -11,6 +11,7 @@ import { tickers, useTickers } from '../stores/tickers'
 import { alerts, addAlert } from '../stores/alerts'
 import { clearDrawings, drawings, drawingsOf, selection } from '../stores/drawings'
 import { crosshairBus, timeBus } from '../stores/sync'
+import { useDayStats } from '../stores/atr'
 import { fmtPrice } from '../lib/format'
 
 const props = defineProps<{ index: number }>()
@@ -27,6 +28,8 @@ const menu = reactive({ open: false, x: 0, y: 0, price: 0 })
 
 // живая цена инструмента панели: и для списка, и для «докраски» последней свечи
 useTickers(() => [pane.symbol])
+// дневной ATR: показывается в легенде и задаёт размер стопа новой позиции
+useDayStats(() => [pane.symbol])
 
 let unregister = () => {}
 
@@ -210,7 +213,7 @@ function toggleScale(id: ScaleMode) {
       <Icon name="skip" :size="16" />
     </button>
 
-    <DrawingBar v-if="ctrl && selected" :layer="ctrl.draw" :max-x="paneWidth || 9999" />
+    <DrawingBar v-if="ctrl && selected" :layer="ctrl.draw" :max-x="paneWidth || 9999" :precision="precision" />
 
     <div v-if="menu.open" class="menu ctx-menu" :style="{ left: Math.max(4, menu.x) + 'px', top: Math.max(4, menu.y) + 'px' }">
       <button class="menu-item" @click="menuAlert"><Icon name="bell" :size="16" />Оповещение на {{ fmtPrice(menu.price, precision) }}</button>

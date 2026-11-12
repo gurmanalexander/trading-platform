@@ -25,6 +25,7 @@ import { setPrecision } from '../lib/format'
 import { indicatorDef, resolveParams, toSource, type IndicatorDef, type IndicatorInstance } from '../lib/indicators'
 import { app, paneCount, theme, type ChartType, type PaneState } from '../stores/app'
 import { crosshairBus, timeBus } from '../stores/sync'
+import { dayStats } from '../stores/atr'
 import { chartColors, withAlpha, type ChartColors } from './theme'
 import { DrawingsLayer } from './drawings'
 import { heikinAshi, heikinBar, lowerBound } from './bars'
@@ -142,6 +143,8 @@ export class ChartController {
       tfSec: () => this.tf.sec,
       tz: () => this.tz,
       precision: () => this.precision,
+      symbol: () => this.pane.symbol.symbol,
+      atr: () => dayStats[symbolKey(this.pane.symbol)]?.atr,
       colors: () => this.colors,
       timeToLogical: (t) => this.timeToLogical(t),
       logicalToTime: (l) => this.logicalToTime(l),

@@ -4,7 +4,7 @@ import Icon from './Icon.vue'
 import Modal from './Modal.vue'
 import { EXCHANGE_NAMES, MARKET_NAMES, symbolKey, type ExchangeId, type MarketId, type SymbolInfo } from '../types'
 import { app, setSymbol } from '../stores/app'
-import { inWatchlist, toggleWatch } from '../stores/watchlist'
+import { activeList, inActiveList, toggleWatch } from '../stores/watchlist'
 import { SOURCES, loadSymbols, withUsdVolume, type SymbolVolume } from '../exchanges'
 import { autoPrecision, fmtCompact, fmtPct, fmtPrice } from '../lib/format'
 
@@ -139,8 +139,8 @@ const MARKETS: { id: MarketId | 'all'; label: string }[] = [
         <span class="ss-num muted vol">{{ it.usdVolume ? '$' + fmtCompact(it.usdVolume) : '' }}</span>
         <button
           class="btn sm star"
-          :class="{ on: inWatchlist(it) }"
-          :title="inWatchlist(it) ? 'Убрать из списка наблюдения' : 'В список наблюдения'"
+          :class="{ on: inActiveList(it) }"
+          :title="(inActiveList(it) ? 'Убрать из списка «' : 'В список «') + activeList.name + '»'"
           @click.stop="toggleWatch(it)"
         >
           <Icon name="star" :size="16" />

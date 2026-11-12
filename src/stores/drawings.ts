@@ -3,6 +3,8 @@ import { load, persist } from '../lib/storage'
 
 export type DrawingType = 'trend' | 'ray' | 'hline' | 'hray' | 'vline' | 'cross' | 'rect' | 'fib' | 'long' | 'short' | 'measure'
 export type Dash = 'solid' | 'dashed' | 'dotted'
+/** На каких интервалах рисунок виден: на всех, только внутри дня (< 1Д) или только от дня и старше */
+export type Visibility = 'all' | 'intraday' | 'daily'
 
 /** Точка привязки: время (сек UTC) и цена — рисунок не зависит от масштаба и таймфрейма */
 export interface Pt {
@@ -22,6 +24,15 @@ export interface Drawing {
   width?: number
   dash?: Dash
   text?: string
+  vis?: Visibility
+}
+
+/** Позиции по умолчанию видны только на внутридневных интервалах: на дневке они сливаются в точку */
+export const defaultVisibility = (type: DrawingType): Visibility => (type === 'long' || type === 'short' ? 'intraday' : 'all')
+
+export function visibleOn(d: Drawing, tfSec: number): boolean {
+  const vis = d.vis ?? defaultVisibility(d.type)
+  return vis === 'all' || (vis === 'intraday' ? tfSec < 86400 : tfSec >= 86400)
 }
 
 export interface DrawStyle {
@@ -95,5 +106,14 @@ export function redo(): boolean {
   return true
 }
 
-/** Скопированный рисунок (Ctrl+C / Ctrl+V) */
-export const clipboard: { item: Drawing | null } = { item: null }
+/**
+ * Скопированный рисунок (Ctrl+C / Ctrl+V). text — то, что при копировании ушло в системный
+ * буфер: по нему при вставке отличаем «свой» рисунок от текста сделки, пришедшего извне.
+ */
+export const clipboard: { item: Drawing | null; text: string } = { item: null, text: '' }
+
+/** Добавляет рисунок инструменту напрямую, минуя график (вставка сделки текстом) */
+export function addDrawing(key: string, d: Drawing) {
+  checkpoint()
+  drawingsOf(key).push(d)
+}

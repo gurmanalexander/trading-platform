@@ -1,4 +1,4 @@
-import { reactive, computed, ref } from 'vue'
+import { reactive, computed, ref, watch } from 'vue'
 import type { ExchangeId, MarketId, SymbolRef } from '../types'
 import { load, persist } from '../lib/storage'
 import { indicatorDef, type IndicatorInstance } from '../lib/indicators'
@@ -169,6 +169,7 @@ interface Saved {
   favTfs?: string[]
   templates?: Template[]
   templateId?: string | null
+  tabTemplates?: { screener?: string | null; watchlist?: string | null }
   searchFilter?: { exchange?: ExchangeId | 'all'; market?: MarketId | 'all' }
   drawingsHidden?: boolean
 }
@@ -207,6 +208,11 @@ export const app = reactive({
   favTfs: (Array.isArray(saved.favTfs) ? saved.favTfs.filter(isTf) : DEFAULT_FAVORITE_TFS.slice()) as string[],
   templates: sanitizeTemplates(saved.templates),
   templateId: (saved.templateId ?? null) as string | null,
+  /** шаблон, который включается сам при открытии вкладки «Отбор» или «Список» */
+  tabTemplates: {
+    screener: (saved.tabTemplates?.screener ?? null) as string | null,
+    watchlist: (saved.tabTemplates?.watchlist ?? null) as string | null,
+  },
   searchFilter: {
     exchange: (saved.searchFilter?.exchange ?? 'binance') as ExchangeId | 'all',
     market: (saved.searchFilter?.market ?? 'futures') as MarketId | 'all',
@@ -231,7 +237,7 @@ export const app = reactive({
 
 persist(
   'app',
-  () => [app.themePref, app.layout, app.panes, app.active, app.panel, app.panelOpen, app.magnet, app.sync, app.favTfs, app.templates, app.templateId, app.searchFilter, app.drawingsHidden],
+  () => [app.themePref, app.layout, app.panes, app.active, app.panel, app.panelOpen, app.magnet, app.sync, app.favTfs, app.templates, app.templateId, app.tabTemplates, app.searchFilter, app.drawingsHidden],
   () => ({
     themePref: app.themePref,
     layout: app.layout,
@@ -244,6 +250,7 @@ persist(
     favTfs: app.favTfs,
     templates: app.templates,
     templateId: app.templateId,
+    tabTemplates: app.tabTemplates,
     searchFilter: app.searchFilter,
     drawingsHidden: app.drawingsHidden,
   }),
@@ -365,6 +372,15 @@ export function deleteTemplate(id: string) {
   const i = app.templates.findIndex((t) => t.id === id)
   if (i >= 0) app.templates.splice(i, 1)
   if (app.templateId === id) app.templateId = null
+  if (app.tabTemplates.screener === id) app.tabTemplates.screener = null
+  if (app.tabTemplates.watchlist === id) app.tabTemplates.watchlist = null
+}
+
+export type BoundTab = 'screener' | 'watchlist'
+
+/** Привязывает шаблон к вкладке (повторный вызов снимает привязку) */
+export function bindTemplate(tab: BoundTab, id: string) {
+  app.tabTemplates[tab] = app.tabTemplates[tab] === id ? null : id
 }
 
 export function applyTemplate(id: string) {
@@ -384,6 +400,19 @@ export function applyTemplate(id: string) {
   app.active = 0
   app.templateId = id
 }
+
+/** Открытая сейчас вкладка боковой панели (на телефоне — раздел нижней навигации) */
+export const currentTab = computed<MobileTab | null>(() => (isPhone.value ? app.mobileTab : app.panelOpen ? app.panel : null))
+
+watch(currentTab, (tab) => {
+  if (tab !== 'screener' && tab !== 'watchlist') return
+  const id = app.tabTemplates[tab]
+  if (id && id !== app.templateId && app.templates.some((t) => t.id === id)) {
+    const keep = app.mobileTab
+    applyTemplate(id)
+    app.mobileTab = keep
+  }
+})
 
 // ---------- всплывающие сообщения ----------
 

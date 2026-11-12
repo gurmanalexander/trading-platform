@@ -1,13 +1,15 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import Icon from './Icon.vue'
-import { EXCHANGE_NAMES, MARKET_NAMES } from '../types'
+import { EXCHANGE_NAMES, MARKET_NAMES, symbolKey } from '../types'
 import { app, openSearch, type PaneState } from '../stores/app'
 import { adapters } from '../exchanges'
 import { getTf } from '../lib/timeframes'
 import { fmtCompact, fmtDuration, fmtPct, fmtPrice } from '../lib/format'
 import { indicatorDef, indicatorTitle } from '../lib/indicators'
 import { nowSec } from '../lib/now'
+import { dayStats, dayProgress } from '../stores/atr'
+import { tickers } from '../stores/tickers'
 import type { Legend } from '../chart/controller'
 
 const props = defineProps<{
@@ -27,6 +29,26 @@ const countdown = computed(() => {
   if (!props.lastTime || tf.value.id === '1M') return ''
   const left = props.lastTime + tf.value.sec - nowSec.value
   return left > 0 ? fmtDuration(left) : ''
+})
+
+// Дневной ATR и сколько его уже пройдено сегодня: от открытия дня и по размаху дня
+const day = computed(() => {
+  const key = symbolKey(props.pane.symbol)
+  const s = dayStats[key]
+  const last = tickers[key]?.last
+  if (!s || !last) return null
+  const p = dayProgress(s, last)
+  // меньше 30% — запас хода большой, больше 70% — дневной ход почти выбран
+  const tone = (v: number) => (v < 30 ? 'up' : v > 70 ? 'down' : '')
+  return {
+    atr: fmtPrice(s.atr, props.precision),
+    pct: ((s.atr / last) * 100).toFixed(2),
+    fromOpen: p.fromOpen.toFixed(0),
+    fromOpenTone: tone(p.fromOpen),
+    traveled: p.traveled.toFixed(0),
+    traveledTone: tone(p.traveled),
+    stop: fmtPrice(s.atr * 0.1, props.precision),
+  }
 })
 
 const rows = computed(() =>
@@ -85,6 +107,15 @@ function pickSymbol() {
         <span :class="legend.chg >= 0 ? 'up' : 'down'">{{ fmtPct(legend.chgPct) }}</span>
       </span>
       <span v-if="countdown" class="muted countdown" title="До закрытия свечи">{{ countdown }}</span>
+    </div>
+    <div
+      v-if="day"
+      class="legend-atr"
+      title="ATR — средний диапазон 5 дневных свечей без аномально больших и маленьких. Пройдено за сегодня: от открытия дня / по размаху дня. Стоп — 10% ATR."
+    >
+      <span><i>ATR</i>{{ day.atr }} <i>({{ day.pct }}%)</i></span>
+      <span><i>пройдено</i><b :class="day.fromOpenTone">{{ day.fromOpen }}%</b> / <b :class="day.traveledTone">{{ day.traveled }}%</b></span>
+      <span><i>стоп</i>{{ day.stop }}</span>
     </div>
     <div v-if="mainRows.length" class="legend-rows">
       <button v-if="mainRows.length > 1" class="collapse muted" :title="collapsed ? 'Показать индикаторы' : 'Свернуть индикаторы'" @click="collapsed = !collapsed">
@@ -179,6 +210,25 @@ function pickSymbol() {
 }
 .countdown {
   font-size: 11px;
+}
+.legend-atr {
+  pointer-events: auto;
+  display: flex;
+  flex-wrap: wrap;
+  column-gap: 10px;
+  width: fit-content;
+  max-width: 100%;
+  background: color-mix(in srgb, var(--bg) 70%, transparent);
+  border-radius: 4px;
+  cursor: help;
+}
+.legend-atr i {
+  font-style: normal;
+  color: var(--muted);
+  margin-right: 3px;
+}
+.legend-atr b {
+  font-weight: 600;
 }
 .legend-rows {
   display: flex;

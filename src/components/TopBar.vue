@@ -24,6 +24,7 @@ import {
   updateTemplate,
   deleteTemplate,
   applyTemplate,
+  bindTemplate,
   toast,
   CHART_TYPES,
   LAYOUT_PRESETS,
@@ -230,10 +231,29 @@ function fullscreen() {
           <button class="menu-item" :class="{ on: t.id === app.templateId }" :title="t.withSymbols ? 'С инструментами' : 'Для текущего инструмента'" @click="applyTemplate(t.id), close()">
             {{ t.name }}
           </button>
+          <button
+            class="btn sm"
+            :class="{ on: app.tabTemplates.screener === t.id }"
+            title="Включать этот шаблон при открытии вкладки «Отбор»"
+            @click="bindTemplate('screener', t.id)"
+          >
+            <Icon name="filter" :size="15" />
+          </button>
+          <button
+            class="btn sm"
+            :class="{ on: app.tabTemplates.watchlist === t.id }"
+            title="Включать этот шаблон при открытии вкладки «Список»"
+            @click="bindTemplate('watchlist', t.id)"
+          >
+            <Icon name="list" :size="15" />
+          </button>
           <button class="btn sm" title="Перезаписать текущим состоянием" @click="overwrite(t.id, t.name)"><Icon name="save" :size="15" /></button>
           <button class="btn sm" title="Удалить" @click="remove(t.id, t.name)"><Icon name="trash" :size="15" /></button>
         </div>
-        <p v-if="!app.templates.length" class="menu-note muted">Шаблон запоминает раскладку, интервалы, вид графиков, индикаторы и синхронизацию.</p>
+        <p class="menu-note muted">
+          Шаблон запоминает раскладку, интервалы, вид графиков, индикаторы и синхронизацию.
+          <template v-if="app.templates.length">Кнопки с воронкой и списком привязывают шаблон к вкладке: он включится сам, когда вы её откроете.</template>
+        </p>
         <div class="menu-sep" />
         <button class="menu-item" @click="saveNew(), close()"><Icon name="plus" :size="16" />Сохранить как новый…</button>
       </template>

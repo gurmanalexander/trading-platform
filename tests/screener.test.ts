@@ -83,3 +83,65 @@ describe('раскладка', () => {
     expect(bad.cellSizes).toEqual([[1], [1, 1]])
   })
 })
+
+describe('списки наблюдения', () => {
+  it('списки по умолчанию; новые инструменты идут в «Наблюдаю»', async () => {
+    const w = await import('../src/stores/watchlist')
+    expect(w.lists.all.map((l) => l.name)).toEqual(['Поводыри', 'Сделки', 'Ордера', 'Не взяли', 'Закрытые', 'Наблюдаю', 'Остальные'])
+    expect(w.lists.all[0].items.map((i) => i.symbol)).toEqual(['BTCUSDT', 'ETHUSDT'])
+    expect(w.activeList.value.name).toBe('Наблюдаю')
+  })
+
+  it('инструмент переносится внутри списка и между списками', async () => {
+    const w = await import('../src/stores/watchlist')
+    const [lead, deals] = w.lists.all
+    const names = (l: { items: { symbol: string }[] }) => l.items.map((i) => i.symbol)
+    lead.items.splice(0, lead.items.length, row('A', 1, 0, 0), row('B', 1, 0, 0), row('C', 1, 0, 0))
+    deals.items.splice(0, deals.items.length, row('X', 1, 0, 0))
+
+    w.moveItem(lead.id, 0, lead.id, 3) // A в конец
+    expect(names(lead)).toEqual(['B', 'C', 'A'])
+    w.moveItem(lead.id, 2, lead.id, 0) // A в начало
+    expect(names(lead)).toEqual(['A', 'B', 'C'])
+    w.moveItem(lead.id, 1, lead.id, 2) // «перед следующим» — то же место, ничего не меняется
+    expect(names(lead)).toEqual(['A', 'B', 'C'])
+
+    w.moveItem(lead.id, 1, deals.id, 0) // B в начало другого списка
+    expect(names(lead)).toEqual(['A', 'C'])
+    expect(names(deals)).toEqual(['B', 'X'])
+  })
+
+  it('при переносе в список, где инструмент уже есть, дубль не появляется', async () => {
+    const w = await import('../src/stores/watchlist')
+    const [lead, deals] = w.lists.all
+    lead.items.splice(0, lead.items.length, row('A', 1, 0, 0))
+    deals.items.splice(0, deals.items.length, row('X', 1, 0, 0), row('A', 1, 0, 0))
+    w.moveItem(lead.id, 0, deals.id, 0)
+    expect(deals.items.map((i) => i.symbol)).toEqual(['A', 'X'])
+    expect(lead.items).toHaveLength(0)
+  })
+
+  it('список переставляется целиком вместе с инструментами', async () => {
+    const w = await import('../src/stores/watchlist')
+    const before = w.lists.all.map((l) => l.name)
+    w.moveList(5, 0)
+    expect(w.lists.all.map((l) => l.name)).toEqual([before[5], ...before.slice(0, 5), before[6]])
+    w.moveList(0, 6)
+    expect(w.lists.all.map((l) => l.name)).toEqual(before)
+  })
+
+  it('отметка направления переключается по кругу и участвует в фильтре', async () => {
+    const w = await import('../src/stores/watchlist')
+    const item = w.lists.all[0].items[0] ?? (w.lists.all[0].items.push(row('A', 1, 0, 0)), w.lists.all[0].items[0])
+    delete item.side
+    w.cycleSide(item)
+    expect(item.side).toBe('long')
+    w.lists.filter = 'short'
+    expect(w.matchesFilter(item)).toBe(false)
+    w.cycleSide(item)
+    expect(w.matchesFilter(item)).toBe(true)
+    w.cycleSide(item)
+    expect(item.side).toBeUndefined()
+    w.lists.filter = 'all'
+  })
+})
