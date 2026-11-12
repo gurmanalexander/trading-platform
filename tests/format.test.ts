@@ -68,3 +68,24 @@ describe('свечи', () => {
     expect(lowerBound([], 5)).toBe(0)
   })
 })
+
+describe('короткие форматы для списков', () => {
+  it('оборот — три значащие цифры', async () => {
+    const { fmtVolume } = await import('../src/lib/format')
+    expect(fmtVolume(1.214e9)).toBe('1.21B')
+    expect(fmtVolume(57.42e6)).toBe('57.4M')
+    expect(fmtVolume(361.5e6)).toBe('362M')
+    expect(fmtVolume(999.9e6)).toBe('1.00B')
+    expect(fmtVolume(950)).toBe('950')
+    expect(fmtVolume(0)).toBe('—')
+  })
+
+  it('цена без хвостовых нулей и без потери малых значений', async () => {
+    const { fmtPriceShort } = await import('../src/lib/format')
+    expect(fmtPriceShort(73503.741)).toBe('73503.74')
+    expect(fmtPriceShort(987.94)).toBe('987.94')
+    expect(fmtPriceShort(1.001)).toBe('1.001')
+    expect(fmtPriceShort(0.06701)).toBe('0.06701')
+    expect(fmtPriceShort(0.00000446)).toBe('0.00000446')
+  })
+})

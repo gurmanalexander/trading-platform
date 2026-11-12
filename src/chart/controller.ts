@@ -18,12 +18,13 @@ import {
   type UTCTimestamp,
 } from 'lightweight-charts'
 import { reactive, shallowRef } from 'vue'
-import { symbolKey, type Bar } from '../types'
+import { EXCHANGE_NAMES, symbolKey, type Bar } from '../types'
 import { adapters } from '../exchanges'
 import { getTf, type Timeframe } from '../lib/timeframes'
 import { setPrecision } from '../lib/format'
 import { indicatorDef, resolveParams, toSource, type IndicatorDef, type IndicatorInstance } from '../lib/indicators'
-import { app, type ChartType, type PaneState } from '../stores/app'
+import { app, paneCount, theme, type ChartType, type PaneState } from '../stores/app'
+import { crosshairBus, timeBus } from '../stores/sync'
 import { chartColors, withAlpha, type ChartColors } from './theme'
 import { DrawingsLayer } from './drawings'
 import { heikinAshi, heikinBar, lowerBound } from './bars'
@@ -95,14 +96,21 @@ export class ChartController {
   private hiddenAt = 0
   private disposed = false
   private resizeObs: ResizeObserver
+  /** указатель пользователя сейчас над этой панелью — она источник синхронизации */
+  private pointerInside = false
+  /** индекс свечи, на которой стоит перекрестие, пришедшее из другой панели; -1 — нет */
+  private syncIdx = -1
+  /** время, к которому панель привязана синхронизацией, пока догружается история */
+  private pendingSyncTime: number | null = null
 
   constructor(
-    el: HTMLElement,
+    private host: HTMLElement,
     private pane: PaneState,
-    paneIndex: number,
+    private paneIndex: number,
   ) {
+    const el = host
     this.tf = getTf(pane.tf)
-    this.colors = chartColors(app.theme)
+    this.colors = chartColors(theme.value)
     const c = this.colors
     this.chart = createChart(el, {
       autoSize: true,
@@ -148,6 +156,54 @@ export class ChartController {
     document.addEventListener('visibilitychange', this.onVisibility)
     this.resizeObs = new ResizeObserver(() => requestAnimationFrame(() => this.onResize()))
     this.resizeObs.observe(el)
+    // capture: колесо над ценовой шкалой перехватываем раньше, чем библиотека начнёт масштабировать время
+    el.addEventListener('wheel', this.onWheel, { capture: true, passive: false })
+    el.addEventListener('pointerenter', this.onPointerIn)
+    el.addEventListener('pointerdown', this.onPointerIn)
+    el.addEventListener('pointerleave', this.onPointerOut)
+  }
+
+  private onPointerIn = () => {
+    this.pointerInside = true
+    this.pendingSyncTime = null
+  }
+
+  private onPointerOut = () => {
+    this.pointerInside = false
+    if (crosshairBus.value?.pane === this.paneIndex) crosshairBus.value = null
+  }
+
+  /** Колесо мыши над ценовой шкалой сжимает и растягивает график по вертикали */
+  private onWheel = (e: WheelEvent) => {
+    const r = this.host.getBoundingClientRect()
+    const x = e.clientX - r.left
+    const y = e.clientY - r.top
+    if (x <= this.chart.paneSize(0).width) return
+    const tops = this.ui.paneTops
+    let idx = -1
+    for (let i = 0; i < tops.length; i++) if (y >= tops[i] && y < tops[i] + this.chart.paneSize(i).height) idx = i
+    if (idx < 0) return
+    e.preventDefault()
+    e.stopPropagation()
+    const scale = this.chart.priceScale('right', idx)
+    const range = scale.getVisibleRange()
+    if (!range || !(range.to > range.from)) return
+    const k = Math.exp(Math.sign(e.deltaY) * Math.min(Math.abs(e.deltaY), 120) * 0.0018)
+    let from: number
+    let to: number
+    if (idx === 0 && this.pane.scale === 'log' && range.from > 0) {
+      const a = Math.log(range.from)
+      const b = Math.log(range.to)
+      from = Math.exp((a + b) / 2 - ((b - a) / 2) * k)
+      to = Math.exp((a + b) / 2 + ((b - a) / 2) * k)
+    } else {
+      const c = (range.from + range.to) / 2
+      const h = ((range.to - range.from) / 2) * k
+      from = c - h
+      to = c + h
+    }
+    scale.setAutoScale(false)
+    scale.setVisibleRange({ from, to })
   }
 
   private onResize() {
@@ -171,6 +227,11 @@ export class ChartController {
   destroy() {
     this.disposed = true
     this.resizeObs.disconnect()
+    this.host.removeEventListener('wheel', this.onWheel, { capture: true })
+    this.host.removeEventListener('pointerenter', this.onPointerIn)
+    this.host.removeEventListener('pointerdown', this.onPointerIn)
+    this.host.removeEventListener('pointerleave', this.onPointerOut)
+    if (crosshairBus.value?.pane === this.paneIndex) crosshairBus.value = null
     this.token++
     this.stopLive()
     cancelAnimationFrame(this.legendRaf)
@@ -193,6 +254,8 @@ export class ChartController {
     this.noMore = false
     this.loadingMore = false
     this.hoverIdx = -1
+    this.syncIdx = -1
+    this.pendingSyncTime = null
     this.setAll()
     this.ui.loading = true
     this.ui.error = ''
@@ -324,11 +387,11 @@ export class ChartController {
   }
 
   /** Догружает более старую историю, когда пользователь докрутил до левого края */
-  private async loadMore() {
-    if (this.loadingMore || this.noMore || this.ui.loading || !this.bars.length) return
+  private async loadMore(): Promise<boolean> {
+    if (this.loadingMore || this.noMore || this.ui.loading || !this.bars.length) return false
     if (this.bars.length >= MAX_BARS) {
       this.noMore = true
-      return
+      return false
     }
     this.loadingMore = true
     const token = this.token
@@ -336,18 +399,22 @@ export class ChartController {
     try {
       const first = this.bars[0].time
       const res = await adapters[symbol.exchange].fetchKlines(symbol.market, symbol.symbol, this.tf, 1000, first * 1000)
-      if (token !== this.token) return
+      if (token !== this.token) return false
       const older = res.bars.filter((b) => b.time < first)
       if (!older.length) {
         this.noMore = true
-        return
+        return false
       }
       this.bars = older.concat(this.bars)
       if (res.precision > this.precision) this.setPrecision(res.precision)
       this.rebuildShown()
       this.setAll()
+      // синхронизация времени просила момент, которого ещё не было в загруженной истории
+      if (this.pendingSyncTime !== null) this.centerOn(this.pendingSyncTime)
+      return true
     } catch {
       /* повторим при следующей прокрутке */
+      return false
     } finally {
       if (token === this.token) {
         this.loadingMore = false
@@ -365,6 +432,9 @@ export class ChartController {
     const back = ts.scrollPosition() < -3
     if (back !== this.ui.scrolledBack) this.ui.scrolledBack = back
     this.draw.layoutOverlay()
+    if (r && this.pointerInside && app.sync.time && paneCount.value > 1 && this.bars.length) {
+      timeBus.value = { pane: this.paneIndex, time: this.logicalToTime((r.from + r.to) / 2), realtime: !back }
+    }
   }
 
   private onVisibility = () => {
@@ -462,7 +532,99 @@ export class ChartController {
   applyScale() {
     const mode =
       this.pane.scale === 'log' ? PriceScaleMode.Logarithmic : this.pane.scale === 'percent' ? PriceScaleMode.Percentage : PriceScaleMode.Normal
-    this.chart.priceScale('right').applyOptions({ mode })
+    this.chart.priceScale('right').applyOptions({ mode, invertScale: this.pane.invert })
+  }
+
+  /** Сдвиг графика на n свечей (отрицательное — в прошлое) */
+  scrollBars(n: number) {
+    const ts = this.chart.timeScale()
+    ts.scrollToPosition(ts.scrollPosition() + n, false)
+  }
+
+  zoomBy(factor: number) {
+    const ts = this.chart.timeScale()
+    ts.applyOptions({ barSpacing: Math.min(60, Math.max(0.8, ts.options().barSpacing * factor)) })
+  }
+
+  private centerOn(t: number) {
+    const ts = this.chart.timeScale()
+    const l = this.timeToLogical(t)
+    const r = ts.getVisibleLogicalRange()
+    if (l == null || !r) return
+    const half = (r.to - r.from) / 2
+    ts.setVisibleLogicalRange({ from: l - half, to: l + half })
+  }
+
+  /** Показывает момент t (сек UTC) в центре графика, при необходимости догружая историю */
+  async goToTime(t: number) {
+    const token = this.token
+    for (let i = 0; i < 40 && this.bars.length && this.bars[0].time > t && !this.noMore; i++) {
+      if (!(await this.loadMore()) || token !== this.token) break
+    }
+    if (token === this.token) this.centerOn(t)
+  }
+
+  /** Синхронизация времени: другая панель показывает момент t */
+  syncToTime(t: number, realtime: boolean) {
+    if (this.pointerInside || !this.bars.length) return
+    if (realtime) {
+      this.pendingSyncTime = null
+      this.chart.timeScale().scrollToRealTime()
+      return
+    }
+    this.pendingSyncTime = t < this.bars[0].time && !this.noMore ? t : null
+    this.centerOn(t)
+  }
+
+  /** Перекрестие, пришедшее из другой панели. price = NaN — показать только момент времени */
+  showSyncCrosshair(t: number, price: number) {
+    const b = this.bars
+    const n = b.length
+    if (!n || this.pointerInside) return
+    const i = lowerBound(b, t + 1) - 1
+    if (i < 0 || t >= b[n - 1].time + this.tf.sec) {
+      this.clearSyncCrosshair()
+      return
+    }
+    this.syncIdx = i
+    this.chart.setCrosshairPosition(price === price ? price : b[i].close, (b[i].time + this.tz) as UTCTimestamp, this.main)
+    if (this.hoverIdx !== i) {
+      this.hoverIdx = i
+      this.scheduleLegend()
+    }
+  }
+
+  clearSyncCrosshair() {
+    if (this.syncIdx < 0) return
+    this.syncIdx = -1
+    this.chart.clearCrosshairPosition()
+    this.hoverIdx = -1
+    this.scheduleLegend()
+  }
+
+  /** Сохраняет снимок графика в PNG */
+  screenshot() {
+    const src = this.chart.takeScreenshot(true)
+    const out = document.createElement('canvas')
+    out.width = src.width
+    out.height = src.height
+    const ctx = out.getContext('2d')
+    if (!ctx) return
+    ctx.drawImage(src, 0, 0)
+    const k = src.width / Math.max(1, this.host.clientWidth)
+    const s = this.pane.symbol
+    ctx.font = `600 ${13 * k}px ${FONT}`
+    ctx.fillStyle = this.colors.text
+    ctx.textBaseline = 'top'
+    ctx.fillText(`${s.symbol} · ${this.tf.label} · ${EXCHANGE_NAMES[s.exchange]}`, 8 * k, 8 * k)
+    out.toBlob((blob) => {
+      if (!blob) return
+      const a = document.createElement('a')
+      a.href = URL.createObjectURL(blob)
+      a.download = `tvx-${s.symbol}-${this.tf.id}-${new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-')}.png`
+      a.click()
+      setTimeout(() => URL.revokeObjectURL(a.href), 5000)
+    })
   }
 
   resetView() {
@@ -476,7 +638,7 @@ export class ChartController {
   }
 
   applyTheme() {
-    this.colors = chartColors(app.theme)
+    this.colors = chartColors(theme.value)
     const c = this.colors
     this.chart.applyOptions({
       layout: {
@@ -603,6 +765,17 @@ export class ChartController {
   // ---------- легенда ----------
 
   private onCrosshair = (param: MouseEventParams<Time>) => {
+    // событие вызвано перекрестием из другой панели — оно уже учтено
+    if (!this.pointerInside && this.syncIdx >= 0) return
+    this.syncIdx = -1
+    if (this.pointerInside && app.sync.crosshair && paneCount.value > 1) {
+      if (param.time !== undefined && param.point) {
+        const price = (param.paneIndex ?? 0) === 0 ? (this.main.coordinateToPrice(param.point.y) as number | null) : null
+        crosshairBus.value = { pane: this.paneIndex, key: symbolKey(this.pane.symbol), time: (param.time as number) - this.tz, price: price ?? NaN }
+      } else if (crosshairBus.value?.pane === this.paneIndex) {
+        crosshairBus.value = null
+      }
+    }
     let idx = -1
     if (param.time !== undefined && param.point) {
       const t = (param.time as number) - this.tz

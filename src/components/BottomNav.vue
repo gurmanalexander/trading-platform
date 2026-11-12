@@ -6,8 +6,8 @@ import { computed } from 'vue'
 
 const TABS: { id: MobileTab; label: string; icon: string }[] = [
   { id: 'chart', label: 'График', icon: 'chart' },
+  { id: 'screener', label: 'Отбор', icon: 'filter' },
   { id: 'watchlist', label: 'Список', icon: 'list' },
-  { id: 'book', label: 'Стакан', icon: 'book' },
   { id: 'alerts', label: 'Оповещения', icon: 'bell' },
 ]
 const activeAlerts = computed(() => alerts.filter((a) => a.active).length)

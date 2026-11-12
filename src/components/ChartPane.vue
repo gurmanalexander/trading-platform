@@ -2,12 +2,15 @@
 import { computed, onBeforeUnmount, onMounted, reactive, ref, shallowRef, watch } from 'vue'
 import Icon from './Icon.vue'
 import ChartLegend from './ChartLegend.vue'
+import DrawingBar from './DrawingBar.vue'
 import { ChartController } from '../chart/controller'
+import { registerChart } from '../chart/registry'
 import { symbolKey } from '../types'
-import { app, activeIndex, paneCount, isPhone, toast, type ScaleMode } from '../stores/app'
+import { app, activeIndex, paneCount, isPhone, theme, toast, type ScaleMode } from '../stores/app'
 import { tickers, useTickers } from '../stores/tickers'
 import { alerts, addAlert } from '../stores/alerts'
-import { DRAW_COLORS, clearDrawings, drawings, drawingsOf, selection } from '../stores/drawings'
+import { clearDrawings, drawings, drawingsOf, selection } from '../stores/drawings'
+import { crosshairBus, timeBus } from '../stores/sync'
 import { fmtPrice } from '../lib/format'
 
 const props = defineProps<{ index: number }>()
@@ -25,9 +28,12 @@ const menu = reactive({ open: false, x: 0, y: 0, price: 0 })
 // живая цена инструмента панели: и для списка, и для «докраски» последней свечи
 useTickers(() => [pane.symbol])
 
+let unregister = () => {}
+
 onMounted(() => {
   const c = new ChartController(host.value!, pane, props.index)
   ctrl.value = c
+  unregister = registerChart(props.index, c)
   c.draw.bind(overlay.value!)
   c.draw.setList(drawingsOf(key.value))
   c.setAlertLines(alertPrices.value)
@@ -40,6 +46,7 @@ onBeforeUnmount(() => {
   window.removeEventListener('keydown', onKey)
   document.removeEventListener('pointerdown', closeMenu, true)
   if (selection.value?.pane === props.index) selection.value = null
+  unregister()
   ctrl.value?.destroy()
 })
 
@@ -54,9 +61,23 @@ watch(
   },
 )
 watch(() => pane.chartType, () => ctrl.value?.setChartType())
-watch(() => pane.scale, () => ctrl.value?.applyScale())
+watch(() => [pane.scale, pane.invert], () => ctrl.value?.applyScale())
 watch(() => pane.indicators, () => ctrl.value?.syncIndicators(), { deep: true })
-watch(() => app.theme, () => ctrl.value?.applyTheme())
+watch(theme, () => ctrl.value?.applyTheme())
+watch(() => app.drawingsHidden, () => ctrl.value?.draw.redraw())
+
+// ---------- синхронизация с другими панелями ----------
+
+watch(crosshairBus, (v) => {
+  const c = ctrl.value
+  if (!c) return
+  if (!v || !app.sync.crosshair) c.clearSyncCrosshair()
+  // цену показываем только на том же инструменте: у другого она ничего не значит
+  else if (v.pane !== props.index) c.showSyncCrosshair(v.time, v.key === key.value ? v.price : NaN)
+})
+watch(timeBus, (v) => {
+  if (v && app.sync.time && v.pane !== props.index) ctrl.value?.syncToTime(v.time, v.realtime)
+})
 watch(
   () => app.tool,
   (tool) => {
@@ -85,13 +106,7 @@ watch(alertPrices, (p) => ctrl.value?.setAlertLines(p))
 // ---------- рисунки ----------
 
 const selected = computed(() => ctrl.value?.draw.selectedId.value ?? null)
-const anchor = computed(() => ctrl.value?.draw.anchor.value ?? null)
-const actionsStyle = computed(() => {
-  const a = anchor.value
-  if (!a) return {}
-  return { left: Math.max(6, a.x) + 'px', top: Math.max(30, a.y - 44) + 'px' }
-})
-const selectedColor = computed(() => (selected.value ? ctrl.value?.draw.selected()?.color : ''))
+const paneWidth = ref(0)
 
 function onKey(e: KeyboardEvent) {
   if (!selected.value) return
@@ -101,6 +116,11 @@ function onKey(e: KeyboardEvent) {
     e.preventDefault()
     ctrl.value?.draw.removeSelected()
   }
+}
+
+function activate() {
+  app.active = props.index
+  paneWidth.value = host.value?.clientWidth ?? 0
 }
 
 // ---------- контекстное меню ----------
@@ -139,8 +159,8 @@ function menuClear() {
 }
 
 const SCALES: { id: ScaleMode; label: string; title: string }[] = [
-  { id: 'log', label: 'лог', title: 'Логарифмическая шкала' },
-  { id: 'percent', label: '%', title: 'Процентная шкала' },
+  { id: 'log', label: 'лог', title: 'Логарифмическая шкала (Alt+L)' },
+  { id: 'percent', label: '%', title: 'Процентная шкала (Alt+P)' },
 ]
 function toggleScale(id: ScaleMode) {
   pane.scale = pane.scale === id ? 'normal' : id
@@ -148,7 +168,7 @@ function toggleScale(id: ScaleMode) {
 </script>
 
 <template>
-  <section class="pane" :class="{ active: isActive && paneCount > 1 }" @pointerdown.capture="app.active = index">
+  <section class="pane" :class="{ active: isActive && paneCount > 1 && !app.maximized && !isPhone }" @pointerdown.capture="activate">
     <div
       ref="host"
       class="chart-host"
@@ -167,13 +187,22 @@ function toggleScale(id: ScaleMode) {
       :last-time="ctrl.ui.lastTime"
       :pane-tops="ctrl.ui.paneTops"
       :ind-pane="ctrl.ui.indPane"
-      :compact="isPhone || paneCount > 1"
+      :compact="isPhone || (paneCount > 1 && !app.maximized)"
     />
 
     <div v-if="ctrl" class="pane-tools">
-      <button class="chip" title="Сбросить масштаб" @click="ctrl.resetView()">авто</button>
+      <button class="chip" title="Сбросить масштаб (Alt+R)" @click="ctrl.resetView()">авто</button>
       <button v-for="s in SCALES" :key="s.id" class="chip" :class="{ on: pane.scale === s.id }" :title="s.title" @click="toggleScale(s.id)">
         {{ s.label }}
+      </button>
+      <button
+        v-if="paneCount > 1 && !isPhone"
+        class="chip"
+        :class="{ on: app.maximized }"
+        :title="app.maximized ? 'Вернуть раскладку (Alt+Enter)' : 'Развернуть график (Alt+Enter)'"
+        @click="app.maximized = !app.maximized"
+      >
+        <Icon name="expand" :size="12" />
       </button>
     </div>
 
@@ -181,18 +210,7 @@ function toggleScale(id: ScaleMode) {
       <Icon name="skip" :size="16" />
     </button>
 
-    <div v-if="selected && anchor" class="draw-actions" :style="actionsStyle" @pointerdown.stop>
-      <button
-        v-for="c in DRAW_COLORS"
-        :key="c"
-        class="swatch"
-        :class="{ on: c === selectedColor }"
-        :style="{ background: c }"
-        :aria-label="'Цвет ' + c"
-        @click="ctrl?.draw.setColor(c)"
-      />
-      <button class="btn sm" title="Удалить рисунок" @click="ctrl?.draw.removeSelected()"><Icon name="trash" :size="16" /></button>
-    </div>
+    <DrawingBar v-if="ctrl && selected" :layer="ctrl.draw" :max-x="paneWidth || 9999" />
 
     <div v-if="menu.open" class="menu ctx-menu" :style="{ left: Math.max(4, menu.x) + 'px', top: Math.max(4, menu.y) + 'px' }">
       <button class="menu-item" @click="menuAlert"><Icon name="bell" :size="16" />Оповещение на {{ fmtPrice(menu.price, precision) }}</button>
@@ -258,6 +276,8 @@ function toggleScale(id: ScaleMode) {
   opacity: 1;
 }
 .chip {
+  display: inline-flex;
+  align-items: center;
   height: 22px;
   padding: 0 7px;
   border-radius: 4px;
@@ -291,27 +311,6 @@ function toggleScale(id: ScaleMode) {
 .rt-btn:hover {
   background: var(--hover);
 }
-.draw-actions {
-  position: absolute;
-  z-index: 7;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 5px 6px 5px 8px;
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  box-shadow: var(--shadow);
-}
-.swatch {
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  border: 2px solid transparent;
-}
-.swatch.on {
-  border-color: var(--text);
-}
 .ctx-menu {
   position: absolute;
   z-index: 8;
@@ -341,10 +340,6 @@ function toggleScale(id: ScaleMode) {
   .chip {
     height: 26px;
     padding: 0 9px;
-  }
-  .swatch {
-    width: 24px;
-    height: 24px;
   }
 }
 </style>

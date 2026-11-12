@@ -2,7 +2,7 @@ import type { Bar, MarketId, SymbolInfo } from '../types'
 import { decimalsOf } from '../lib/format'
 import { getJson } from './http'
 import { StreamSocket } from './ws'
-import { toLevels, type ExchangeAdapter } from './types'
+import type { ExchangeAdapter } from './types'
 
 const REST = ['https://api.bybit.com', 'https://api.bytick.com']
 const CATEGORY: Record<MarketId, string> = { spot: 'spot', futures: 'linear' }
@@ -10,7 +10,6 @@ const WS: Record<MarketId, string> = {
   spot: 'wss://stream.bybit.com/v5/public/spot',
   futures: 'wss://stream.bybit.com/v5/public/linear',
 }
-const BOOK_POLL_MS = 1000
 
 const sockets = new Map<MarketId, StreamSocket>()
 function socket(market: MarketId): StreamSocket {
@@ -92,32 +91,6 @@ export const bybit: ExchangeAdapter = {
         [state.lastPrice, state.prevPrice24h, state.highPrice24h, state.lowPrice24h],
       )
     })
-  },
-
-  // Поток стакана у Bybit шлёт дельты каждые 20 мс — для телефона это лишняя нагрузка.
-  // Раз в секунду забираем готовый срез по REST и только пока вкладка на экране.
-  subscribeBook(market, symbol, onBook) {
-    let stopped = false
-    let timer = 0
-    const path = `/v5/market/orderbook?category=${CATEGORY[market]}&symbol=${symbol}&limit=${market === 'spot' ? 20 : 25}`
-    const tick = async () => {
-      timer = 0
-      if (stopped) return
-      if (document.visibilityState === 'visible') {
-        try {
-          const r = await api(path)
-          if (!stopped) onBook({ bids: toLevels(r.b ?? [], 20), asks: toLevels(r.a ?? [], 20) })
-        } catch {
-          /* временная ошибка — повторим на следующем шаге */
-        }
-      }
-      if (!stopped) timer = window.setTimeout(tick, BOOK_POLL_MS)
-    }
-    tick()
-    return () => {
-      stopped = true
-      clearTimeout(timer)
-    }
   },
 
   async fetchSymbols(market) {

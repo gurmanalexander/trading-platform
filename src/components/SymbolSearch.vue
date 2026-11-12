@@ -1,21 +1,16 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, reactive, ref, shallowRef, watch } from 'vue'
+import { computed, nextTick, onMounted, reactive, ref, shallowRef, toRef, watch } from 'vue'
 import Icon from './Icon.vue'
 import Modal from './Modal.vue'
 import { EXCHANGE_NAMES, MARKET_NAMES, symbolKey, type ExchangeId, type MarketId, type SymbolInfo } from '../types'
 import { app, setSymbol } from '../stores/app'
 import { inWatchlist, toggleWatch } from '../stores/watchlist'
-import { SOURCES, loadSymbols } from '../exchanges'
+import { SOURCES, loadSymbols, withUsdVolume, type SymbolVolume } from '../exchanges'
 import { autoPrecision, fmtCompact, fmtPct, fmtPrice } from '../lib/format'
 
-interface Item extends SymbolInfo {
-  /** оборот, приведённый к долларам — чтобы сравнивать пары с разной валютой котировки */
-  usdVolume: number
-}
+type Item = SymbolVolume
 
 const MAX_SHOWN = 80
-const STABLE = ['USDT', 'USDC', 'FDUSD', 'TUSD', 'BUSD', 'USDE', 'USD1', 'DAI', 'PERP', 'USD']
-const OTHER_QUOTES = ['BTC', 'ETH', 'BNB', 'SOL', 'XRP', 'TRX', 'DOGE', 'EUR', 'TRY', 'BRL', 'JPY', 'ARS', 'MXN', 'PLN', 'RON', 'UAH', 'ZAR', 'CZK', 'COP', 'IDR', 'GBP', 'AUD']
 
 // строка поиска живёт в общем состоянии: туда же попадают буквы, набранные до появления окна
 const query = computed({
@@ -24,30 +19,13 @@ const query = computed({
     if (app.search) app.search.query = v
   },
 })
-const exchange = ref<ExchangeId | 'all'>('all')
-const market = ref<MarketId | 'all'>('all')
+// выбранные биржа и рынок запоминаются между открытиями
+const exchange = toRef(app.searchFilter, 'exchange')
+const market = toRef(app.searchFilter, 'market')
 const input = ref<HTMLInputElement>()
 const cursor = ref(0)
 const items = shallowRef<Item[]>([])
 const state = reactive<Record<string, 'loading' | 'ok' | 'error'>>({})
-
-function toItems(list: SymbolInfo[]): Item[] {
-  const price = new Map(list.map((s) => [s.symbol, s.last]))
-  return list.map((s) => {
-    let usd = 0
-    if (STABLE.some((q) => s.symbol.endsWith(q)) || s.symbol.includes('-')) usd = s.quoteVolume
-    else {
-      const q = OTHER_QUOTES.find((x) => s.symbol.endsWith(x))
-      if (q) {
-        const direct = price.get(q + 'USDT')
-        const inverse = price.get('USDT' + q)
-        if (direct) usd = s.quoteVolume * direct
-        else if (inverse) usd = s.quoteVolume / inverse
-      }
-    }
-    return { ...s, usdVolume: usd }
-  })
-}
 
 onMounted(() => {
   nextTick(() => input.value?.focus())
@@ -57,7 +35,7 @@ onMounted(() => {
     loadSymbols(src.exchange, src.market)
       .then((list) => {
         state[key] = 'ok'
-        items.value = items.value.concat(toItems(list)).sort((a, b) => b.usdVolume - a.usdVolume)
+        items.value = items.value.concat(withUsdVolume(list)).sort((a, b) => b.usdVolume - a.usdVolume)
       })
       .catch(() => (state[key] = 'error'))
   }

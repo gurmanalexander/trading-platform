@@ -26,12 +26,6 @@ export interface Ticker {
   quoteVolume: number
 }
 
-export type BookLevel = [price: number, size: number]
-export interface OrderBook {
-  bids: BookLevel[]
-  asks: BookLevel[]
-}
-
 export interface SymbolInfo extends SymbolRef {
   last: number
   changePct: number

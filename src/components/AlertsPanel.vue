@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import Icon from './Icon.vue'
 import { EXCHANGE_NAMES, MARKET_NAMES, symbolKey } from '../types'
-import { activePane, setSymbol } from '../stores/app'
+import { app, activePane, setSymbol } from '../stores/app'
 import { tickers, useTickers } from '../stores/tickers'
 import { alerts, addAlert, removeAlert, rearmAlert, notifySupported, requestNotifications } from '../stores/alerts'
 import { fmtPrice, precisionOf } from '../lib/format'
@@ -13,6 +13,13 @@ useTickers(() => [symbol.value])
 
 const last = computed(() => tickers[key.value]?.last ?? 0)
 const price = ref('')
+const input = ref<HTMLInputElement>()
+// Alt+A открывает панель и ставит курсор в поле цены
+watch(
+  () => app.alertFocus,
+  () => nextTick(() => input.value?.select()),
+  { immediate: app.alertFocus > 0 },
+)
 const permission = ref(notifySupported ? Notification.permission : 'denied')
 
 // подставляем текущую цену, пока пользователь не начал вводить свою
@@ -54,7 +61,7 @@ const time = (ms: number) => new Date(ms).toLocaleString('ru-RU', { day: '2-digi
     <form class="al-form" @submit.prevent="create">
       <label class="muted" for="alert-price">Оповестить, когда {{ symbol.symbol }} достигнет</label>
       <div class="al-inputs">
-        <input id="alert-price" v-model="price" class="field" inputmode="decimal" autocomplete="off" placeholder="Цена" @input="touched = true" />
+        <input id="alert-price" ref="input" v-model="price" class="field" inputmode="decimal" autocomplete="off" placeholder="Цена" @input="touched = true" />
         <button class="btn primary" type="submit" :disabled="!valid">Создать</button>
       </div>
       <p v-if="notifySupported && permission === 'default'" class="hint">

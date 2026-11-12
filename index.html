@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="ru" data-theme="dark">
+<html lang="ru">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
@@ -8,16 +8,19 @@
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <meta name="apple-mobile-web-app-title" content="Svecha" />
+    <meta name="apple-mobile-web-app-title" content="tvx" />
     <link rel="icon" type="image/svg+xml" href="./icon.svg" />
     <link rel="apple-touch-icon" href="./icon-180.png" />
     <link rel="manifest" href="./manifest.webmanifest" />
-    <title>Svecha — торговый терминал</title>
+    <title>tvx — торговый терминал</title>
     <script>
+      // тема до первой отрисовки: выбранная вручную либо как в системе
+      var t
       try {
-        var t = JSON.parse(localStorage.getItem('svecha:app') || '{}').theme
-        if (t) document.documentElement.dataset.theme = t
+        t = JSON.parse(localStorage.getItem('tvx:app') || '{}').themePref
       } catch (e) {}
+      if (t !== 'dark' && t !== 'light') t = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+      document.documentElement.dataset.theme = t
     </script>
   </head>
   <body>

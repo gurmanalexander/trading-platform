@@ -55,6 +55,34 @@ export function fmtCompact(v: number | null | undefined): string {
   return v.toPrecision(3)
 }
 
+/** Оборот: три значащие цифры ("1.21B", "57.4M", "362M") — узкий столбец в списках */
+export function fmtVolume(v: number | null | undefined): string {
+  if (v == null || !isFinite(v) || v <= 0) return '—'
+  const units: [number, string][] = [
+    [1e9, 'B'],
+    [1e6, 'M'],
+    [1e3, 'K'],
+  ]
+  for (const [size, suffix] of units) {
+    // порог чуть ниже единицы: 999.9 млн — это "1.00B", а не "1000M"
+    if (v >= size * 0.9995) {
+      const n = v / size
+      return (n >= 100 ? n.toFixed(0) : n >= 10 ? n.toFixed(1) : n.toFixed(2)) + suffix
+    }
+  }
+  return v.toFixed(0)
+}
+
+/** Цена без сведений о шаге: не больше пяти значащих цифр после ведущих нулей, без хвостовых нулей */
+export function fmtPriceShort(v: number | null | undefined): string {
+  if (v == null || !isFinite(v)) return '—'
+  if (v >= 1000) return v.toFixed(2)
+  if (v >= 1) return String(+v.toFixed(4))
+  if (v <= 0) return '0'
+  const digits = Math.min(12, 4 - Math.floor(Math.log10(v)))
+  return v.toFixed(digits).replace(/0+$/, '').replace(/\.$/, '')
+}
+
 export function fmtPct(v: number | null | undefined): string {
   if (v == null || !isFinite(v)) return '—'
   return (v > 0 ? '+' : '') + v.toFixed(2) + '%'

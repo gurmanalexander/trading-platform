@@ -2,9 +2,10 @@ import type { IChartApi, IPrimitivePaneRenderer, IPrimitivePaneView, ISeriesApi,
 import { computed, shallowRef } from 'vue'
 import type { Bar } from '../types'
 import { app } from '../stores/app'
-import { selection, type Drawing, type DrawingType, type Pt } from '../stores/drawings'
+import { checkpoint, clipboard, selection, setDefaultStyle, styleFor, type Dash, type Drawing, type DrawingType, type Pt } from '../stores/drawings'
 import { fmtPct, fmtPrice, fmtSpan } from '../lib/format'
 import { withAlpha, type ChartColors } from './theme'
+import { movePositionHandle, riskReward } from './position'
 
 /** Что слою рисунков нужно знать о графике */
 export interface DrawHost {
@@ -26,12 +27,24 @@ interface XY {
   y: number
 }
 
+interface Geometry {
+  /** экранные координаты точек рисунка */
+  sp: XY[]
+  /** маркеры, за которые рисунок можно тянуть */
+  handles: XY[]
+}
+
 const FIB_LEVELS = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1]
 const HANDLE = 4.5
 const FONT = '11px -apple-system, "Segoe UI", Roboto, sans-serif'
-let lastColor = '#4c8dff'
+const DASHES: Record<Dash, number[]> = { solid: [], dashed: [6, 4], dotted: [1.5, 3.5] }
 
-const isSingle = (t: DrawingType) => t === 'hline' || t === 'vline'
+const SINGLE = new Set<DrawingType>(['hline', 'vline', 'hray', 'cross'])
+const isSingle = (t: DrawingType) => SINGLE.has(t)
+export const isPosition = (t: DrawingType) => t === 'long' || t === 'short'
+/** Инструменты, у которых настраиваются цвет, толщина и вид линии */
+export const hasLineStyle = (t: DrawingType) => !isPosition(t) && t !== 'measure'
+export const hasText = (t: DrawingType) => t === 'hline' || t === 'hray' || t === 'trend' || t === 'ray' || t === 'rect'
 const uid = () => Math.random().toString(36).slice(2, 10)
 
 function distToSegment(px: number, py: number, a: XY, b: XY): number {
@@ -70,6 +83,8 @@ export class DrawingsLayer {
   private pressing = false
   private downAt: XY = { x: 0, y: 0 }
   private drag: { d: Drawing; handle: number; start: XY; orig: XY[]; moved: boolean } | null = null
+  /** прокрутка графика отключена на время жеста над рисунком */
+  private scrollLocked = false
   private requestUpdate: (() => void) | null = null
   private overlay: HTMLElement | null = null
   private offs: (() => void)[] = []
@@ -110,10 +125,15 @@ export class DrawingsLayer {
   private toScreen(p: Pt): XY | null {
     const lg = this.host.timeToLogical(p.t)
     if (lg == null) return null
-    const x = this.host.chart.timeScale().logicalToCoordinate(lg as Logical)
+    // Библиотека переводит в координату только целый номер существующей свечи. Время рисунка
+    // может попадать между свечами (другой интервал) или за край данных, поэтому берём
+    // ближайшую свечу и сдвигаемся от неё на дробную часть шага.
+    const ts = this.host.chart.timeScale()
+    const base = Math.min(this.host.bars().length - 1, Math.max(0, Math.round(lg)))
+    const x0 = ts.logicalToCoordinate(base as Logical)
     const y = this.host.series().priceToCoordinate(p.p)
-    if (x == null || y == null) return null
-    return { x, y }
+    if (x0 == null || y == null) return null
+    return { x: x0 + (lg - base) * ts.options().barSpacing, y }
   }
 
   private toPoint(x: number, y: number): Pt | null {
@@ -134,7 +154,34 @@ export class DrawingsLayer {
         }
       }
     }
-    return { t: this.host.logicalToTime(idx), p: price }
+    // цена — с шагом инструмента, без «хвоста» от пересчёта из пикселей
+    return { t: this.host.logicalToTime(idx), p: +price.toFixed(this.host.precision()) }
+  }
+
+  private geometry(d: Drawing, w: number, h: number): Geometry | null {
+    const s = d.pts.map((p) => this.toScreen(p))
+    if (s.some((p) => !p)) return null
+    const sp = s as XY[]
+    switch (d.type) {
+      case 'hline':
+        return { sp, handles: [{ x: w / 2, y: sp[0].y }] }
+      case 'vline':
+        return { sp, handles: [{ x: sp[0].x, y: h / 2 }] }
+      case 'long':
+      case 'short':
+        if (sp.length < 3) return null
+        return {
+          sp,
+          handles: [
+            { x: sp[0].x, y: sp[0].y },
+            { x: sp[0].x, y: sp[1].y },
+            { x: sp[0].x, y: sp[2].y },
+            { x: sp[1].x, y: sp[0].y },
+          ],
+        }
+      default:
+        return { sp, handles: sp }
+    }
   }
 
   // ---------- события ----------
@@ -183,7 +230,7 @@ export class DrawingsLayer {
       (e) => {
         if (app.tool !== 'cursor' || e.button > 0) return
         const p = rel(e)
-        this.idleDown(p.x, p.y, e.pointerType === 'mouse' ? 6 : 14)
+        this.idleDown(p.x, p.y, e.pointerType === 'mouse' ? 6 : 14, e.shiftKey)
       },
       { capture: true },
     )
@@ -220,6 +267,29 @@ export class DrawingsLayer {
     this.offs = []
   }
 
+  private lockScroll(on: boolean) {
+    if (this.scrollLocked === on) return
+    this.scrollLocked = on
+    this.host.chart.applyOptions({ handleScroll: !on, handleScale: !on })
+  }
+
+  private newDrawing(type: DrawingType, pts: Pt[]): Drawing {
+    const st = styleFor(type)
+    return { id: uid(), type, pts, color: st.color, width: st.width, dash: st.dash }
+  }
+
+  /** Позиция по умолчанию: цель на ~12% высоты экрана от входа, стоп вдвое ближе, ширина ~15% видимых свечей */
+  private newPosition(type: 'long' | 'short', entry: Pt, x: number): Drawing {
+    const sign = type === 'long' ? 1 : -1
+    const size = this.host.chart.paneSize(0)
+    const top = this.host.series().coordinateToPrice(0) as number | null
+    const bottom = this.host.series().coordinateToPrice(size.height) as number | null
+    const dist = top != null && bottom != null ? Math.abs(top - bottom) * 0.12 : entry.p * 0.01
+    const right = this.toPoint(x + Math.max(60, size.width * 0.15), 0)
+    const t2 = Math.max(right?.t ?? 0, entry.t + this.host.tfSec())
+    return this.newDrawing(type, [entry, { t: t2, p: entry.p + sign * dist }, { t: entry.t, p: entry.p - (sign * dist) / 2 }])
+  }
+
   private toolDown(x: number, y: number) {
     const tool = app.tool
     if (tool === 'cursor') return
@@ -232,7 +302,8 @@ export class DrawingsLayer {
       this.commit()
       return
     }
-    this.draft = { id: uid(), type: tool, pts: isSingle(tool) ? [pt] : [pt, { ...pt }], color: lastColor }
+    if (tool === 'long' || tool === 'short') this.draft = this.newPosition(tool, pt, x)
+    else this.draft = this.newDrawing(tool, isSingle(tool) ? [pt] : [pt, { ...pt }])
     this.downAt = { x, y }
     this.pressing = true
     this.redraw()
@@ -244,7 +315,15 @@ export class DrawingsLayer {
     if (isMouse) this.syncCrosshair(pt)
     const d = this.draft
     if (!d) return
-    if (isSingle(d.type)) {
+    if (isPosition(d.type)) {
+      // протяжка задаёт цель и правый край; стоп — вдвое ближе цели
+      if (this.pressing && Math.hypot(x - this.downAt.x, y - this.downAt.y) > 8) {
+        const sign = d.type === 'long' ? 1 : -1
+        const dist = Math.max(Math.abs(pt.p - d.pts[0].p), 1 / 10 ** this.host.precision())
+        d.pts[1] = { t: Math.max(pt.t, d.pts[0].t + this.host.tfSec()), p: d.pts[0].p + sign * dist }
+        d.pts[2].p = d.pts[0].p - (sign * dist) / 2
+      }
+    } else if (isSingle(d.type)) {
       if (this.pressing) d.pts[0] = pt
     } else if (this.pressing || isMouse) {
       d.pts[1] = pt
@@ -253,12 +332,13 @@ export class DrawingsLayer {
   }
 
   private toolUp(x: number, y: number) {
+    this.lockScroll(false)
     if (!this.pressing) return
     this.pressing = false
     const d = this.draft
     if (!d) return
     // протянули — фигура готова; просто щёлкнули — ждём второй щелчок
-    if (isSingle(d.type) || Math.hypot(x - this.downAt.x, y - this.downAt.y) > 8) this.commit()
+    if (isSingle(d.type) || isPosition(d.type) || Math.hypot(x - this.downAt.x, y - this.downAt.y) > 8) this.commit()
   }
 
   private commit() {
@@ -269,6 +349,7 @@ export class DrawingsLayer {
     if (d.type === 'measure') {
       this.measure = d
     } else {
+      checkpoint()
       this.list.push(d)
       selection.value = { pane: this.host.paneIndex, id: d.id }
     }
@@ -278,6 +359,7 @@ export class DrawingsLayer {
   }
 
   cancelDraft() {
+    this.lockScroll(false)
     if (!this.draft && !this.pressing) return
     this.draft = null
     this.pressing = false
@@ -294,13 +376,24 @@ export class DrawingsLayer {
     this.host.chart.setCrosshairPosition(pt.p, (pt.t + this.host.tz()) as Time, this.host.series())
   }
 
-  private idleDown(x: number, y: number, tol: number) {
+  private idleDown(x: number, y: number, tol: number, shift: boolean) {
     if (this.measure) {
       this.measure = null
       this.redraw()
     }
     const size = this.host.chart.paneSize(0)
     if (x > size.width || y > size.height) return
+    if (shift) {
+      // Shift+щелчок — линейка: первая точка здесь, вторая — следующим щелчком
+      const pt = this.toPoint(x, y)
+      if (!pt) return
+      this.lockScroll(true)
+      window.addEventListener('pointerup', () => this.lockScroll(false), { once: true })
+      app.tool = 'measure'
+      this.draft = this.newDrawing('measure', [pt, { ...pt }])
+      this.redraw()
+      return
+    }
     const h = this.hit(x, y, tol)
     if (!h) {
       if (this.selectedId.value) {
@@ -312,7 +405,7 @@ export class DrawingsLayer {
     selection.value = { pane: this.host.paneIndex, id: h.d.id }
     const orig = h.d.pts.map((p) => this.toScreen(p) ?? { x, y })
     this.drag = { d: h.d, handle: h.handle, start: { x, y }, orig, moved: false }
-    this.host.chart.applyOptions({ handleScroll: false, handleScale: false })
+    this.lockScroll(true)
     this.redraw()
   }
 
@@ -321,20 +414,30 @@ export class DrawingsLayer {
     if (!g) return
     const dx = x - g.start.x
     const dy = y - g.start.y
-    if (!g.moved && Math.hypot(dx, dy) < 3) return
-    g.moved = true
-    g.orig.forEach((o, i) => {
-      if (g.handle >= 0 && g.handle !== i) return
-      const pt = g.handle >= 0 ? this.toPoint(x, y) : this.toPoint(o.x + dx, o.y + dy)
-      if (pt) g.d.pts[i] = pt
-    })
+    if (!g.moved) {
+      if (Math.hypot(dx, dy) < 3) return
+      g.moved = true
+      checkpoint()
+    }
+    if (g.handle >= 0) {
+      const pt = this.toPoint(x, y)
+      if (pt) {
+        if (isPosition(g.d.type)) movePositionHandle(g.d, g.handle, pt, 1 / 10 ** this.host.precision(), this.host.tfSec())
+        else g.d.pts[g.handle] = pt
+      }
+    } else {
+      g.orig.forEach((o, i) => {
+        const pt = this.toPoint(o.x + dx, o.y + dy)
+        if (pt) g.d.pts[i] = pt
+      })
+    }
     this.redraw()
   }
 
   private dragEnd() {
     if (!this.drag) return
     this.drag = null
-    this.host.chart.applyOptions({ handleScroll: true, handleScale: true })
+    this.lockScroll(false)
   }
 
   // ---------- действия ----------
@@ -344,43 +447,76 @@ export class DrawingsLayer {
     return id ? (this.list.find((d) => d.id === id) ?? null) : null
   }
 
-  setColor(color: string) {
+  setStyle(patch: Partial<Pick<Drawing, 'color' | 'width' | 'dash' | 'text'>>) {
     const d = this.selected()
     if (!d) return
-    d.color = color
-    lastColor = color
+    checkpoint()
+    Object.assign(d, patch)
+    if (!d.text) delete d.text
     this.redraw()
+  }
+
+  /** Запоминает стиль выбранного рисунка как стиль по умолчанию для этого инструмента */
+  saveAsDefault() {
+    const d = this.selected()
+    if (d) setDefaultStyle(d.type, { color: d.color, width: d.width ?? 1, dash: d.dash ?? 'solid' })
   }
 
   removeSelected() {
     const id = this.selectedId.value
     if (!id) return
     const i = this.list.findIndex((d) => d.id === id)
-    if (i >= 0) this.list.splice(i, 1)
+    if (i >= 0) {
+      checkpoint()
+      this.list.splice(i, 1)
+    }
     selection.value = null
     this.redraw()
+  }
+
+  copySelected(): boolean {
+    const d = this.selected()
+    if (!d) return false
+    clipboard.item = JSON.parse(JSON.stringify(d))
+    return true
+  }
+
+  /** Вставляет скопированный рисунок со сдвигом на несколько свечей вправо */
+  paste(): boolean {
+    const src = clipboard.item
+    if (!src) return false
+    const shift = this.host.tfSec() * 3
+    const d: Drawing = { ...JSON.parse(JSON.stringify(src)), id: uid() }
+    d.pts = d.pts.map((p) => ({ t: p.t + shift, p: p.p }))
+    checkpoint()
+    this.list.push(d)
+    selection.value = { pane: this.host.paneIndex, id: d.id }
+    this.redraw()
+    return true
   }
 
   /** Горизонтальная линия на заданной цене (из контекстного меню) */
   addHLine(price: number) {
     const bars = this.host.bars()
     if (!bars.length) return
-    this.list.push({ id: uid(), type: 'hline', pts: [{ t: bars[bars.length - 1].time, p: price }], color: lastColor })
+    checkpoint()
+    this.list.push(this.newDrawing('hline', [{ t: bars[bars.length - 1].time, p: price }]))
     this.redraw()
   }
 
   // ---------- попадание ----------
 
   private hit(x: number, y: number, tol: number): { d: Drawing; handle: number } | null {
+    if (app.drawingsHidden) return null
     const size = this.host.chart.paneSize(0)
     const sel = this.selectedId.value
     for (let i = this.list.length - 1; i >= 0; i--) {
       const d = this.list[i]
-      const s = d.pts.map((p) => this.toScreen(p))
-      if (s.some((p) => !p)) continue
-      const sp = s as XY[]
+      const g = this.geometry(d, size.width, size.height)
+      if (!g) continue
+      const { sp, handles } = g
       if (d.id === sel && !isSingle(d.type)) {
-        for (let k = 0; k < sp.length; k++) if (Math.hypot(x - sp[k].x, y - sp[k].y) <= tol + HANDLE) return { d, handle: k }
+        for (let k = 0; k < handles.length; k++) if (Math.hypot(x - handles[k].x, y - handles[k].y) <= tol + HANDLE) return { d, handle: k }
       }
       let ok = false
       switch (d.type) {
@@ -390,6 +526,12 @@ export class DrawingsLayer {
         case 'vline':
           ok = Math.abs(x - sp[0].x) <= tol
           break
+        case 'hray':
+          ok = Math.abs(y - sp[0].y) <= tol && x >= sp[0].x - tol
+          break
+        case 'cross':
+          ok = Math.abs(y - sp[0].y) <= tol || Math.abs(x - sp[0].x) <= tol
+          break
         case 'trend':
           ok = distToSegment(x, y, sp[0], sp[1]) <= tol
           break
@@ -397,18 +539,21 @@ export class DrawingsLayer {
           ok = distToSegment(x, y, sp[0], rayEnd(sp[0], sp[1], size.width, size.height)) <= tol
           break
         case 'rect':
-        case 'fib': {
-          const x0 = Math.min(sp[0].x, sp[1].x) - tol
-          const x1 = Math.max(sp[0].x, sp[1].x) + tol
-          const y0 = Math.min(sp[0].y, sp[1].y) - tol
-          const y1 = Math.max(sp[0].y, sp[1].y) + tol
-          ok = x >= x0 && x <= x1 && y >= y0 && y <= y1
+        case 'fib':
+          ok = this.inBox(x, y, sp[0], sp[1], tol)
           break
-        }
+        case 'long':
+        case 'short':
+          ok = this.inBox(x, y, { x: sp[0].x, y: sp[1].y }, { x: sp[1].x, y: sp[2].y }, tol)
+          break
       }
       if (ok) return { d, handle: -1 }
     }
     return null
+  }
+
+  private inBox(x: number, y: number, a: XY, b: XY, tol: number): boolean {
+    return x >= Math.min(a.x, b.x) - tol && x <= Math.max(a.x, b.x) + tol && y >= Math.min(a.y, b.y) - tol && y <= Math.max(a.y, b.y) + tol
   }
 
   // ---------- отрисовка ----------
@@ -419,12 +564,13 @@ export class DrawingsLayer {
     ctx.save()
     ctx.font = FONT
     ctx.lineJoin = 'round'
-    for (const d of this.list) {
-      const active = d.id === sel || d.id === this.hoverId
-      const sp = this.drawOne(ctx, d, w, h, active, d.id === sel)
-      if (d.id === sel && sp) anchor = { x: Math.min(...sp.map((p) => p.x)), y: Math.min(...sp.map((p) => p.y)) }
+    if (!app.drawingsHidden) {
+      for (const d of this.list) {
+        const pts = this.drawOne(ctx, d, w, h, d.id === this.hoverId, d.id === sel)
+        if (d.id === sel && pts) anchor = { x: Math.min(...pts.map((p) => p.x)), y: Math.min(...pts.map((p) => p.y)) }
+      }
     }
-    if (this.draft) this.drawOne(ctx, this.draft, w, h, true, true)
+    if (this.draft) this.drawOne(ctx, this.draft, w, h, false, true)
     if (this.measure) this.drawOne(ctx, this.measure, w, h, false, false)
     ctx.restore()
     const prev = this.anchor.value
@@ -435,16 +581,34 @@ export class DrawingsLayer {
     }
   }
 
-  private drawOne(ctx: CanvasRenderingContext2D, d: Drawing, w: number, h: number, active: boolean, handles: boolean): XY[] | null {
-    const s = d.pts.map((p) => this.toScreen(p))
-    if (s.some((p) => !p)) return null
-    const sp = s as XY[]
+  /** Подпись в цветной плашке; x — центр плашки либо (left = true) её левый край, y — центр */
+  private tag(ctx: CanvasRenderingContext2D, lines: string[], x: number, cy: number, bg: string, w: number, h: number, left = false) {
+    const bw = Math.max(...lines.map((l) => ctx.measureText(l).width)) + 14
+    const bh = lines.length * 15 + 6
+    const bx = Math.max(2, Math.min(w - bw - 2, left ? x : x - bw / 2))
+    const by = Math.max(2, Math.min(h - bh - 2, cy - bh / 2))
+    ctx.fillStyle = bg
+    ctx.beginPath()
+    ctx.roundRect(bx, by, bw, bh, 4)
+    ctx.fill()
+    ctx.fillStyle = '#fff'
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    lines.forEach((l, i) => ctx.fillText(l, bx + bw / 2, by + 11 + i * 15))
+  }
+
+  private drawOne(ctx: CanvasRenderingContext2D, d: Drawing, w: number, h: number, hover: boolean, handles: boolean): XY[] | null {
+    const g = this.geometry(d, w, h)
+    if (!g) return null
+    const { sp } = g
     const c = this.host.colors()
     const prec = this.host.precision()
+    const width = (d.width ?? 1) + (hover ? 1 : 0)
+    const dash = DASHES[d.dash ?? 'solid']
     ctx.strokeStyle = d.color
     ctx.fillStyle = d.color
-    ctx.lineWidth = active ? 2 : 1.5
-    ctx.setLineDash([])
+    ctx.lineWidth = width
+    ctx.setLineDash(dash)
     const line = (a: XY, b: XY) => {
       ctx.beginPath()
       ctx.moveTo(a.x, a.y)
@@ -457,26 +621,43 @@ export class DrawingsLayer {
       ctx.fillStyle = d.color
       ctx.fillText(text, x, y)
     }
-    let handlePts = sp
+    // координата тонкой линии — на середине пикселя, иначе она размывается
+    const crisp = (v: number) => (width % 2 ? Math.round(v) + 0.5 : Math.round(v))
 
     switch (d.type) {
       case 'trend':
         line(sp[0], sp[1])
+        if (d.text) label(d.text, (sp[0].x + sp[1].x) / 2, (sp[0].y + sp[1].y) / 2 - 4, 'center')
         break
       case 'ray':
         line(sp[0], rayEnd(sp[0], sp[1], w, h))
+        if (d.text) label(d.text, (sp[0].x + sp[1].x) / 2, (sp[0].y + sp[1].y) / 2 - 4, 'center')
         break
       case 'hline': {
-        const y = Math.round(sp[0].y) + 0.5
+        const y = crisp(sp[0].y)
         line({ x: 0, y }, { x: w, y })
         label(fmtPrice(d.pts[0].p, prec), w - 6, y - 3, 'right')
-        handlePts = [{ x: w / 2, y }]
+        if (d.text) label(d.text, 8, y - 3)
+        break
+      }
+      case 'hray': {
+        const y = crisp(sp[0].y)
+        line({ x: sp[0].x, y }, { x: w, y })
+        label(fmtPrice(d.pts[0].p, prec), w - 6, y - 3, 'right')
+        if (d.text) label(d.text, Math.max(8, sp[0].x + 6), y - 3)
         break
       }
       case 'vline': {
-        const x = Math.round(sp[0].x) + 0.5
+        const x = crisp(sp[0].x)
         line({ x, y: 0 }, { x, y: h })
-        handlePts = [{ x, y: h / 2 }]
+        break
+      }
+      case 'cross': {
+        const x = crisp(sp[0].x)
+        const y = crisp(sp[0].y)
+        line({ x: 0, y }, { x: w, y })
+        line({ x, y: 0 }, { x, y: h })
+        label(fmtPrice(d.pts[0].p, prec), w - 6, y - 3, 'right')
         break
       }
       case 'rect': {
@@ -487,6 +668,7 @@ export class DrawingsLayer {
         ctx.fillStyle = withAlpha(d.color, 0.12)
         ctx.fillRect(x, y, rw, rh)
         ctx.strokeRect(x, y, rw, rh)
+        if (d.text) label(d.text, x + 4, y + 16)
         break
       }
       case 'fib': {
@@ -498,18 +680,53 @@ export class DrawingsLayer {
         ctx.lineWidth = 1
         ctx.strokeStyle = withAlpha(d.color, 0.6)
         line(sp[0], sp[1])
-        ctx.setLineDash([])
+        ctx.setLineDash(dash)
         ctx.strokeStyle = d.color
-        ctx.lineWidth = active ? 1.5 : 1
+        ctx.lineWidth = width
         for (const lvl of FIB_LEVELS) {
           // уровень 0 — в конечной точке, 1 — в начальной
           const price = p1 + (p0 - p1) * lvl
           const yy = this.host.series().priceToCoordinate(price)
           if (yy == null) continue
-          const y = Math.round(yy) + 0.5
+          const y = crisp(yy)
           line({ x: x0, y }, { x: x1, y })
           label(`${lvl} (${fmtPrice(price, prec)})`, x0 + 2, y - 2)
         }
+        break
+      }
+      case 'long':
+      case 'short': {
+        const x1 = sp[0].x
+        const x2 = Math.max(sp[1].x, x1 + 8)
+        const yE = sp[0].y
+        const yT = sp[1].y
+        const yS = sp[2].y
+        const entry = d.pts[0].p
+        const target = d.pts[1].p
+        const stop = d.pts[2].p
+        ctx.setLineDash([])
+        ctx.fillStyle = withAlpha(c.up, hover || handles ? 0.26 : 0.18)
+        ctx.fillRect(x1, Math.min(yE, yT), x2 - x1, Math.abs(yT - yE))
+        ctx.fillStyle = withAlpha(c.down, hover || handles ? 0.26 : 0.18)
+        ctx.fillRect(x1, Math.min(yE, yS), x2 - x1, Math.abs(yS - yE))
+        ctx.strokeStyle = c.text
+        ctx.lineWidth = 1
+        line({ x: x1, y: Math.round(yE) + 0.5 }, { x: x2, y: Math.round(yE) + 0.5 })
+        // на мелком масштабе (другой интервал) подписи слиплись бы — показываем их только у выбранной позиции
+        if (!hover && !handles && (Math.abs(yT - yS) < 70 || x2 - x1 < 90)) break
+        const pct = (v: number) => fmtPct(entry ? ((v - entry) / entry) * 100 : 0)
+        const texts = [
+          `Цель ${fmtPrice(target, prec)} (${pct(target)})`,
+          `Стоп ${fmtPrice(stop, prec)} (${pct(stop)})`,
+          `${d.type === 'long' ? 'Лонг' : 'Шорт'} ${fmtPrice(entry, prec)} · R/R ${riskReward(d).toFixed(2)}`,
+        ]
+        // узкая позиция: подписи не помещаются между маркерами — выносим их вправо от неё
+        const outside = x2 - x1 < Math.max(...texts.map((t) => ctx.measureText(t).width)) + 40
+        const x = outside ? x2 + 10 : (x1 + x2) / 2
+        const up = d.type === 'long' ? -1 : 1
+        this.tag(ctx, [texts[0]], x, yT + up * 13, c.up, w, h, outside)
+        this.tag(ctx, [texts[1]], x, yS - up * 13, c.down, w, h, outside)
+        this.tag(ctx, [texts[2]], x, yE, c.muted, w, h, outside)
         break
       }
       case 'measure': {
@@ -519,6 +736,7 @@ export class DrawingsLayer {
         const y = Math.min(sp[0].y, sp[1].y)
         const rw = Math.abs(sp[1].x - sp[0].x)
         const rh = Math.abs(sp[1].y - sp[0].y)
+        ctx.setLineDash([])
         ctx.fillStyle = withAlpha(col, 0.14)
         ctx.fillRect(x, y, rw, rh)
         ctx.strokeStyle = col
@@ -531,23 +749,7 @@ export class DrawingsLayer {
         const pct = d.pts[0].p ? (diff / d.pts[0].p) * 100 : 0
         const dt = d.pts[1].t - d.pts[0].t
         const nBars = Math.round(dt / this.host.tfSec())
-        const l1 = `${diff >= 0 ? '+' : ''}${fmtPrice(diff, prec)} (${fmtPct(pct)})`
-        const l2 = `${nBars} бар., ${fmtSpan(dt)}`
-        const bw = Math.max(ctx.measureText(l1).width, ctx.measureText(l2).width) + 16
-        const bh = 36
-        let bx = mx - bw / 2
-        let by = up ? y - bh - 6 : y + rh + 6
-        bx = Math.max(2, Math.min(w - bw - 2, bx))
-        by = Math.max(2, Math.min(h - bh - 2, by))
-        ctx.fillStyle = col
-        ctx.beginPath()
-        ctx.roundRect(bx, by, bw, bh, 4)
-        ctx.fill()
-        ctx.fillStyle = '#fff'
-        ctx.textAlign = 'center'
-        ctx.textBaseline = 'middle'
-        ctx.fillText(l1, bx + bw / 2, by + 11)
-        ctx.fillText(l2, bx + bw / 2, by + 26)
+        this.tag(ctx, [`${diff >= 0 ? '+' : ''}${fmtPrice(diff, prec)} (${fmtPct(pct)})`, `${nBars} бар., ${fmtSpan(dt)}`], mx, up ? y - 24 : y + rh + 24, col, w, h)
         return sp
       }
     }
@@ -555,15 +757,15 @@ export class DrawingsLayer {
     if (handles) {
       ctx.setLineDash([])
       ctx.lineWidth = 1.5
-      for (const p of handlePts) {
+      for (const p of g.handles) {
         ctx.beginPath()
         ctx.arc(p.x, p.y, HANDLE, 0, Math.PI * 2)
         ctx.fillStyle = c.bg
         ctx.fill()
-        ctx.strokeStyle = d.color
+        ctx.strokeStyle = isPosition(d.type) ? c.text : d.color
         ctx.stroke()
       }
     }
-    return handlePts
+    return g.handles
   }
 }

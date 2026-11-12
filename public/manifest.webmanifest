@@ -1,6 +1,6 @@
 {
-  "name": "Svecha — торговый терминал",
-  "short_name": "Svecha",
+  "name": "tvx — торговый терминал",
+  "short_name": "tvx",
   "description": "Лёгкий терминал для графиков Binance и Bybit",
   "lang": "ru",
   "start_url": "./",

@@ -1,6 +1,6 @@
 import { watch, type WatchSource } from 'vue'
 
-const PREFIX = 'svecha:'
+const PREFIX = 'tvx:'
 
 export function load<T>(key: string, fallback: T): T {
   try {

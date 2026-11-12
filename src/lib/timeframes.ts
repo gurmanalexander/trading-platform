@@ -27,7 +27,29 @@ export const TIMEFRAMES: Timeframe[] = [
   { id: '1M', label: '1Мес', sec: 30 * D, binance: '1M', bybit: 'M' },
 ]
 
-export const FAVORITE_TFS = ['1m', '5m', '15m', '1h', '4h', '1d', '1w']
+export const DEFAULT_FAVORITE_TFS = ['1m', '5m', '1h', '4h', '1d']
 
 const byId = new Map(TIMEFRAMES.map((t) => [t.id, t]))
 export const getTf = (id: string): Timeframe => byId.get(id) ?? byId.get('1h')!
+export const isTf = (id: unknown): id is string => typeof id === 'string' && byId.has(id)
+
+/**
+ * Интервал, набранный с клавиатуры: "5" и "15" — минуты, "1h"/"4ч" — часы, "D"/"1д" — день,
+ * "W"/"н" — неделя, "M"/"мес" — месяц. Латинская m — минуты, M — месяц.
+ */
+export function parseTf(input: string): Timeframe | null {
+  const m = /^(\d*)\s*([a-zA-Zа-яА-Я]*)$/.exec(input.trim())
+  if (!m || (!m[1] && !m[2])) return null
+  const n = m[1] ? parseInt(m[1], 10) : 1
+  const u = m[2]
+  const lower = u.toLowerCase()
+  if (u === 'M' || lower === 'мес' || lower === 'mo') return n === 1 ? byId.get('1M')! : null
+  let unit: number
+  if (!u || u === 'm' || lower === 'м' || lower === 'мин' || lower === 'min') unit = M
+  else if (lower === 'h' || lower === 'ч') unit = H
+  else if (lower === 'd' || lower === 'д') unit = D
+  else if (lower === 'w' || lower === 'н') unit = 7 * D
+  else return null
+  const sec = n * unit
+  return TIMEFRAMES.find((t) => t.id !== '1M' && t.sec === sec) ?? null
+}

@@ -1,4 +1,4 @@
-import type { Bar, MarketId, OrderBook, SymbolInfo, Ticker } from '../types'
+import type { Bar, MarketId, SymbolInfo, Ticker } from '../types'
 import type { Timeframe } from '../lib/timeframes'
 import type { SocketStatus } from './ws'
 import type { Ref } from 'vue'
@@ -20,14 +20,7 @@ export interface ExchangeAdapter {
     onReconnect: () => void,
   ): () => void
   subscribeTicker(market: MarketId, symbol: string, onTicker: (t: Ticker, rawPrices: (string | undefined)[]) => void): () => void
-  subscribeBook(market: MarketId, symbol: string, onBook: (b: OrderBook) => void): () => void
   /** Все торгуемые инструменты рынка с ценой и оборотом */
   fetchSymbols(market: MarketId): Promise<SymbolInfo[]>
   status(market: MarketId): Ref<SocketStatus>
-}
-
-export const toLevels = (rows: [string, string][], limit: number): [number, number][] => {
-  const out: [number, number][] = []
-  for (let i = 0; i < rows.length && i < limit; i++) out.push([+rows[i][0], +rows[i][1]])
-  return out
 }

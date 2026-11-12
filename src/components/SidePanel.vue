@@ -1,14 +1,14 @@
 <script setup lang="ts">
+import Screener from './Screener.vue'
 import Watchlist from './Watchlist.vue'
-import OrderBook from './OrderBook.vue'
 import AlertsPanel from './AlertsPanel.vue'
 import { app, type PanelId } from '../stores/app'
 
 defineProps<{ tab: PanelId; tabs: boolean }>()
 
 const TABS: { id: PanelId; label: string }[] = [
+  { id: 'screener', label: 'Отбор' },
   { id: 'watchlist', label: 'Список' },
-  { id: 'book', label: 'Стакан' },
   { id: 'alerts', label: 'Оповещения' },
 ]
 </script>
@@ -21,8 +21,8 @@ const TABS: { id: PanelId; label: string }[] = [
       </button>
     </div>
     <div class="side-body">
-      <Watchlist v-if="tab === 'watchlist'" />
-      <OrderBook v-else-if="tab === 'book'" />
+      <Screener v-if="tab === 'screener'" />
+      <Watchlist v-else-if="tab === 'watchlist'" />
       <AlertsPanel v-else />
     </div>
   </aside>

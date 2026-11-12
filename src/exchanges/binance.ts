@@ -2,11 +2,10 @@ import type { Bar, MarketId, SymbolInfo } from '../types'
 import { decimalsOf } from '../lib/format'
 import { getJson } from './http'
 import { StreamSocket, type StreamConfig } from './ws'
-import { toLevels, type ExchangeAdapter } from './types'
+import type { ExchangeAdapter } from './types'
 
 // Спот: data-api.binance.vision / data-stream.binance.vision — официальные адреса «только рыночные данные».
-// Фьючерсы USDⓈ-M: потоки разнесены по маршрутам /market (свечи, тикеры) и /public (стакан);
-// прежний общий адрес оставлен запасным.
+// Фьючерсы USDⓈ-M: свечи и тикеры идут по маршруту /market; прежний общий адрес оставлен запасным.
 const REST: Record<MarketId, string[]> = {
   spot: ['https://data-api.binance.vision', 'https://api.binance.com', 'https://api-gcp.binance.com'],
   futures: ['https://fapi.binance.com'],
@@ -14,11 +13,9 @@ const REST: Record<MarketId, string[]> = {
 const KLINES: Record<MarketId, string> = { spot: '/api/v3/klines', futures: '/fapi/v1/klines' }
 const TICKERS: Record<MarketId, string> = { spot: '/api/v3/ticker/24hr?type=MINI', futures: '/fapi/v1/ticker/24hr' }
 
-type Channel = 'spot' | 'futMarket' | 'futPublic'
-const WS: Record<Channel, string[]> = {
+const WS: Record<MarketId, string[]> = {
   spot: ['wss://data-stream.binance.vision/stream', 'wss://stream.binance.com:443/stream'],
-  futMarket: ['wss://fstream.binance.com/market/stream', 'wss://fstream.binance.com/stream'],
-  futPublic: ['wss://fstream.binance.com/public/stream', 'wss://fstream.binance.com/stream'],
+  futures: ['wss://fstream.binance.com/market/stream', 'wss://fstream.binance.com/stream'],
 }
 
 const baseCfg: Omit<StreamConfig, 'urls'> = {
@@ -32,14 +29,12 @@ const baseCfg: Omit<StreamConfig, 'urls'> = {
   sendGapMs: 260, // лимит: 5 входящих сообщений в секунду
 }
 
-const sockets = new Map<Channel, StreamSocket>()
-function socket(ch: Channel): StreamSocket {
-  let s = sockets.get(ch)
-  if (!s) sockets.set(ch, (s = new StreamSocket({ ...baseCfg, urls: WS[ch] })))
+const sockets = new Map<MarketId, StreamSocket>()
+function marketSocket(m: MarketId): StreamSocket {
+  let s = sockets.get(m)
+  if (!s) sockets.set(m, (s = new StreamSocket({ ...baseCfg, urls: WS[m] })))
   return s
 }
-const marketSocket = (m: MarketId) => socket(m === 'spot' ? 'spot' : 'futMarket')
-const bookSocket = (m: MarketId) => socket(m === 'spot' ? 'spot' : 'futPublic')
 
 const DAY = 86_400_000
 
@@ -85,16 +80,6 @@ export const binance: ExchangeAdapter = {
         { last, changePct: open ? ((last - open) / open) * 100 : 0, high: +d.h, low: +d.l, quoteVolume: +d.q },
         [d.c, d.o, d.h, d.l],
       )
-    })
-  },
-
-  subscribeBook(market, symbol, onBook) {
-    const stream = `${symbol.toLowerCase()}@depth20${market === 'futures' ? '@500ms' : ''}`
-    return bookSocket(market).subscribe(stream, (msg) => {
-      const d = msg.data
-      if (!d) return
-      // спот: bids/asks, фьючерсы: b/a
-      onBook({ bids: toLevels(d.bids ?? d.b ?? [], 20), asks: toLevels(d.asks ?? d.a ?? [], 20) })
     })
   },
 
