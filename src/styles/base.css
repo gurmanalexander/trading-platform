@@ -1,0 +1,227 @@
+:root {
+  --bg: #0e1116;
+  --panel: #141821;
+  --panel-2: #1a1f2a;
+  --hover: #202634;
+  --border: #232a36;
+  --text: #d6dbe4;
+  --muted: #7d8799;
+  --accent: #4c8dff;
+  --accent-soft: rgba(76, 141, 255, 0.16);
+  --up: #1fb28a;
+  --down: #f0566b;
+  --warn: #e8a838;
+  --shadow: 0 10px 32px rgba(0, 0, 0, 0.5);
+  --ctl: 34px;
+  --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  color-scheme: dark;
+}
+[data-theme='light'] {
+  --bg: #ffffff;
+  --panel: #f6f7f9;
+  --panel-2: #eceff3;
+  --hover: #e4e8ee;
+  --border: #e1e5eb;
+  --text: #1c2230;
+  --muted: #6b7486;
+  --accent: #2f6fe4;
+  --accent-soft: rgba(47, 111, 228, 0.12);
+  --up: #12997a;
+  --down: #e0445c;
+  --warn: #b97c10;
+  --shadow: 0 10px 32px rgba(20, 30, 50, 0.18);
+  color-scheme: light;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+html,
+body,
+#app {
+  height: 100%;
+  margin: 0;
+}
+body {
+  background: var(--bg);
+  color: var(--text);
+  font: 13px/1.35 var(--font);
+  font-variant-numeric: tabular-nums;
+  overflow: hidden;
+  overscroll-behavior: none;
+  -webkit-text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+}
+button,
+input,
+select {
+  font: inherit;
+  color: inherit;
+}
+button {
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+}
+input {
+  user-select: text;
+  -webkit-user-select: text;
+}
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: var(--ctl);
+  min-width: var(--ctl);
+  padding: 0 8px;
+  border-radius: 6px;
+  color: var(--text);
+  white-space: nowrap;
+  flex: none;
+}
+.btn:hover {
+  background: var(--hover);
+}
+.btn.on {
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+.btn.primary {
+  background: var(--accent);
+  color: #fff;
+  padding: 0 14px;
+  font-weight: 600;
+}
+.btn.primary:hover {
+  filter: brightness(1.08);
+}
+.btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.btn.sm {
+  height: 26px;
+  min-width: 26px;
+  padding: 0 5px;
+  border-radius: 5px;
+}
+
+.field {
+  height: var(--ctl);
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--text);
+  min-width: 0;
+  width: 100%;
+}
+.field:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.up {
+  color: var(--up);
+}
+.down {
+  color: var(--down);
+}
+.muted {
+  color: var(--muted);
+}
+.tag {
+  font-size: 10px;
+  line-height: 1;
+  padding: 2px 4px;
+  border-radius: 3px;
+  background: var(--panel-2);
+  color: var(--muted);
+  white-space: nowrap;
+}
+.tag.binance {
+  color: #d9a514;
+}
+.tag.bybit {
+  color: #f08a3c;
+}
+
+.menu {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+  padding: 4px;
+  min-width: 160px;
+}
+.menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  height: 34px;
+  padding: 0 10px;
+  border-radius: 5px;
+  text-align: left;
+  white-space: nowrap;
+}
+.menu-item:hover {
+  background: var(--hover);
+}
+.menu-item.on {
+  color: var(--accent);
+}
+.menu-sep {
+  height: 1px;
+  margin: 4px 0;
+  background: var(--border);
+}
+
+.scroll {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+
+.spinner {
+  width: 22px;
+  height: 22px;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (max-width: 719px) {
+  :root {
+    --ctl: 38px;
+  }
+  body {
+    font-size: 14px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
