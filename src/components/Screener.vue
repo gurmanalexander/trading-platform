@@ -1,11 +1,13 @@
 <script setup lang="ts">
-import { onBeforeUnmount, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import Icon from './Icon.vue'
-import { sameSymbol, symbolKey, EXCHANGE_NAMES, MARKET_NAMES } from '../types'
+import { sameSymbol, symbolKey, EXCHANGE_NAMES, MARKET_NAMES, type SymbolRef } from '../types'
 import { activePane, setSymbol } from '../stores/app'
 import { settings, state, view, total, sortBy, refresh, resetSettings, startAutoRefresh, MAX_ROWS, type SortKey } from '../stores/screener'
 import SideMark from './SideMark.vue'
 import ListPicker from './ListPicker.vue'
+import ListMenu from './ListMenu.vue'
+import Dropdown from './Dropdown.vue'
 import { fmtPct, fmtPriceShort, fmtVolume } from '../lib/format'
 
 const showSettings = ref(false)
@@ -13,7 +15,124 @@ const stop = startAutoRefresh()
 onBeforeUnmount(stop)
 
 // другая биржа или рынок — другой список: запрашиваем сразу
-watch(() => [settings.exchange, settings.market], () => refresh())
+watch(() => [settings.exchange, settings.market], () => {
+  picked.value = new Set()
+  refresh()
+})
+
+// ---------- выбор нескольких монет ----------
+// Ctrl+щелчок добавляет монету к выбранным, Shift+щелчок выбирает подряд; на сенсорном экране
+// выбор начинается долгим нажатием. Флажок и меню по правой кнопке действуют на все выбранные.
+
+const picked = ref(new Set<string>())
+let anchor = ''
+const chosen = computed(() => view.value.filter((r) => picked.value.has(symbolKey(r))))
+const isPicked = (r: SymbolRef) => picked.value.has(symbolKey(r))
+
+function togglePick(r: SymbolRef) {
+  const next = new Set(picked.value)
+  const k = symbolKey(r)
+  if (next.has(k)) next.delete(k)
+  else next.add(k)
+  picked.value = next
+  anchor = k
+}
+function pickRange(r: SymbolRef) {
+  const rows = view.value
+  const to = rows.findIndex((x) => symbolKey(x) === symbolKey(r))
+  let from = rows.findIndex((x) => symbolKey(x) === anchor)
+  // якоря нет — выбор тянется от открытой сейчас монеты
+  if (from < 0) from = rows.findIndex((x) => sameSymbol(x, activePane.value.symbol))
+  if (from < 0) from = to
+  const next = new Set(picked.value)
+  for (let i = Math.min(from, to); i <= Math.max(from, to); i++) next.add(symbolKey(rows[i]))
+  picked.value = next
+}
+function clearPicked() {
+  picked.value = new Set()
+  anchor = ''
+}
+
+// долгое нажатие пальцем
+let pressTimer = 0
+let pressAt = { x: 0, y: 0 }
+let touch = false
+let longPressed = false
+function onDown(e: PointerEvent, r: SymbolRef) {
+  touch = e.pointerType === 'touch'
+  longPressed = false
+  clearTimeout(pressTimer)
+  if (!touch) return
+  pressAt = { x: e.clientX, y: e.clientY }
+  pressTimer = window.setTimeout(() => {
+    longPressed = true
+    togglePick(r)
+    navigator.vibrate?.(15)
+  }, 450)
+}
+function onMove(e: PointerEvent) {
+  if (Math.abs(e.clientX - pressAt.x) + Math.abs(e.clientY - pressAt.y) > 10) clearTimeout(pressTimer)
+}
+const onUp = () => clearTimeout(pressTimer)
+onBeforeUnmount(onUp)
+
+function onRowClick(e: MouseEvent, r: SymbolRef) {
+  if (longPressed) {
+    longPressed = false
+    return
+  }
+  if (e.shiftKey) pickRange(r)
+  else if (e.ctrlKey || e.metaKey || (touch && picked.value.size)) togglePick(r)
+  else {
+    clearPicked()
+    anchor = symbolKey(r)
+    setSymbol(r)
+  }
+}
+
+/** На что действует флажок или меню строки: на все выбранные, если строка среди них, иначе только на неё */
+const targetsOf = (r: SymbolRef) => (isPicked(r) && chosen.value.length > 1 ? chosen.value : [r])
+
+// ---------- меню по правой кнопке ----------
+
+const menu = reactive({ open: false, x: 0, y: 0, items: [] as SymbolRef[] })
+const menuEl = ref<HTMLElement>()
+async function onContext(e: MouseEvent, r: SymbolRef) {
+  // на сенсорном экране долгое нажатие уже занято выбором
+  if (touch) return
+  // правая кнопка по невыбранной строке — работаем только с ней
+  if (!isPicked(r)) clearPicked()
+  menu.items = targetsOf(r)
+  menu.x = e.clientX
+  menu.y = e.clientY
+  menu.open = true
+  await nextTick()
+  const el = menuEl.value
+  if (!el) return
+  menu.x = Math.max(6, Math.min(window.innerWidth - el.offsetWidth - 6, menu.x))
+  menu.y = Math.max(6, Math.min(window.innerHeight - el.offsetHeight - 6, menu.y))
+}
+function closeMenu(e?: Event) {
+  if (e && menuEl.value?.contains(e.target as Node)) return
+  menu.open = false
+}
+watch(
+  () => menu.open,
+  (open) => {
+    if (open) {
+      document.addEventListener('pointerdown', closeMenu, true)
+      document.addEventListener('keydown', onMenuKey, true)
+    } else unbindMenu()
+  },
+)
+function onMenuKey(e: KeyboardEvent) {
+  if (e.key === 'Escape') menu.open = false
+}
+function unbindMenu() {
+  document.removeEventListener('pointerdown', closeMenu, true)
+  document.removeEventListener('keydown', onMenuKey, true)
+}
+onBeforeUnmount(unbindMenu)
 
 const COLS: { id: SortKey; label: string }[] = [
   { id: 'symbol', label: 'Инструмент' },
@@ -82,6 +201,18 @@ const COLS: { id: SortKey; label: string }[] = [
       <button type="button" class="btn sm reset" @click="resetSettings">Сбросить настройки</button>
     </form>
 
+    <div v-if="chosen.length" class="sc-sel">
+      <b>Выбрано: {{ chosen.length }}</b>
+      <span class="grow" />
+      <Dropdown align="right">
+        <template #trigger="{ toggle }">
+          <button class="btn sm" title="Добавить выбранные в список, поставить направление" @click="toggle"><Icon name="flag" :size="14" />В список</button>
+        </template>
+        <ListMenu :items="chosen" />
+      </Dropdown>
+      <button class="btn sm" title="Снять выбор" @click="clearPicked"><Icon name="close" :size="14" /></button>
+    </div>
+
     <div class="sc-head">
       <button v-for="c in COLS" :key="c.id" class="muted" :class="{ on: settings.sort === c.id, num: c.id !== 'symbol', first: c.id === 'symbol' }" @click="sortBy(c.id)">
         {{ c.label }}
@@ -95,23 +226,35 @@ const COLS: { id: SortKey; label: string }[] = [
         v-for="r in view"
         :key="symbolKey(r)"
         class="sc-row"
-        :class="{ active: sameSymbol(r, activePane.symbol) }"
+        :class="{ active: sameSymbol(r, activePane.symbol), picked: isPicked(r) }"
         role="button"
         tabindex="0"
-        @click="setSymbol(r)"
+        title="Ctrl+щелчок — выбрать несколько, Shift+щелчок — выбрать подряд, правая кнопка — в список"
+        @click="onRowClick($event, r)"
         @keydown.enter="setSymbol(r)"
+        @pointerdown="onDown($event, r)"
+        @pointermove="onMove"
+        @pointerup="onUp"
+        @pointercancel="onUp"
+        @contextmenu.prevent="onContext($event, r)"
       >
         <span class="name"><SideMark :item="r" /><b>{{ r.symbol }}</b></span>
         <span class="num">{{ fmtPriceShort(r.last) }}</span>
         <span class="num" :class="r.changePct >= 0 ? 'up' : 'down'">{{ fmtPct(r.changePct) }}</span>
         <span class="num muted">{{ fmtVolume(r.usdVolume) }}</span>
-        <ListPicker :item="r" />
+        <ListPicker :item="r" :group="targetsOf(r)" />
       </div>
       <p v-if="state.error" class="note muted">{{ state.error }}</p>
       <div v-else-if="state.loading && !view.length" class="note"><div class="spinner" /></div>
       <p v-else-if="!view.length" class="note muted">Под условия ничего не подходит. Смягчите фильтры.</p>
       <p v-else-if="total.length > MAX_ROWS" class="note muted">Показаны первые {{ MAX_ROWS }} из {{ total.length }}.</p>
     </div>
+
+    <Teleport to="body">
+      <div v-if="menu.open" ref="menuEl" class="menu sc-menu" :style="{ left: menu.x + 'px', top: menu.y + 'px' }">
+        <ListMenu :items="menu.items" />
+      </div>
+    </Teleport>
   </div>
 </template>
 
@@ -211,12 +354,34 @@ const COLS: { id: SortKey; label: string }[] = [
   min-height: 0;
 }
 .sc-row {
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
   height: 34px;
   border-bottom: 1px solid color-mix(in srgb, var(--border) 55%, transparent);
   cursor: pointer;
 }
 .sc-row:hover {
   background: var(--hover);
+}
+.sc-row.picked {
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+}
+.sc-row.picked:hover {
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+}
+.sc-sel {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 6px 4px 10px;
+  border-bottom: 1px solid var(--border);
+  background: var(--accent-soft);
+  font-size: 12.5px;
+  flex: none;
+}
+.sc-sel .grow {
+  flex: 1;
 }
 .sc-row.active {
   background: var(--accent-soft);
@@ -248,5 +413,12 @@ const COLS: { id: SortKey; label: string }[] = [
   .sc-row {
     height: 44px;
   }
+}
+</style>
+
+<style>
+.sc-menu {
+  position: fixed;
+  z-index: 90;
 }
 </style>
