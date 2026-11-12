@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { focusFraction, formatSetup, fromRuLayout, parseSetup } from '../src/lib/setup'
+import { focusFraction, formatSetup, fromRuLayout, parseLines, parseSetup } from '../src/lib/setup'
 
 describe('сетап одной строкой', () => {
   it('полная строка из примера (с табуляцией и запятой в цене)', () => {
@@ -58,5 +58,29 @@ describe('сетап одной строкой', () => {
     expect(fromRuLayout('иес')).toBe('btc')
     expect(fromRuLayout('ЗУЗУ')).toBe('pepe')
     expect(fromRuLayout('1000pepe')).toBe('1000pepe')
+  })
+})
+
+describe('вставка, которая раньше молча не срабатывала', () => {
+  it('лишние слова рядом с явно названной монетой не мешают', () => {
+    expect(parseSetup('#TAOUSDT Short 211,89 пробой уровня')).toEqual({ symbol: 'TAOUSDT', side: 'short', level: 211.89 })
+    expect(parseSetup('10.11.2026 #WLDUSDT Short 0,3012 -1R 2,5')).toEqual({ date: { y: 2026, m: 11, d: 10 }, symbol: 'WLDUSDT', side: 'short', level: 0.3012 })
+    expect(parseSetup('ARBUSDT.P long 0.15;')).toEqual({ symbol: 'ARBUSDT', side: 'long', level: 0.15 })
+    expect(parseSetup('"#TAOUSDT\u200b Short, 211,89"')).toEqual({ symbol: 'TAOUSDT', side: 'short', level: 211.89 })
+  })
+
+  it('несколько строк: понятные применяются, непонятные возвращаются отдельно', () => {
+    const r = parseLines('Монета Направление Уровень\n#TAOUSDT SHort 211,89\n\n#WLDUSDT SHort 0,3012 комментарий\nитого две')!
+    expect(r.list).toEqual([
+      { symbol: 'TAOUSDT', side: 'short', level: 211.89 },
+      { symbol: 'WLDUSDT', side: 'short', level: 0.3012 },
+    ])
+    expect(r.skipped).toEqual(['Монета Направление Уровень', 'итого две'])
+  })
+
+  it('столбик тикеров без решётки — пачка, но только когда понятна каждая строка', () => {
+    expect(parseLines('BTC\nETH\nSOL')!.list.map((s) => s.symbol)).toEqual(['BTCUSDT', 'ETHUSDT', 'SOLUSDT'])
+    expect(parseLines('hello\nпросто текст')!.list).toEqual([])
+    expect(parseLines('#TAOUSDT Short 211,89')).toBeNull() // одна строка — не пачка
   })
 })

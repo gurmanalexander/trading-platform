@@ -200,6 +200,11 @@ function onPaste(e: ClipboardEvent) {
   }
   // сделка (ТВХ / SL / TP), строка сетапа или несколько строк сетапов
   if (applyPastedText(text)) e.preventDefault()
+  else if (text.trim()) {
+    // молчать нельзя: иначе непонятно, почему вставка «не сработала»
+    const one = text.trim().replace(/\s+/g, ' ')
+    toast(`Не понял вставленный текст: «${one.length > 60 ? one.slice(0, 60) + '…' : one}». Нужна монета (#TAOUSDT), можно с датой, направлением и уровнем`, 'error', 7000)
+  }
 }
 
 /**

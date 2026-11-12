@@ -45,6 +45,7 @@ function apply() {
       <p v-else-if="rec?.kind === 'batch'" class="found">
         <b>{{ rec.list.length }} монет в список «{{ activeList.name }}»:</b>
         <span v-for="s in rec.list" :key="s.symbol">{{ formatSetup(s) }}</span>
+        <span v-if="rec.skipped.length" class="down">не разобрано строк: {{ rec.skipped.length }} — {{ rec.skipped.slice(0, 3).join(' · ') }}</span>
       </p>
       <p v-else class="muted hint">
         Сделка — цены ТВХ, SL, TP. Сетап — монета и, если нужно, дата, направление и уровень. Несколько сетапов — по одному в строке: монеты попадут в текущий список.
