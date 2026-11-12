@@ -39,6 +39,8 @@ self.addEventListener('fetch', (event) => {
   if (req.method !== 'GET') return
   const url = new URL(req.url)
   if (url.origin !== self.location.origin) return
+  // обучающее видео большое и запрашивается кусками — его отдаёт сеть напрямую, мимо кэша
+  if (req.headers.has('range') || url.pathname.includes('/help/')) return
 
   // Файлы сборки имеют хэш в имени и не меняются — отдаём из кэша
   if (url.pathname.includes('/assets/')) {

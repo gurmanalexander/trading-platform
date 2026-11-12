@@ -18,7 +18,7 @@ import {
   type UTCTimestamp,
 } from 'lightweight-charts'
 import { reactive, shallowRef } from 'vue'
-import { EXCHANGE_NAMES, symbolKey, type Bar } from '../types'
+import { EXCHANGE_NAMES, symbolKey, type Bar, type SymbolRef } from '../types'
 import { adapters } from '../exchanges'
 import { getTf, type Timeframe } from '../lib/timeframes'
 import { setPrecision } from '../lib/format'
@@ -62,12 +62,20 @@ const FONT = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica 
 const isOhlc = (t: ChartType) => t !== 'line' && t !== 'area'
 
 /** Сохраняет холст как PNG с отметкой времени в имени файла */
+/** Имя файла снимка: «HANAUSDT.P_2026-11-12_09-41-03» — тикер (у бессрочных фьючерсов с «.P»), дата и местное время */
+export function snapshotName(ref: SymbolRef, at = new Date()): string {
+  const pad = (n: number) => String(n).padStart(2, '0')
+  const date = `${at.getFullYear()}-${pad(at.getMonth() + 1)}-${pad(at.getDate())}`
+  const time = `${pad(at.getHours())}-${pad(at.getMinutes())}-${pad(at.getSeconds())}`
+  return `${ref.symbol}${ref.market === 'futures' ? '.P' : ''}_${date}_${time}`
+}
+
 export function downloadCanvas(canvas: HTMLCanvasElement, name: string) {
   canvas.toBlob((blob) => {
     if (!blob) return
     const a = document.createElement('a')
     a.href = URL.createObjectURL(blob)
-    a.download = `${name}-${new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-')}.png`
+    a.download = `${name}.png`
     a.click()
     setTimeout(() => URL.revokeObjectURL(a.href), 5000)
   })
@@ -777,7 +785,7 @@ export class ChartController {
   /** Сохраняет снимок графика в PNG */
   screenshot() {
     const canvas = this.capture()
-    if (canvas) downloadCanvas(canvas, `tvx-${this.pane.symbol.symbol}-${this.tf.id}`)
+    if (canvas) downloadCanvas(canvas, snapshotName(this.pane.symbol))
   }
 
   /** Возврат к виду по умолчанию; запомненный для монеты вид забывается */

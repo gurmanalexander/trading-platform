@@ -45,7 +45,8 @@ const FILTERS: { id: SideFilter; label: string; title: string }[] = [
 const HEAD: Record<ListCol, string> = { price: 'Цена', change: '24ч', volume: 'Объём', result: 'Итог', atr: 'ATR' }
 const WIDTH: Record<ListCol, string> = { price: 'minmax(58px, auto)', change: '56px', volume: '50px', result: '54px', atr: '40px' }
 const cols = computed(() => LIST_COLS.filter((c) => lists.cols.includes(c.id)))
-const grid = computed(() => ({ gridTemplateColumns: ['16px', 'minmax(0, 1fr)', ...cols.value.map((c) => WIDTH[c.id]), '18px'].join(' ') }))
+// слева — метка цвета списка, затем тикер (все тикеры начинаются с одной линии), справа — числа
+const grid = computed(() => ({ gridTemplateColumns: ['12px', 'minmax(0, 1fr)', ...cols.value.map((c) => WIDTH[c.id]), '18px'].join(' ') }))
 const tone = (pct: number | undefined) => (!pct ? 'muted' : pct > 0 ? 'up' : 'down')
 
 /** Сколько дневного ATR пройдено от открытия дня */
@@ -343,7 +344,6 @@ function listMark(listId: string, i: number): string {
           @click="toggle(l, $event)"
         >
           <Icon name="chevron" :size="13" class="chev" />
-          <i class="dot" />
           <b>{{ l.name }}</b>
           <span class="count">{{ l.items.length }}</span>
           <span v-if="l.id === lists.activeId" class="cur">★</span>
@@ -400,8 +400,11 @@ function listMark(listId: string, i: number): string {
               @click="pick(r)"
               @keydown.enter="setSymbol(r)"
             >
-              <SideMark :item="r" />
-              <b class="sym">{{ r.symbol }}<i v-if="r.exchange !== 'binance' || r.market !== 'futures'">{{ r.exchange === 'bybit' ? 'bb' : 'bn' }}{{ r.market === 'spot' ? '·с' : '' }}</i></b>
+              <i class="tag" />
+              <span class="name">
+                <b class="sym">{{ r.symbol }}<i v-if="r.exchange !== 'binance' || r.market !== 'futures'">{{ r.exchange === 'bybit' ? 'bb' : 'bn' }}{{ r.market === 'spot' ? '·с' : '' }}</i></b>
+                <SideMark :item="r" />
+              </span>
               <template v-for="c in cols" :key="c.id">
                 <span v-if="c.id === 'price'" class="num" :class="tone(tickers[symbolKey(r)]?.changePct)" :title="'За сутки ' + fmtPct(tickers[symbolKey(r)]?.changePct)">{{ price(r) }}</span>
                 <span v-else-if="c.id === 'change'" class="num" :class="tone(tickers[symbolKey(r)]?.changePct)">{{ fmtPct(tickers[symbolKey(r)]?.changePct) }}</span>
@@ -493,8 +496,8 @@ function listMark(listId: string, i: number): string {
 .wl-cols {
   display: grid;
   align-items: center;
-  column-gap: 5px;
-  padding: 0 4px 4px;
+  column-gap: 6px;
+  padding: 0 6px 5px 4px;
   font-size: 10.5px;
   color: var(--muted);
   border-bottom: 1px solid var(--border);
@@ -503,17 +506,18 @@ function listMark(listId: string, i: number): string {
 .wl-list {
   flex: 1;
   min-height: 0;
+  overflow-x: hidden;
 }
 .list {
   position: relative;
 }
-/* заголовок списка — как раздел: без подложки, только название и метка цвета */
+/* заголовок списка — как раздел в ТВ: с отступом, без подложки; тикеры под ним стоят левее и читаются столбцом */
 .list-head {
   display: flex;
   align-items: center;
-  gap: 5px;
-  height: 28px;
-  padding: 0 2px 0 3px;
+  gap: 8px;
+  height: 34px;
+  padding: 4px 2px 0 22px;
   background: var(--panel);
   cursor: pointer;
   position: sticky;
@@ -527,17 +531,10 @@ function listMark(listId: string, i: number): string {
 .list-head.closed .chev {
   transform: rotate(-90deg);
 }
-.dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--list);
-  flex: none;
-}
 .list-head b {
   font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.05em;
+  font-weight: 500;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--muted);
   overflow: hidden;
@@ -577,10 +574,10 @@ function listMark(listId: string, i: number): string {
 .wl-row {
   display: grid;
   align-items: center;
-  column-gap: 5px;
-  padding: 0 4px;
-  height: 30px;
-  font-size: 12.5px;
+  column-gap: 6px;
+  padding: 0 6px 0 4px;
+  height: 32px;
+  font-size: 13px;
   cursor: pointer;
   position: relative;
 }
@@ -615,8 +612,21 @@ function listMark(listId: string, i: number): string {
 .list.drop-into > .list-head {
   box-shadow: inset 0 0 0 2px var(--accent);
 }
+/* метка цвета списка у левого края строки — вымпел, как флажок в ТВ */
+.tag {
+  width: 8px;
+  height: 12px;
+  background: var(--list);
+  clip-path: polygon(0 0, 100% 0, 62% 50%, 100% 100%, 0 100%);
+}
+.name {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+}
 .sym {
-  font-weight: 600;
+  font-weight: 500;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -636,10 +646,11 @@ function listMark(listId: string, i: number): string {
 .st {
   font-weight: 600;
 }
-.rm {
+.wl-row .btn.rm {
   color: var(--muted);
   height: 22px;
-  min-width: 18px;
+  width: 18px;
+  min-width: 0;
   padding: 0;
 }
 @media (hover: hover) {

@@ -1,7 +1,7 @@
 import { activePane, theme } from '../stores/app'
 import { chartColors } from './theme'
 import { allCharts } from './registry'
-import { downloadCanvas } from './controller'
+import { downloadCanvas, snapshotName } from './controller'
 
 /**
  * Снимок всех окон раскладки одной картинкой: графики стоят так же, как на экране.
@@ -28,6 +28,6 @@ export function snapshotAll(): boolean {
     const r = chart.element.getBoundingClientRect()
     ctx.drawImage(shot, Math.round((r.left - box.left) * k), Math.round((r.top - box.top) * k), Math.round(r.width * k), Math.round(r.height * k))
   }
-  downloadCanvas(out, `tvx-${activePane.value.symbol.symbol}-all`)
+  downloadCanvas(out, snapshotName(activePane.value.symbol))
   return true
 }

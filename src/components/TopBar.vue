@@ -299,16 +299,16 @@ function fullscreen() {
       </template>
     </Dropdown>
 
-    <!-- снимок: нажатие сразу снимает активное окно, стрелка — другие варианты -->
+    <!-- снимок: нажатие сразу сохраняет все окна одной картинкой, стрелка — другие варианты -->
     <div v-if="!isPhone" class="split-btn">
-      <button class="btn" title="Снимок этого окна в PNG (Alt+S)" @click="chartAt(activeIndex)?.screenshot()"><Icon name="camera" /></button>
+      <button class="btn" title="Снимок всех окон одной картинкой (Alt+Shift+S)" @click="snapshotAll()"><Icon name="camera" /></button>
       <Dropdown align="right">
         <template #trigger="{ toggle }">
           <button class="btn caret-btn" title="Другие варианты снимка" @click="toggle"><Icon name="chevron" :size="13" /></button>
         </template>
         <template #default="{ close }">
-          <button class="menu-item" @click="chartAt(activeIndex)?.screenshot(), close()"><Icon name="rect" :size="16" />Это окно <span class="muted">Alt+S</span></button>
           <button class="menu-item" @click="snapshotAll(), close()"><Icon name="windows" :size="16" />Все окна одной картинкой <span class="muted">Alt+Shift+S</span></button>
+          <button class="menu-item" @click="chartAt(activeIndex)?.screenshot(), close()"><Icon name="rect" :size="16" />Только активное окно <span class="muted">Alt+S</span></button>
         </template>
       </Dropdown>
     </div>
@@ -356,6 +356,7 @@ function fullscreen() {
         </template>
       </template>
     </Dropdown>
+    <button v-if="!isPhone" class="btn" title="Обучение: видео-обзор терминала" @click="app.tutorialOpen = true"><Icon name="learn" /></button>
     <button v-if="!isPhone" class="btn" title="Горячие клавиши (?)" @click="app.hotkeysOpen = true"><Icon name="keyboard" /></button>
     <button v-if="!isPhone" class="btn" :class="{ on: app.panelOpen }" title="Боковая панель" @click="togglePanel(app.panel)">
       <Icon name="panel" />

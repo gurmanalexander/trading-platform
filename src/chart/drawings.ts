@@ -160,7 +160,7 @@ export class DrawingsLayer {
   }
 
   /**
-   * Метки на шкалах. Цена горизонтальных уровней видна на ценовой шкале всегда;
+   * Метки на шкалах. Цена горизонтальных уровней, цель и стоп позиций видны на ценовой шкале всегда;
    * у выбранного рисунка на шкалы проецируются все его цены и моменты времени.
    */
   private buildAxisLabels() {
@@ -182,10 +182,11 @@ export class DrawingsLayer {
     for (const d of items) {
       const active = d.id === sel || d === this.draft
       if (d.type === 'hline' || d.type === 'hray' || d.type === 'cross') addPrice(d.pts[0].p, d.color)
-      else if (active && isPosition(d.type) && d.pts.length >= 3) {
+      else if (isPosition(d.type) && d.pts.length >= 3) {
+        // цель и стоп позиции видны на ценовой шкале всегда, вход — у выбранной
         addPrice(d.pts[1].p, c.up)
         addPrice(d.pts[2].p, c.down)
-        addPrice(d.pts[0].p, c.crossLabel)
+        if (active) addPrice(d.pts[0].p, c.crossLabel)
       } else if (active && d.type !== 'vline' && d.type !== 'text') d.pts.forEach((p) => addPrice(p.p, d.color))
       if (active && d.type !== 'hline' && d.type !== 'text') {
         addTime(d.pts[0].t)
@@ -1080,7 +1081,7 @@ export class DrawingsLayer {
         const x = outside ? x2 + 10 : (x1 + x2) / 2
         const up = d.type === 'long' ? -1 : 1
         // позиция не в фокусе — подписи приглушены, чтобы не закрывать свечи
-        ctx.globalAlpha = handles ? 1 : hover ? 0.85 : 0.35
+        ctx.globalAlpha = handles ? 1 : hover ? 0.9 : 0.65
         this.tag(ctx, [texts[0]], x, yT + up * 13, c.up, w, h, outside)
         this.tag(ctx, [texts[1]], x, yS - up * 13, c.down, w, h, outside)
         this.tag(ctx, [texts[2]], x, yE, c.muted, w, h, outside)

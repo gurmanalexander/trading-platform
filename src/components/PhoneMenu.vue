@@ -56,6 +56,7 @@ function saveNew() {
     </template>
     <template #default="{ close }">
       <div class="pm">
+        <button class="menu-item" @click="(app.tutorialOpen = true), close()"><Icon name="learn" :size="16" />Обучение: видео-обзор</button>
         <button class="menu-item" @click="(app.dashboardOpen = true), close()"><Icon name="dashboard" :size="16" />Обзор по спискам</button>
         <button class="menu-item" @click="(app.indicatorsOpen = true), close()"><Icon name="fx" :size="16" />Индикаторы</button>
         <button class="menu-item" @click="pasteFromClipboard(), close()"><Icon name="paste" :size="16" />Вставить из буфера (сделка, сетапы)</button>

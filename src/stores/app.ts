@@ -194,6 +194,7 @@ interface Saved {
   defaults?: { exchange?: ExchangeId; market?: MarketId }
   colors?: Partial<Record<Theme, CustomColors>>
   atrTable?: boolean
+  panelWidth?: number
 }
 
 const saved = load<Saved>('app', {})
@@ -221,6 +222,8 @@ export const app = reactive({
   active: Math.min(MAX_PANES - 1, Math.max(0, saved.active ?? 0)),
   panel: (PANELS.includes(saved.panel as PanelId) ? saved.panel : 'screener') as PanelId,
   panelOpen: saved.panelOpen ?? true,
+  /** ширина боковой панели, px; 0 — стандартная */
+  panelWidth: typeof saved.panelWidth === 'number' && saved.panelWidth >= 220 ? Math.min(900, saved.panelWidth) : 0,
   magnet: saved.magnet ?? true,
   sync: {
     symbol: saved.sync?.symbol ?? true,
@@ -278,6 +281,7 @@ export const app = reactive({
   dashboardOpen: false,
   screenerFilterOpen: false,
   syncOpen: false,
+  tutorialOpen: false,
   /** код синхронизации, пришедший по ссылке: окно синхронизации откроется с ним */
   syncCode: '',
   colorsOpen: false,
@@ -287,7 +291,7 @@ export const app = reactive({
 
 persist(
   'app',
-  () => [app.themePref, app.layout, app.panes, app.active, app.panel, app.panelOpen, app.magnet, app.sync, app.favTfs, app.templates, app.templateId, app.tabTemplates, app.searchFilter, app.drawingsHidden, app.phoneStack, app.defaults, app.colors, app.atrTable],
+  () => [app.themePref, app.layout, app.panes, app.active, app.panel, app.panelOpen, app.magnet, app.sync, app.favTfs, app.templates, app.templateId, app.tabTemplates, app.searchFilter, app.drawingsHidden, app.phoneStack, app.defaults, app.colors, app.atrTable, app.panelWidth],
   () => ({
     themePref: app.themePref,
     layout: app.layout,
@@ -307,6 +311,7 @@ persist(
     defaults: app.defaults,
     colors: app.colors,
     atrTable: app.atrTable,
+    panelWidth: app.panelWidth,
   }),
 )
 
@@ -335,7 +340,7 @@ export const paneCount = computed(() => layoutCount(app.layout))
 export const activeIndex = computed(() => Math.min(app.active, paneCount.value - 1))
 export const activePane = computed(() => app.panes[activeIndex.value])
 export const modalOpen = computed(
-  () => !!(app.search || app.indicatorsOpen || app.indSettings || app.intervalInput || app.hotkeysOpen || app.gotoOpen || app.textEdit || app.tradeTextOpen || app.shareOpen || app.dashboardOpen || app.screenerFilterOpen || app.syncOpen || app.colorsOpen || app.transfer),
+  () => !!(app.search || app.indicatorsOpen || app.indSettings || app.intervalInput || app.hotkeysOpen || app.gotoOpen || app.textEdit || app.tradeTextOpen || app.shareOpen || app.dashboardOpen || app.screenerFilterOpen || app.syncOpen || app.tutorialOpen || app.colorsOpen || app.transfer),
 )
 
 // ---------- действия ----------

@@ -26,6 +26,7 @@ const groups = computed(() => {
     <div class="hk-top">
       <Icon name="search" :size="16" />
       <input ref="input" v-model="query" class="field" placeholder="Найти: «уровень», «список», «Alt»…" autocomplete="off" />
+      <button class="btn sm learn" title="Видео-обзор терминала" @click="(app.hotkeysOpen = false), (app.tutorialOpen = true)"><Icon name="learn" :size="16" />Обучение</button>
     </div>
     <div class="hk scroll">
       <section v-for="g in groups" :key="g.title" class="card">
@@ -71,6 +72,9 @@ const groups = computed(() => {
   background: none;
   padding: 0;
   height: 28px;
+}
+.learn {
+  color: var(--accent);
 }
 .hk {
   columns: 2 380px;

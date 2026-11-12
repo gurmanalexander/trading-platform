@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import Icon from './components/Icon.vue'
-import { defineAsyncComponent, onBeforeUnmount, onMounted, watch } from 'vue'
+import { ref, defineAsyncComponent, onBeforeUnmount, onMounted, watch } from 'vue'
 import TopBar from './components/TopBar.vue'
 import DrawToolbar from './components/DrawToolbar.vue'
 import ChartGrid from './components/ChartGrid.vue'
@@ -31,6 +31,7 @@ const TextDialog = defineAsyncComponent(() => import('./components/TextDialog.vu
 const TradeTextDialog = defineAsyncComponent(() => import('./components/TradeTextDialog.vue'))
 const ColorsDialog = defineAsyncComponent(() => import('./components/ColorsDialog.vue'))
 const Dashboard = defineAsyncComponent(() => import('./components/Dashboard.vue'))
+const TutorialDialog = defineAsyncComponent(() => import('./components/TutorialDialog.vue'))
 const SyncDialog = defineAsyncComponent(() => import('./components/SyncDialog.vue'))
 const ShareDialog = defineAsyncComponent(() => import('./components/ShareDialog.vue'))
 const ScreenerFilterDialog = defineAsyncComponent(() => import('./components/ScreenerFilterDialog.vue'))
@@ -73,6 +74,29 @@ function addToWatchlist() {
 function fullscreen() {
   if (document.fullscreenElement) document.exitFullscreen()
   else document.documentElement.requestFullscreen?.().catch(() => {})
+}
+
+// ---------- ширина боковой панели ----------
+
+const panelDrag = ref(false)
+function startPanelResize(e: PointerEvent) {
+  if (e.button > 0) return
+  e.preventDefault()
+  panelDrag.value = true
+  const move = (ev: PointerEvent) => {
+    // панель прижата к правому краю: её ширина — расстояние от курсора до края окна
+    const max = Math.max(260, window.innerWidth - 420)
+    app.panelWidth = Math.round(Math.min(max, Math.max(240, window.innerWidth - ev.clientX)))
+  }
+  const stop = () => {
+    panelDrag.value = false
+    window.removeEventListener('pointermove', move)
+    window.removeEventListener('pointerup', stop)
+    window.removeEventListener('pointercancel', stop)
+  }
+  window.addEventListener('pointermove', move)
+  window.addEventListener('pointerup', stop)
+  window.addEventListener('pointercancel', stop)
 }
 
 /** Сочетания с Alt. Возвращает true, если клавиша обработана */
@@ -310,7 +334,10 @@ onBeforeUnmount(() => {
     <div class="body">
       <DrawToolbar v-if="!app.zen && (!isPhone || app.drawBarOpen)" :horizontal="isPhone" />
       <ChartGrid />
-      <SidePanel v-if="!isPhone && app.panelOpen && !app.zen" class="side-dock" :tab="app.panel" tabs />
+      <template v-if="!isPhone && app.panelOpen && !app.zen">
+        <div class="side-split" :class="{ on: panelDrag }" title="Потяните, чтобы изменить ширину панели. Двойной щелчок — стандартная ширина" @pointerdown="startPanelResize" @dblclick="app.panelWidth = 0" />
+        <SidePanel class="side-dock" :style="app.panelWidth ? { width: app.panelWidth + 'px' } : undefined" :tab="app.panel" tabs />
+      </template>
       <div v-if="isPhone && app.mobileTab !== 'chart' && !app.zen" class="sheet">
         <SidePanel :tab="app.mobileTab" :tabs="false" />
       </div>
@@ -330,6 +357,7 @@ onBeforeUnmount(() => {
     <TransferDialog v-if="app.transfer" />
     <ShareDialog v-if="app.shareOpen" />
     <SyncDialog v-if="app.syncOpen" />
+    <TutorialDialog v-if="app.tutorialOpen" />
     <Dashboard v-if="app.dashboardOpen" />
     <ScreenerFilterDialog v-if="app.screenerFilterOpen" />
     <Toasts />
@@ -375,7 +403,20 @@ onBeforeUnmount(() => {
 .side-dock {
   width: 340px;
   flex: none;
-  border-left: 1px solid var(--border);
+}
+/* граница боковой панели: за неё панель растягивается */
+.side-split {
+  flex: none;
+  width: 5px;
+  margin: 0 -2px;
+  z-index: 6;
+  cursor: col-resize;
+  background: linear-gradient(to right, transparent 2px, var(--border) 2px, var(--border) 3px, transparent 3px);
+  touch-action: none;
+}
+.side-split:hover,
+.side-split.on {
+  background: var(--accent);
 }
 .sheet {
   position: absolute;
