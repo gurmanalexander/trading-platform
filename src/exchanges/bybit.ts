@@ -110,4 +110,5 @@ export const bybit: ExchangeAdapter = {
   },
 
   status: (market) => socket(market).status,
+  reconnect: () => sockets.forEach((s) => s.reconnect()),
 }

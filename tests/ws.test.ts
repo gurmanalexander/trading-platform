@@ -172,4 +172,65 @@ describe('StreamSocket', () => {
     vi.advanceTimersByTime(40_000) // ответа так и нет
     expect(FakeSocket.all.length).toBeGreaterThan(1)
   })
+
+  it('зависшее подключение бросает и пробует следующий адрес', () => {
+    const s = new StreamSocket(cfg)
+    s.subscribe('a', () => {})
+    expect(last().url).toBe('wss://a.test')
+    // соединение не открылось и не закрылось: ни одного события
+    vi.advanceTimersByTime(10_000)
+    expect(s.status.value).toBe('closed')
+    vi.advanceTimersByTime(1000)
+    expect(FakeSocket.all).toHaveLength(2)
+    expect(last().url).toBe('wss://b.test')
+    last().open()
+    expect(last().sent).toEqual([{ op: 'sub', args: ['a'], id: 1 }])
+  })
+
+  it('после возвращения приложения давно молчащее соединение пересоздаётся сразу', () => {
+    const s = new StreamSocket(cfg)
+    const again = vi.fn()
+    s.onReconnect(again)
+    s.subscribe('a', () => {})
+    last().open()
+    // приложение было заморожено: таймеры стояли, а время шло
+    vi.setSystemTime(Date.now() + 10 * 60_000)
+    s.resume()
+    expect(FakeSocket.all).toHaveLength(2)
+    last().open()
+    expect(last().sent).toEqual([{ op: 'sub', args: ['a'], id: 2 }])
+    expect(again).toHaveBeenCalledTimes(1)
+  })
+
+  it('после короткого отсутствия соединение проверяется ping-ом и остаётся, если отвечает', () => {
+    const s = new StreamSocket(cfg)
+    s.subscribe('a', () => {})
+    last().open()
+    vi.advanceTimersByTime(8000)
+    s.resume()
+    vi.advanceTimersByTime(200)
+    expect(last().sent.some((m) => m.op === 'ping')).toBe(true)
+    last().receive({ pong: true })
+    vi.advanceTimersByTime(5000)
+    expect(FakeSocket.all).toHaveLength(1)
+  })
+
+  it('после короткого отсутствия молчащее на проверку соединение пересоздаётся', () => {
+    const s = new StreamSocket(cfg)
+    s.subscribe('a', () => {})
+    last().open()
+    vi.setSystemTime(Date.now() + 8000)
+    s.resume()
+    vi.advanceTimersByTime(3500)
+    expect(FakeSocket.all).toHaveLength(2)
+  })
+
+  it('подключение, повисшее до возвращения приложения, заменяется новым', () => {
+    const s = new StreamSocket(cfg)
+    s.subscribe('a', () => {})
+    vi.setSystemTime(Date.now() + 60_000)
+    s.resume()
+    expect(FakeSocket.all).toHaveLength(2)
+    expect(FakeSocket.all[0].readyState).toBe(3)
+  })
 })

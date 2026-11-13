@@ -4,6 +4,7 @@ import Icon from './Icon.vue'
 import Dropdown from './Dropdown.vue'
 import LayoutIcon from './LayoutIcon.vue'
 import PhoneMenu from './PhoneMenu.vue'
+import TfDropdown from './TfDropdown.vue'
 import { EXCHANGE_NAMES, MARKET_NAMES } from '../types'
 import {
   app,
@@ -16,7 +17,6 @@ import {
   showPanel,
   togglePanel,
   setTf,
-  toggleFavTf,
   setLayout,
   sameLayout,
   saveTemplate,
@@ -114,27 +114,7 @@ function fullscreen() {
         {{ t.label }}
       </button>
     </template>
-    <Dropdown>
-      <template #trigger="{ toggle }">
-        <button class="btn" :class="{ on: tfInMenu }" title="Интервал: выбор и избранные" @click="toggle">
-          <template v-if="tfInMenu">{{ getTf(pane.tf).label }}</template>
-          <Icon name="chevron" :size="14" />
-        </button>
-      </template>
-      <template #default="{ close }">
-        <div v-for="t in TIMEFRAMES" :key="t.id" class="tf-row">
-          <button class="menu-item" :class="{ on: pane.tf === t.id }" @click="setTf(t.id), close()">{{ t.label }}</button>
-          <button
-            class="btn sm star"
-            :class="{ on: app.favTfs.includes(t.id) }"
-            :title="app.favTfs.includes(t.id) ? 'Убрать с панели' : 'Показывать на панели'"
-            @click="toggleFavTf(t.id)"
-          >
-            <Icon name="star" :size="15" />
-          </button>
-        </div>
-      </template>
-    </Dropdown>
+    <TfDropdown :label="tfInMenu" />
 
     <!-- телефон: вкладки окон раскладки; подпись — интервал окна -->
     <div v-if="isPhone && paneCount > 1" class="pane-tabs" role="tablist" aria-label="Окна раскладки">
@@ -425,13 +405,11 @@ function fullscreen() {
 .grow {
   flex: 1;
 }
-.tf-row,
 .tpl-row {
   display: flex;
   align-items: center;
   gap: 2px;
 }
-.tf-row .menu-item,
 .tpl-row .menu-item {
   flex: 1;
   min-width: 90px;

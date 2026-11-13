@@ -23,4 +23,6 @@ export interface ExchangeAdapter {
   /** Все торгуемые инструменты рынка с ценой и оборотом */
   fetchSymbols(market: MarketId): Promise<SymbolInfo[]>
   status(market: MarketId): Ref<SocketStatus>
+  /** Пересоздаёт соединения с биржей: подписки восстанавливаются сами */
+  reconnect(): void
 }

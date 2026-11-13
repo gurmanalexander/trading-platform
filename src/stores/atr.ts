@@ -62,6 +62,13 @@ export function ensureDayStats(ref: SymbolRef) {
   pump()
 }
 
+/** Обновление по просьбе пользователя: всё, что сейчас на экране, запрашивается заново */
+const watched = new Set<() => SymbolRef[]>()
+export function refreshDayStats() {
+  for (const key of Object.keys(dayStats)) dayStats[key] = { ...dayStats[key], at: 0 }
+  for (const list of watched) list().forEach(ensureDayStats)
+}
+
 /** Держит дневные показатели актуальными для реактивного списка инструментов */
 export function useDayStats(source: WatchSource<SymbolRef[]>) {
   let current: SymbolRef[] = []
@@ -76,9 +83,12 @@ export function useDayStats(source: WatchSource<SymbolRef[]>) {
   const timer = window.setInterval(() => {
     if (document.visibilityState === 'visible') current.forEach(ensureDayStats)
   }, 60_000)
+  const list = () => current
+  watched.add(list)
   onScopeDispose(() => {
     stop()
     clearInterval(timer)
+    watched.delete(list)
   })
 }
 

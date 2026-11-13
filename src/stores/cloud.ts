@@ -1,5 +1,6 @@
 import { reactive, watch } from 'vue'
 import { load, save } from '../lib/storage'
+import { onWake } from '../lib/wake'
 import type { Envelope, NostrEvent, SyncKeys } from '../lib/nostr'
 import { app, exportSettings, importSettings, toast } from './app'
 import { lists, exportLists, importLists } from './watchlist'
@@ -144,9 +145,25 @@ class Relay {
     clearTimeout(this.timer)
     this.timer = window.setTimeout(() => this.connect(), Math.min(60_000, 3000 * 2 ** this.retry++))
   }
-  /** соединение могло «зависнуть», пока вкладка была в фоне */
-  wake() {
-    if (this.closed || this.open || this.ws?.readyState === WebSocket.CONNECTING) return
+  /**
+   * Соединение могло «зависнуть», пока приложение было в фоне. stale — отсутствовали долго:
+   * тогда и «открытому» соединению не верим и создаём его заново.
+   */
+  wake(stale = false) {
+    if (this.closed) return
+    if (!stale && (this.open || this.ws?.readyState === WebSocket.CONNECTING)) return
+    const ws = this.ws
+    if (ws) {
+      ws.onopen = ws.onmessage = ws.onclose = ws.onerror = null
+      try {
+        ws.close()
+      } catch {
+        /* уже закрыт */
+      }
+      this.ws = null
+      this.open = false
+      count()
+    }
     clearTimeout(this.timer)
     this.retry = 0
     this.connect()
@@ -178,6 +195,11 @@ class Relay {
 }
 
 let relays: Relay[] = []
+
+/** Возвращает связь с ретрансляторами; stale — пересоздать и те соединения, что считаются открытыми */
+export function wakeRelays(stale = false) {
+  relays.forEach((r) => r.wake(stale))
+}
 const count = () => (cloud.online = relays.filter((r) => r.open).length)
 
 // ---------- приём ----------
@@ -389,10 +411,7 @@ export function codeFrom(text: string): string {
 
 // связь восстанавливается сама, когда вкладка снова на экране или вернулась сеть
 if (typeof document !== 'undefined') {
-  document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible') relays.forEach((r) => r.wake())
-  })
-  window.addEventListener('online', () => relays.forEach((r) => r.wake()))
+  onWake((awayMs) => wakeRelays(awayMs > 60_000))
   // правки последних секунд должны успеть уйти до закрытия вкладки
   window.addEventListener('pagehide', () => {
     if (!keys) return

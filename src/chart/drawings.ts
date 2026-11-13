@@ -46,6 +46,8 @@ const DASHES: Record<Dash, number[]> = { solid: [], dashed: [6, 4], dotted: [1.5
 
 const SINGLE = new Set<DrawingType>(['hline', 'vline', 'hray', 'cross', 'text'])
 const isSingle = (t: DrawingType) => SINGLE.has(t)
+/** Линии через весь экран: под ними выбранный рисунок остаётся доступен */
+const ENDLESS = new Set<DrawingType>(['hline', 'hray', 'vline', 'cross'])
 export const isPosition = (t: DrawingType) => t === 'long' || t === 'short'
 /** Инструменты, у которых настраиваются цвет, толщина и вид линии */
 export const hasLineStyle = (t: DrawingType) => !isPosition(t) && t !== 'measure' && t !== 'text'
@@ -811,56 +813,58 @@ export class DrawingsLayer {
 
   // ---------- попадание ----------
 
+  /**
+   * Что под указателем. Выбранный рисунок важнее остальных: его маркеры проверяются первыми,
+   * а сам он — раньше линий, идущих через весь экран. Иначе позицию, вход которой стоит на уровне,
+   * не взять ни за край, ни за линию входа: уровень перехватывал бы каждое нажатие.
+   */
   private hit(x: number, y: number, tol: number): { d: Drawing; handle: number } | null {
     if (app.drawingsHidden) return null
     const size = this.host.chart.paneSize(0)
-    const sel = this.selectedId.value
+    const cur = this.selected()
+    const curGeo = cur && this.shown(cur) ? this.geometry(cur, size.width, size.height) : null
+    if (cur && curGeo && !isSingle(cur.type)) {
+      const { handles } = curGeo
+      for (let k = 0; k < handles.length; k++) if (Math.hypot(x - handles[k].x, y - handles[k].y) <= tol + HANDLE) return { d: cur, handle: k }
+    }
     for (let i = this.list.length - 1; i >= 0; i--) {
       const d = this.list[i]
       if (!this.shown(d)) continue
-      const g = this.geometry(d, size.width, size.height)
-      if (!g) continue
-      const { sp, handles } = g
-      if (d.id === sel && !isSingle(d.type)) {
-        for (let k = 0; k < handles.length; k++) if (Math.hypot(x - handles[k].x, y - handles[k].y) <= tol + HANDLE) return { d, handle: k }
-      }
-      let ok = false
-      switch (d.type) {
-        case 'hline':
-          ok = Math.abs(y - sp[0].y) <= tol
-          break
-        case 'vline':
-          ok = Math.abs(x - sp[0].x) <= tol
-          break
-        case 'hray':
-          ok = Math.abs(y - sp[0].y) <= tol && x >= sp[0].x - tol
-          break
-        case 'cross':
-          ok = Math.abs(y - sp[0].y) <= tol || Math.abs(x - sp[0].x) <= tol
-          break
-        case 'text': {
-          const b = this.textBoxes.get(d.id)
-          ok = !!b && x >= b.x - tol && x <= b.x + b.w + tol && y >= b.y - tol && y <= b.y + b.h + tol
-          break
-        }
-        case 'trend':
-          ok = distToSegment(x, y, sp[0], sp[1]) <= tol
-          break
-        case 'ray':
-          ok = distToSegment(x, y, sp[0], rayEnd(sp[0], sp[1], size.width, size.height)) <= tol
-          break
-        case 'rect':
-        case 'fib':
-          ok = this.inBox(x, y, sp[0], sp[1], tol)
-          break
-        case 'long':
-        case 'short':
-          ok = this.inBox(x, y, { x: sp[0].x, y: sp[1].y }, { x: sp[1].x, y: sp[2].y }, tol)
-          break
-      }
-      if (ok) return { d, handle: -1 }
+      const g = d === cur ? curGeo : this.geometry(d, size.width, size.height)
+      if (!g || !this.bodyHit(d, g.sp, x, y, tol, size)) continue
+      if (d !== cur && cur && curGeo && ENDLESS.has(d.type) && !ENDLESS.has(cur.type) && this.bodyHit(cur, curGeo.sp, x, y, tol, size)) return { d: cur, handle: -1 }
+      return { d, handle: -1 }
     }
     return null
+  }
+
+  /** Попадает ли точка в сам рисунок (маркеры проверяются отдельно) */
+  private bodyHit(d: Drawing, sp: XY[], x: number, y: number, tol: number, size: { width: number; height: number }): boolean {
+    switch (d.type) {
+      case 'hline':
+        return Math.abs(y - sp[0].y) <= tol
+      case 'vline':
+        return Math.abs(x - sp[0].x) <= tol
+      case 'hray':
+        return Math.abs(y - sp[0].y) <= tol && x >= sp[0].x - tol
+      case 'cross':
+        return Math.abs(y - sp[0].y) <= tol || Math.abs(x - sp[0].x) <= tol
+      case 'text': {
+        const b = this.textBoxes.get(d.id)
+        return !!b && x >= b.x - tol && x <= b.x + b.w + tol && y >= b.y - tol && y <= b.y + b.h + tol
+      }
+      case 'trend':
+        return distToSegment(x, y, sp[0], sp[1]) <= tol
+      case 'ray':
+        return distToSegment(x, y, sp[0], rayEnd(sp[0], sp[1], size.width, size.height)) <= tol
+      case 'rect':
+      case 'fib':
+        return this.inBox(x, y, sp[0], sp[1], tol)
+      case 'long':
+      case 'short':
+        return this.inBox(x, y, { x: sp[0].x, y: sp[1].y }, { x: sp[1].x, y: sp[2].y }, tol)
+    }
+    return false
   }
 
   private inBox(x: number, y: number, a: XY, b: XY, tol: number): boolean {

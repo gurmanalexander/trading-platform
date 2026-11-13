@@ -39,6 +39,7 @@ const LUCIDE = {
   chart: 'chart-candlestick',
   chevron: 'chevron-down',
   next: 'chevron-right',
+  prev: 'chevron-left',
   sortUp: 'chevron-up',
   sortDown: 'chevron-down',
   skip: 'chevrons-right',
