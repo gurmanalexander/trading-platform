@@ -36,6 +36,12 @@ const groupShown = (cells: number[]) => !single.value || cells.includes(activeIn
 /** На телефоне скрытые окна не создаются вовсе: меньше соединений и памяти */
 const mounted = (index: number) => !isPhone.value || stacked.value || index === activeIndex.value
 
+/**
+ * Доля группы или окна. Когда на экране одно окно, оно занимает всё место: доля меньше единицы
+ * (границы раскладки двигали) иначе оставила бы его меньше экрана — с пустой полосой рядом.
+ */
+const flex = (share: number) => ({ flex: `${single.value ? 1 : share} 1 0` })
+
 const MIN_PX = 90
 
 /** Перетаскивание границы: меняет доли двух соседних групп или панелей */
@@ -84,7 +90,7 @@ function equalize(sizes: number[]) {
         @pointerdown="startResize($event, view.groupSizes, gi, view.dir === 'rows')"
         @dblclick="equalize(view.groupSizes)"
       />
-      <div v-show="groupShown(cells)" class="group" :style="{ flex: `${view.groupSizes[gi]} 1 0` }">
+      <div v-show="groupShown(cells)" class="group" :style="flex(view.groupSizes[gi])">
         <template v-for="(index, ci) in cells" :key="index">
           <div
             v-if="ci > 0"
@@ -94,7 +100,7 @@ function equalize(sizes: number[]) {
             @pointerdown="startResize($event, view.cellSizes[gi], ci, view.dir === 'cols')"
             @dblclick="equalize(view.cellSizes[gi])"
           />
-          <ChartPane v-if="mounted(index)" v-show="shown(index)" :index="index" :style="{ flex: `${view.cellSizes[gi][ci]} 1 0` }" />
+          <ChartPane v-if="mounted(index)" v-show="shown(index)" :index="index" :style="flex(view.cellSizes[gi][ci])" />
         </template>
       </div>
     </template>

@@ -3,7 +3,6 @@ import { computed, reactive } from 'vue'
 import Icon from './Icon.vue'
 import Dropdown from './Dropdown.vue'
 import LayoutIcon from './LayoutIcon.vue'
-import PhoneMenu from './PhoneMenu.vue'
 import TfDropdown from './TfDropdown.vue'
 import { EXCHANGE_NAMES, MARKET_NAMES } from '../types'
 import {
@@ -160,7 +159,6 @@ function fullscreen() {
       <Icon name="pencil" />
     </button>
     <span class="grow" />
-    <PhoneMenu v-if="isPhone" />
 
     <!-- шаблоны: избранные — кнопками (первая буква названия), остальное — в меню -->
     <template v-if="!isPhone">

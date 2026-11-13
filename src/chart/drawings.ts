@@ -111,6 +111,10 @@ export class DrawingsLayer {
   private pressing = false
   private downAt: XY = { x: 0, y: 0 }
   private drag: { d: Drawing; handle: number; start: XY; orig: XY[]; moved: boolean; copy: boolean } | null = null
+  /** палец опустился на невыбранный рисунок: если не сдвинется — это выбор, иначе прокрутка графика */
+  private tap: { id: string; x: number; y: number; at: number } | null = null
+  /** последний указатель — палец: ему нужны расстояния побольше */
+  private coarse = false
   /** где на экране нарисован каждый текст — чтобы попадать по нему указателем */
   private textBoxes = new Map<string, { x: number; y: number; w: number; h: number }>()
   private priceLabels: ISeriesPrimitiveAxisView[] = []
@@ -237,7 +241,8 @@ export class DrawingsLayer {
     if (magnet) {
       const bar = this.host.bars()[idx]
       if (bar) {
-        let best = 14
+        // с какого расстояния цена притягивается к ценам свечи, px
+        let best = this.coarse ? 40 : 28
         for (const v of [bar.open, bar.high, bar.low, bar.close]) {
           const vy = this.host.series().priceToCoordinate(v)
           if (vy != null && Math.abs(vy - y) < best) {
@@ -309,6 +314,7 @@ export class DrawingsLayer {
     // режим рисования
     on(overlay, 'pointerdown', (e) => {
       if (e.button > 0) return
+      this.coarse = e.pointerType !== 'mouse'
       overlay.setPointerCapture(e.pointerId)
       const p = rel(e)
       this.toolDown(p.x, p.y)
@@ -332,7 +338,8 @@ export class DrawingsLayer {
       (e) => {
         if (app.tool !== 'cursor' || e.button > 0) return
         const p = rel(e)
-        this.idleDown(p.x, p.y, e.pointerType === 'mouse' ? 6 : 14, e.shiftKey, e.ctrlKey || e.metaKey)
+        this.coarse = e.pointerType !== 'mouse'
+        this.idleDown(p.x, p.y, this.coarse ? 14 : 6, e.shiftKey, e.ctrlKey || e.metaKey, this.coarse)
       },
       { capture: true },
     )
@@ -364,9 +371,23 @@ export class DrawingsLayer {
       const p = rel(e as PointerEvent)
       this.dragMove(p.x, p.y)
     })
-    const end = () => this.dragEnd()
-    on(window, 'pointerup', end)
-    on(window, 'pointercancel', end)
+    on(window, 'pointerup', (e) => {
+      const t = this.tap
+      this.tap = null
+      if (t) {
+        // палец почти не сдвинулся и не задержался — это касание: выбираем рисунок
+        const p = rel(e as PointerEvent)
+        if (Math.hypot(p.x - t.x, p.y - t.y) <= 10 && Date.now() - t.at < 600 && this.list.some((d) => d.id === t.id)) {
+          selection.value = { pane: this.host.paneIndex, id: t.id }
+          this.redraw()
+        }
+      }
+      this.dragEnd()
+    })
+    on(window, 'pointercancel', () => {
+      this.tap = null
+      this.dragEnd()
+    })
   }
 
   /** Подгоняет слой рисования под область цены (без шкал и панелей индикаторов) */
@@ -507,7 +528,8 @@ export class DrawingsLayer {
     this.host.chart.setCrosshairPosition(pt.p, (pt.t + this.host.tz()) as Time, this.host.series())
   }
 
-  private idleDown(x: number, y: number, tol: number, shift: boolean, ctrl: boolean) {
+  private idleDown(x: number, y: number, tol: number, shift: boolean, ctrl: boolean, touch = false) {
+    this.tap = null
     if (this.measure) {
       this.measure = null
       this.redraw()
@@ -531,6 +553,12 @@ export class DrawingsLayer {
         selection.value = null
         this.redraw()
       }
+      return
+    }
+    if (touch && h.d.id !== this.selectedId.value) {
+      // Палец на рисунке, который не выбран: чаще всего так начинают прокрутку графика.
+      // Рисунок не двигаем; выберем его, если палец поднимется на том же месте.
+      this.tap = { id: h.d.id, x, y, at: Date.now() }
       return
     }
     selection.value = { pane: this.host.paneIndex, id: h.d.id }
