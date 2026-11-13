@@ -15,6 +15,8 @@ export interface WatchList {
   color: string
   collapsed: boolean
   items: WatchItem[]
+  /** «Поделиться списком»: монеты этого списка отмечены сразу; false — их отмечают вручную */
+  share: boolean
 }
 
 /** Столбцы списка, кроме названия: цена, изменение, объём, результат сделки / расстояние до уровня, исчерпание ATR */
@@ -34,7 +36,7 @@ const uid = () => Math.random().toString(36).slice(2, 10)
 const fut = (symbol: string): WatchItem => ({ exchange: 'binance', market: 'futures', symbol })
 
 function defaults(): { all: WatchList[]; activeId: string } {
-  const mk = (name: string, color: string, items: WatchItem[] = []): WatchList => ({ id: uid(), name, color, collapsed: false, items })
+  const mk = (name: string, color: string, items: WatchItem[] = []): WatchList => ({ id: uid(), name, color, collapsed: false, items, share: true })
   const all = [
     mk('Поводыри', '#e8a838', [fut('BTCUSDT'), fut('ETHUSDT')]),
     mk('Сделки', '#1fb28a'),
@@ -62,6 +64,7 @@ function parse(saved: SavedLists) {
       name: l.name,
       color: typeof l.color === 'string' ? l.color : LIST_COLORS[i % LIST_COLORS.length],
       collapsed: l.collapsed === true,
+      share: l.share !== false,
       items: l.items
         .filter((r) => r && r.exchange && r.market && r.symbol)
         .map((r) => ({ exchange: r.exchange, market: r.market, symbol: r.symbol })),
@@ -165,7 +168,7 @@ export function moveList(fromIndex: number, toIndex: number) {
 }
 
 export function createList(name: string, color?: string) {
-  const list: WatchList = { id: uid(), name, color: color ?? LIST_COLORS[lists.all.length % LIST_COLORS.length], collapsed: false, items: [] }
+  const list: WatchList = { id: uid(), name, color: color ?? LIST_COLORS[lists.all.length % LIST_COLORS.length], collapsed: false, items: [], share: true }
   lists.all.push(list)
   lists.activeId = list.id
 }
@@ -182,7 +185,7 @@ export function deleteList(id: string) {
 
 /** Что уходит на другие устройства: сами списки и отметки. Свёрнутость, фильтр и столбцы — у каждого свои */
 export function exportLists() {
-  return { all: lists.all.map((l) => ({ id: l.id, name: l.name, color: l.color, items: l.items })), activeId: lists.activeId, marks: lists.marks }
+  return { all: lists.all.map((l) => ({ id: l.id, name: l.name, color: l.color, items: l.items, share: l.share })), activeId: lists.activeId, marks: lists.marks }
 }
 
 /** Принимает списки с другого устройства, сохраняя местное состояние (какие списки свёрнуты) */

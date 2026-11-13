@@ -38,6 +38,7 @@ const Dashboard = defineAsyncComponent(() => import('./components/Dashboard.vue'
 const TutorialDialog = defineAsyncComponent(() => import('./components/TutorialDialog.vue'))
 const SyncDialog = defineAsyncComponent(() => import('./components/SyncDialog.vue'))
 const ShareDialog = defineAsyncComponent(() => import('./components/ShareDialog.vue'))
+const ListShareDialog = defineAsyncComponent(() => import('./components/ListShareDialog.vue'))
 const ScreenerFilterDialog = defineAsyncComponent(() => import('./components/ScreenerFilterDialog.vue'))
 const TransferDialog = defineAsyncComponent(() => import('./components/TransferDialog.vue'))
 
@@ -383,6 +384,7 @@ onBeforeUnmount(() => {
     <ColorsDialog v-if="app.colorsOpen" />
     <TransferDialog v-if="app.transfer" />
     <ShareDialog v-if="app.shareOpen" />
+    <ListShareDialog v-if="app.listShareOpen" />
     <SyncDialog v-if="app.syncOpen" />
     <TutorialDialog v-if="app.tutorialOpen" />
     <Dashboard v-if="app.dashboardOpen" />

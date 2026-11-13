@@ -143,11 +143,16 @@ export class ChartController {
   private viewAtPress = ''
   private saveViewTimer = 0
 
+  /** false — график для снимка вне экрана: свечи читаются один раз, без потока и самообновления */
+  private live: boolean
+
   constructor(
     private host: HTMLElement,
     private pane: PaneState,
     private paneIndex: number,
+    opts: { live?: boolean } = {},
   ) {
+    this.live = opts.live !== false
     const el = host
     this.tf = getTf(pane.tf)
     this.colors = chartColors(theme.value)
@@ -195,8 +200,8 @@ export class ChartController {
 
     this.chart.subscribeCrosshairMove(this.onCrosshair)
     this.chart.timeScale().subscribeVisibleLogicalRangeChange(this.onRange)
-    this.offWake = onWake(this.onWake)
-    this.watchTimer = window.setInterval(this.watchStale, WATCH_MS)
+    this.offWake = this.live ? onWake(this.onWake) : () => {}
+    if (this.live) this.watchTimer = window.setInterval(this.watchStale, WATCH_MS)
     this.resizeObs = new ResizeObserver(() => requestAnimationFrame(() => this.onResize()))
     this.resizeObs.observe(el)
     // capture: колесо над ценовой шкалой перехватываем раньше, чем библиотека начнёт масштабировать время
@@ -400,6 +405,7 @@ export class ChartController {
       // просьба показать дату важнее запомненного вида
       const saved = getView(viewKey(symbolKey(symbol), this.tf.id))
       if (!this.applyDateFocus() && saved) this.restoreView(saved)
+      if (!this.live) return
       this.offLive = adapter.subscribeKline(
         symbol.market,
         symbol.symbol,
