@@ -1,4 +1,5 @@
 import { ref } from 'vue'
+import { onWake } from '../lib/wake'
 
 type Handler = (msg: any) => void
 
@@ -23,6 +24,10 @@ export type SocketStatus = 'idle' | 'connecting' | 'open' | 'closed'
 
 const IDLE_CLOSE_MS = 10_000
 const MAX_BACKOFF_MS = 15_000
+/** Сколько ждём открытия соединения: после сна устройства попытка может повиснуть без ошибки */
+const CONNECT_TIMEOUT_MS = 10_000
+/** Сколько ждём ответа на проверочный ping после возвращения приложения */
+const PROBE_MS = 3000
 
 /**
  * Одно WebSocket-соединение на биржу/рынок с подсчётом подписчиков по темам,
@@ -46,6 +51,8 @@ export class StreamSocket {
   private pingTimer = 0
   private idleTimer = 0
   private probeTimer = 0
+  private connectTimer = 0
+  private connectAt = 0
   private retry = 0
   private urlIdx = 0
   private lastMsg = 0
@@ -54,12 +61,7 @@ export class StreamSocket {
   private reconnectCbs = new Set<() => void>()
 
   constructor(private cfg: StreamConfig) {
-    if (typeof document !== 'undefined') {
-      document.addEventListener('visibilitychange', () => {
-        if (document.visibilityState === 'visible') this.onResume()
-      })
-      window.addEventListener('online', () => this.onResume())
-    }
+    onWake(() => this.resume())
   }
 
   subscribe(topic: string, handler: Handler): () => void {
@@ -104,10 +106,20 @@ export class StreamSocket {
       return
     }
     this.ws = ws
+    this.connectAt = Date.now()
     let opened = false
+    clearTimeout(this.connectTimer)
+    this.connectTimer = window.setTimeout(() => {
+      if (this.ws !== ws || opened) return
+      // соединение так и не открылось и не сообщило об ошибке — бросаем его и пробуем следующий адрес
+      this.teardown()
+      if (this.handlers.size > 0) this.scheduleReconnect(true)
+      else this.status.value = 'idle'
+    }, CONNECT_TIMEOUT_MS)
     ws.onopen = () => {
       if (this.ws !== ws) return
       opened = true
+      clearTimeout(this.connectTimer)
       this.retry = 0
       this.lastMsg = Date.now()
       this.sent.clear()
@@ -160,7 +172,8 @@ export class StreamSocket {
     clearInterval(this.pingTimer)
     clearTimeout(this.sendTimer)
     clearTimeout(this.probeTimer)
-    this.pingTimer = this.sendTimer = this.probeTimer = 0
+    clearTimeout(this.connectTimer)
+    this.pingTimer = this.sendTimer = this.probeTimer = this.connectTimer = 0
     this.sent.clear()
     this.pending.clear()
     this.outbox.length = 0
@@ -196,20 +209,41 @@ export class StreamSocket {
     this.enqueue(this.cfg.ping(this.nextId++))
   }
 
-  private onResume() {
+  /** Пересоздаёт соединение немедленно — «обновить» по просьбе пользователя */
+  reconnect() {
+    this.forceReconnect()
+  }
+
+  /**
+   * Приложение вернулось на экран или появилась сеть. Соединение за это время могло умереть,
+   * не сообщив об этом: «открытое» молчит, а открывающееся — висит. Проверяем и пересоздаём.
+   */
+  resume() {
     if (this.handlers.size === 0) return
-    if (!this.ws || this.ws.readyState > WebSocket.OPEN) {
+    const ws = this.ws
+    if (!ws || ws.readyState > WebSocket.OPEN) {
       this.forceReconnect()
       return
     }
-    if (this.ws.readyState !== WebSocket.OPEN || Date.now() - this.lastMsg < 5000) return
-    // Вкладка была в фоне: соединение могло «зависнуть». Проверяем его ping-ом.
+    if (ws.readyState !== WebSocket.OPEN) {
+      // всё ещё открывается: свежей попытке даём время, зависшую с прошлого раза — заменяем
+      if (Date.now() - this.connectAt > 4000) this.forceReconnect()
+      return
+    }
+    const silent = Date.now() - this.lastMsg
+    if (silent < 5000) return
+    // молчит дольше, чем длится пауза между проверками, — ответа на проверку уже точно не было
+    if (silent > this.cfg.pingMs + 5000) {
+      this.forceReconnect()
+      return
+    }
+    // недолгое молчание: соединение могло «зависнуть». Проверяем его ping-ом.
     const seen = this.lastMsg
     this.enqueue(this.cfg.ping(this.nextId++))
     clearTimeout(this.probeTimer)
     this.probeTimer = window.setTimeout(() => {
       if (this.lastMsg === seen) this.forceReconnect()
-    }, 4000)
+    }, PROBE_MS)
   }
 
   private scheduleSync() {

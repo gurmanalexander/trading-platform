@@ -3,7 +3,8 @@ import { nextTick, onBeforeUnmount, ref } from 'vue'
 
 // Выпадающее меню. Рисуется прямо в body: так его не обрезает прокручиваемая панель
 // и не перекрывают элементы со своим слоем (например, закреплённые заголовки списков).
-const props = defineProps<{ align?: 'left' | 'right' }>()
+/** side — меню открывается сбоку от кнопки, а не под ней: для узкой вертикальной колонки */
+const props = defineProps<{ align?: 'left' | 'right'; side?: boolean }>()
 const open = ref(false)
 const root = ref<HTMLElement>()
 const menu = ref<HTMLElement>()
@@ -14,6 +15,12 @@ function place() {
   const m = menu.value!
   const w = m.offsetWidth
   const h = m.offsetHeight
+  if (props.side) {
+    let x = r.right + 6
+    if (x + w > window.innerWidth - 6) x = Math.max(6, r.left - w - 6)
+    style.value = { left: x + 'px', top: Math.max(6, Math.min(window.innerHeight - h - 6, r.top)) + 'px' }
+    return
+  }
   let left = props.align === 'right' ? r.right - w : r.left
   left = Math.max(6, Math.min(window.innerWidth - w - 6, left))
   let top = r.bottom + 4
@@ -49,7 +56,7 @@ onBeforeUnmount(close)
   <div ref="root" class="dropdown">
     <slot name="trigger" :toggle="toggle" :open="open" />
     <Teleport to="body">
-      <div v-if="open" ref="menu" class="menu dropdown-menu scroll" :style="style">
+      <div v-if="open" ref="menu" class="menu dropdown-menu scroll" :class="{ side }" :style="style">
         <slot :close="close" />
       </div>
     </Teleport>
@@ -67,5 +74,8 @@ onBeforeUnmount(close)
   z-index: 90;
   max-height: calc(100dvh - 60px);
   max-width: calc(100vw - 12px);
+}
+.dropdown-menu.side {
+  max-height: calc(100dvh - 12px);
 }
 </style>

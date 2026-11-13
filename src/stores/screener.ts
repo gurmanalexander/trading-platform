@@ -120,10 +120,29 @@ export function startAutoRefresh(): () => void {
 
 // ---------- переход по списку клавишами ----------
 
-/** Следующий/предыдущий инструмент в том списке, который сейчас открыт (отбор или список наблюдения) */
+/**
+ * Список, по которому листаются монеты: тот, что сейчас открыт (отбор или списки наблюдения).
+ * На телефоне рядом с графиком списка не видно — там это вкладка, которую открывали последней.
+ */
+export const stepSource = computed<'screener' | 'watchlist'>(() => {
+  const tab = isPhone.value ? (app.mobileTab === 'screener' || app.mobileTab === 'watchlist' ? app.mobileTab : app.listTab) : app.panel
+  // отбор ещё не загружали — листать по нему нечего
+  return tab === 'screener' && (!isPhone.value || view.value.length) ? 'screener' : 'watchlist'
+})
+const stepList = computed<SymbolRef[]>(() => (stepSource.value === 'screener' ? view.value : visibleItems.value))
+
+/** Где открытая монета стоит в этом списке и какие монеты рядом с ней */
+export const stepInfo = computed(() => {
+  const list = stepList.value
+  const n = list.length
+  const index = list.findIndex((r) => sameSymbol(r, activePane.value.symbol))
+  if (!n) return { count: 0, index, prev: null, next: null }
+  return { count: n, index, prev: list[index < 0 ? n - 1 : (index - 1 + n) % n], next: list[index < 0 ? 0 : (index + 1) % n] }
+})
+
+/** Следующий/предыдущий инструмент списка */
 export function stepSymbol(step: number) {
-  const tab = isPhone.value ? app.mobileTab : app.panel
-  const list: SymbolRef[] = tab === 'screener' ? view.value : visibleItems.value
+  const list = stepList.value
   if (!list.length) return
   const cur = list.findIndex((r) => sameSymbol(r, activePane.value.symbol))
   const next = cur < 0 ? (step > 0 ? 0 : list.length - 1) : (cur + step + list.length) % list.length

@@ -7,7 +7,8 @@ import AtrTable from './AtrTable.vue'
 import { ChartController } from '../chart/controller'
 import { registerChart } from '../chart/registry'
 import { symbolKey } from '../types'
-import { app, activeIndex, paneCount, isPhone, setZen, theme, toast, type ScaleMode } from '../stores/app'
+import { app, activeIndex, paneCount, isPhone, phoneWide, setZen, theme, toast, type ScaleMode } from '../stores/app'
+import { stepInfo, stepSymbol } from '../stores/screener'
 import { tickers, useTickers } from '../stores/tickers'
 import { alerts, addAlert, moveAlert, type PriceAlert } from '../stores/alerts'
 import { clearDrawings, drawings, drawingsOf, selection } from '../stores/drawings'
@@ -278,6 +279,11 @@ function toggleScale(id: ScaleMode) {
       </button>
       <button v-if="atrCapable" class="chip" :class="{ on: app.atrTable }" title="Таблица ATR: стоп, тейк, люфт, границы дня" @click="app.atrTable = !app.atrTable">ATR</button>
       <button v-if="isPhone && !app.zen" class="chip" title="Только график: убрать панели, на весь экран" @click="setZen(true)"><Icon name="maximize" :size="13" /></button>
+      <!-- телефон набок или «только график»: полосы с монетами под графиком нет — листаем отсюда -->
+      <template v-if="isPhone && (phoneWide || app.zen) && isActive && stepInfo.count > 1">
+        <button class="chip step" :title="'Предыдущая монета списка: ' + stepInfo.prev?.symbol" @click="stepSymbol(-1)"><Icon name="prev" :size="15" /></button>
+        <button class="chip step" :title="'Следующая монета списка: ' + stepInfo.next?.symbol" @click="stepSymbol(1)"><Icon name="next" :size="15" /></button>
+      </template>
       <button
         v-if="paneCount > 1 && !isPhone"
         class="chip"
@@ -441,10 +447,13 @@ function toggleScale(id: ScaleMode) {
   margin: 0;
   max-width: 320px;
 }
-@media (max-width: 719px) {
+@media (max-width: 719px), (pointer: coarse) {
   .chip {
     height: 26px;
     padding: 0 9px;
+  }
+  .chip.step {
+    padding: 0 12px;
   }
 }
 </style>

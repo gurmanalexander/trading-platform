@@ -1,15 +1,7 @@
 <script setup lang="ts">
 import Icon from './Icon.vue'
-import { app, type MobileTab } from '../stores/app'
+import { app, MOBILE_TABS as TABS } from '../stores/app'
 import { unreadAlerts } from '../stores/alerts'
-
-const TABS: { id: MobileTab; label: string; icon: string }[] = [
-  { id: 'chart', label: 'График', icon: 'chart' },
-  { id: 'screener', label: 'Отбор', icon: 'filter' },
-  { id: 'watchlist', label: 'Список', icon: 'list' },
-  { id: 'checklist', label: 'Чеклист', icon: 'checklist' },
-  { id: 'alerts', label: 'Оповещения', icon: 'bell' },
-]
 </script>
 
 <template>
@@ -45,15 +37,6 @@ const TABS: { id: MobileTab; label: string; icon: string }[] = [
 }
 .bnav button.on {
   color: var(--accent);
-}
-/* телефон набок: высота на вес золота — оставляем одни значки */
-@media (max-height: 499px) {
-  .bnav button {
-    height: 36px;
-  }
-  .bnav button > span:last-child {
-    display: none;
-  }
 }
 .ico {
   position: relative;

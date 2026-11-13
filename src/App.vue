@@ -1,13 +1,16 @@
 <script setup lang="ts">
 import Icon from './components/Icon.vue'
-import { ref, defineAsyncComponent, onBeforeUnmount, onMounted, watch } from 'vue'
+import { computed, ref, defineAsyncComponent, onBeforeUnmount, onMounted, watch } from 'vue'
 import TopBar from './components/TopBar.vue'
 import DrawToolbar from './components/DrawToolbar.vue'
 import ChartGrid from './components/ChartGrid.vue'
 import SidePanel from './components/SidePanel.vue'
 import BottomNav from './components/BottomNav.vue'
+import PhoneRail from './components/PhoneRail.vue'
+import SymbolStrip from './components/SymbolStrip.vue'
+import PullRefresh from './components/PullRefresh.vue'
 import Toasts from './components/Toasts.vue'
-import { app, activeIndex, activePane, isPhone, modalOpen, paneCount, theme, cyclePane, openSearch, setZen, showPanel, togglePanel, toast, type Tool } from './stores/app'
+import { app, activeIndex, activePane, isPhone, phoneWide, modalOpen, paneCount, theme, cyclePane, openSearch, setZen, showPanel, togglePanel, toast, type Tool } from './stores/app'
 import { addWatch, activeList } from './stores/watchlist'
 import { clipboard, redo, selection, undo } from './stores/drawings'
 import { stepSymbol } from './stores/screener'
@@ -18,6 +21,7 @@ import { decodeShare } from './lib/share'
 // синхронизация устройств запускается сама, если была включена
 import './stores/cloud'
 import { snapshotAll } from './chart/snapshot'
+import { refreshAll } from './chart/refresh'
 import { parseSetup } from './lib/setup'
 
 // Диалоги нужны не сразу — грузим их код по первому открытию
@@ -61,6 +65,14 @@ watch(
   },
   { immediate: true, deep: true },
 )
+
+// ---------- что видно на телефоне ----------
+
+/** На телефоне на экране сейчас график, а не раздел поверх него */
+const onChart = computed(() => !isPhone.value || app.mobileTab === 'chart')
+// Верхняя панель управляет графиком: в разделах телефона (отбор, список…) она не нужна.
+// Телефон набок: её заменяет боковая колонка — высота целиком достаётся графику.
+const topBar = computed(() => !app.zen && !phoneWide.value && onChart.value)
 
 // ---------- горячие клавиши ----------
 
@@ -340,21 +352,25 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="app" :class="{ phone: isPhone }">
-    <TopBar v-if="!app.zen" />
+  <div class="app" :class="{ phone: isPhone, wide: phoneWide }">
+    <TopBar v-if="topBar" />
+    <PhoneRail v-if="phoneWide && !app.zen" />
     <div class="body">
-      <DrawToolbar v-if="!app.zen && (!isPhone || app.drawBarOpen)" :horizontal="isPhone" />
+      <DrawToolbar v-if="!app.zen && (!isPhone || (app.drawBarOpen && onChart))" :horizontal="isPhone && !phoneWide" />
       <ChartGrid />
       <template v-if="!isPhone && app.panelOpen && !app.zen">
         <div class="side-split" :class="{ on: panelDrag }" title="Потяните, чтобы изменить ширину панели. Двойной щелчок — стандартная ширина" @pointerdown="startPanelResize" @dblclick="app.panelWidth = 0" />
         <SidePanel class="side-dock" :style="app.panelWidth ? { width: app.panelWidth + 'px' } : undefined" :tab="app.panel" tabs />
       </template>
-      <div v-if="isPhone && app.mobileTab !== 'chart' && !app.zen" class="sheet">
-        <SidePanel :tab="app.mobileTab" :tabs="false" />
+      <div v-if="isPhone && app.mobileTab !== 'chart' && !app.zen" class="sheet" :class="{ top: !phoneWide }">
+        <PullRefresh :refresh="refreshAll">
+          <SidePanel :tab="app.mobileTab" :tabs="false" />
+        </PullRefresh>
       </div>
       <button v-if="app.zen" class="zen-exit" title="Вернуть панели" @click="setZen(false)"><Icon name="minimize" :size="18" /></button>
     </div>
-    <BottomNav v-if="isPhone && !app.zen" />
+    <SymbolStrip v-if="isPhone && !phoneWide && !app.zen && onChart" />
+    <BottomNav v-if="isPhone && !phoneWide && !app.zen" />
 
     <SymbolSearch v-if="app.search" />
     <IndicatorsDialog v-if="app.indicatorsOpen" />
@@ -390,11 +406,18 @@ onBeforeUnmount(() => {
   display: flex;
 }
 /* телефон: панель рисования — полосой под графиком */
-.app.phone .body {
+.app.phone:not(.wide) .body {
   flex-direction: column;
 }
-.app.phone .drawbar {
+.app.phone:not(.wide) .drawbar {
   order: 2;
+}
+/* телефон набок: слева колонка с навигацией, остальное — графику */
+.app.wide {
+  flex-direction: row;
+}
+.app.wide .body {
+  min-width: 0;
 }
 .zen-exit {
   position: absolute;
@@ -434,6 +457,10 @@ onBeforeUnmount(() => {
   inset: 0;
   z-index: 20;
   background: var(--panel);
+}
+/* верхней панели над разделом нет — отступ под вырез экрана держит сам раздел */
+.sheet.top {
+  padding-top: env(safe-area-inset-top);
 }
 @media (max-width: 899px) {
   .side-dock {

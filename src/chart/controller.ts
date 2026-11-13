@@ -26,6 +26,7 @@ import { indicatorDef, resolveParams, toSource, type IndicatorDef, type Indicato
 import { app, paneCount, theme, type ChartType, type PaneState } from '../stores/app'
 import { crosshairBus, dateFocus, timeBus } from '../stores/sync'
 import { focusFraction } from '../lib/setup'
+import { onWake } from '../lib/wake'
 import { dayStats } from '../stores/atr'
 import { clearView, getView, setView, viewKey, type ChartView } from '../stores/views'
 import { chartColors, withAlpha, type ChartColors } from './theme'
@@ -55,6 +56,8 @@ interface IndRuntime {
 }
 
 const INITIAL_BARS = 1000
+/** Как часто проверяем, не отстал ли график от времени */
+const WATCH_MS = 15_000
 const MAX_BARS = 30_000
 const LOCAL_TZ_SEC = -new Date().getTimezoneOffset() * 60
 const FONT = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif'
@@ -116,7 +119,14 @@ export class ChartController {
   private colors: ChartColors
   private alertLines: IPriceLine[] = []
   private alertPrices: number[] = []
-  private hiddenAt = 0
+  /** когда поток свечей или запрос в последний раз принёс данные */
+  private lastDataAt = 0
+  private lastWatchAt = 0
+  private watchTimer = 0
+  /** повтор неудавшейся дозагрузки хвоста */
+  private retryTimer = 0
+  private retries = 0
+  private offWake: () => void
   private disposed = false
   private resizeObs: ResizeObserver
   /** указатель пользователя сейчас над этой панелью — она источник синхронизации */
@@ -185,7 +195,8 @@ export class ChartController {
 
     this.chart.subscribeCrosshairMove(this.onCrosshair)
     this.chart.timeScale().subscribeVisibleLogicalRangeChange(this.onRange)
-    document.addEventListener('visibilitychange', this.onVisibility)
+    this.offWake = onWake(this.onWake)
+    this.watchTimer = window.setInterval(this.watchStale, WATCH_MS)
     this.resizeObs = new ResizeObserver(() => requestAnimationFrame(() => this.onResize()))
     this.resizeObs.observe(el)
     // capture: колесо над ценовой шкалой перехватываем раньше, чем библиотека начнёт масштабировать время
@@ -338,11 +349,13 @@ export class ChartController {
     this.host.removeEventListener('pointerdown', this.onPress)
     window.removeEventListener('pointerup', this.onRelease)
     clearTimeout(this.saveViewTimer)
+    clearTimeout(this.retryTimer)
+    clearInterval(this.watchTimer)
+    this.offWake()
     if (crosshairBus.value?.pane === this.paneIndex) crosshairBus.value = null
     this.token++
     this.stopLive()
     cancelAnimationFrame(this.legendRaf)
-    document.removeEventListener('visibilitychange', this.onVisibility)
     this.draw.destroy()
     this.chart.remove()
   }
@@ -352,6 +365,9 @@ export class ChartController {
   async load() {
     const token = ++this.token
     this.stopLive()
+    clearTimeout(this.retryTimer)
+    this.retryTimer = 0
+    this.retries = 0
     const { symbol } = this.pane
     this.tf = getTf(this.pane.tf)
     // Внутридневные свечи показываем в местном времени; дневные и старше — по датам биржи (UTC)
@@ -373,6 +389,7 @@ export class ChartController {
       if (token !== this.token) return
       if (!res.bars.length) throw new Error('Нет данных по инструменту')
       this.bars = res.bars
+      this.lastDataAt = Date.now()
       this.loadedKey = symbolKey(symbol)
       this.setPrecision(res.precision)
       this.rebuildShown()
@@ -387,7 +404,11 @@ export class ChartController {
         symbol.market,
         symbol.symbol,
         this.tf,
-        (bar) => token === this.token && this.onBar(bar),
+        (bar) => {
+          if (token !== this.token) return
+          this.lastDataAt = Date.now()
+          this.onBar(bar)
+        },
         () => token === this.token && this.refreshTail(),
       )
     } catch (e) {
@@ -472,17 +493,28 @@ export class ChartController {
     this.onBar({ ...last, close: price, high: Math.max(last.high, price), low: Math.min(last.low, price) })
   }
 
-  /** Перечитывает последние свечи и сшивает с уже загруженными (после обрыва связи или сна вкладки) */
-  private async refreshTail() {
-    if (this.refreshing || !this.bars.length || this.ui.loading) return
+  /**
+   * Перечитывает последние свечи и сшивает с уже загруженными (после обрыва связи или сна приложения).
+   * Не получилось — повторяет с растущей паузой: сеть после пробуждения устройства поднимается не сразу.
+   */
+  private async refreshTail(): Promise<boolean> {
+    if (this.refreshing || !this.bars.length || this.ui.loading) return false
     this.refreshing = true
+    clearTimeout(this.retryTimer)
+    this.retryTimer = 0
     const token = this.token
     const { symbol } = this.pane
     try {
       const res = await adapters[symbol.exchange].fetchKlines(symbol.market, symbol.symbol, this.tf, 500)
-      if (token !== this.token || !res.bars.length) return
+      if (token !== this.token) return false
+      this.retries = 0
+      this.lastDataAt = Date.now()
+      if (!res.bars.length) return true
       const fresh = res.bars
       const old = this.bars
+      // график отмотан в прошлое — новые свечи справа не должны сдвинуть то, что сейчас на экране
+      const ts = this.chart.timeScale()
+      const pos = ts.scrollPosition()
       if (fresh[0].time > old[old.length - 1].time + this.tf.sec) {
         // разрыв больше загруженного окна — начинаем историю заново
         this.bars = fresh
@@ -490,13 +522,57 @@ export class ChartController {
       } else {
         this.bars = old.slice(0, lowerBound(old, fresh[0].time)).concat(fresh)
       }
+      const added = this.bars.length - old.length
       this.rebuildShown()
       this.setAll()
+      if (pos < -3 && added > 0) ts.scrollToPosition(pos - added, false)
+      return true
     } catch {
-      /* попробуем при следующем событии */
+      if (token === this.token && !this.disposed && this.retries < 6) {
+        this.retryTimer = window.setTimeout(() => this.refreshTail(), Math.min(15_000, 1500 * 2 ** this.retries++))
+      }
+      return false
     } finally {
       this.refreshing = false
     }
+  }
+
+  /** Обновление по просьбе пользователя: график с ошибкой загружается заново, остальным дочитывается хвост */
+  async refreshNow() {
+    if (this.disposed || this.ui.loading) return
+    if (this.ui.error || !this.bars.length) await this.load()
+    else {
+      this.retries = 0
+      await this.refreshTail()
+    }
+  }
+
+  /** Приложение вернулось на экран (или вернулась сеть): за это время могли пропустить свечи */
+  private onWake = (awayMs: number, reason: string) => {
+    if (this.disposed) return
+    if (this.ui.error && !this.ui.loading) {
+      this.load()
+      return
+    }
+    if (awayMs < 20_000 && reason !== 'online') return
+    this.retries = 0
+    this.refreshTail()
+    // в фоне система могла выбросить содержимое холста — просим перерисовать
+    this.draw.redraw()
+  }
+
+  /**
+   * Страховка: новая свеча уже должна была начаться, а данных давно нет — поток молчит,
+   * хотя соединение считается живым. Перечитываем хвост сами.
+   */
+  private watchStale = () => {
+    const n = this.bars.length
+    if (this.disposed || !n || this.ui.loading || this.tf.id === '1M' || document.visibilityState !== 'visible') return
+    const now = Date.now()
+    if (now / 1000 - this.bars[n - 1].time < this.tf.sec + 20) return
+    if (now - this.lastDataAt < 40_000 || now - this.lastWatchAt < 60_000) return
+    this.lastWatchAt = now
+    this.refreshTail()
   }
 
   /** Догружает более старую историю, когда пользователь докрутил до левого края */
@@ -549,15 +625,6 @@ export class ChartController {
     this.draw.layoutOverlay()
     if (r && this.pointerInside && app.sync.time && paneCount.value > 1 && this.bars.length) {
       timeBus.value = { pane: this.paneIndex, time: this.logicalToTime((r.from + r.to) / 2), realtime: !back }
-    }
-  }
-
-  private onVisibility = () => {
-    if (document.visibilityState === 'hidden') {
-      this.hiddenAt = Date.now()
-    } else if (this.hiddenAt && Date.now() - this.hiddenAt > 20_000) {
-      // вкладка спала — за это время могли пропустить свечи
-      this.refreshTail()
     }
   }
 

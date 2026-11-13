@@ -20,6 +20,10 @@ import { activeIndex } from '../stores/app'
 import { pasteFromClipboard } from '../chart/setup'
 import { chartAt } from '../chart/registry'
 import { snapshotAll } from '../chart/snapshot'
+import { refreshAll, refreshing } from '../chart/refresh'
+
+// side — меню открывается сбоку от кнопки (телефон набок: кнопка стоит в боковой колонке)
+defineProps<{ side?: boolean }>()
 
 // Меню «ещё» для телефона: всё, что на широком экране лежит кнопками на верхней панели
 const pane = activePane
@@ -41,6 +45,8 @@ function toList() {
   const s = pane.value.symbol
   toast(addWatch(s) ? `${s.symbol} добавлен в список «${activeList.value.name}»` : `${s.symbol} уже есть в списке «${activeList.value.name}»`)
 }
+/** Полная перезагрузка страницы — то же, что закрыть приложение и открыть заново */
+const restart = () => location.reload()
 function saveNew() {
   const name = prompt('Название шаблона', 'Мой шаблон')?.trim()
   if (!name) return
@@ -50,12 +56,13 @@ function saveNew() {
 </script>
 
 <template>
-  <Dropdown align="right">
+  <Dropdown align="right" :side="side">
     <template #trigger="{ toggle }">
       <button class="btn" title="Ещё" @click="toggle"><Icon name="more" /></button>
     </template>
     <template #default="{ close }">
       <div class="pm">
+        <button class="menu-item" :disabled="refreshing" @click="refreshAll(), close()"><Icon name="refresh" :size="16" />Обновить данные</button>
         <button class="menu-item" @click="(app.tutorialOpen = true), close()"><Icon name="learn" :size="16" />Обучение: видео-обзор</button>
         <button class="menu-item" @click="(app.dashboardOpen = true), close()"><Icon name="dashboard" :size="16" />Обзор по спискам</button>
         <button class="menu-item" @click="(app.indicatorsOpen = true), close()"><Icon name="fx" :size="16" />Индикаторы</button>
@@ -119,6 +126,8 @@ function saveNew() {
             <Icon :name="t.icon" :size="16" />{{ t.label }}
           </button>
         </div>
+        <div class="menu-sep" />
+        <button class="menu-item" @click="restart"><Icon name="skip" :size="16" />Перезапустить приложение</button>
       </div>
     </template>
   </Dropdown>

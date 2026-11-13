@@ -8,6 +8,14 @@ export type ChartType = 'candles' | 'hollow' | 'bars' | 'heikin' | 'line' | 'are
 export type ScaleMode = 'normal' | 'log' | 'percent'
 export type PanelId = 'screener' | 'watchlist' | 'checklist' | 'alerts'
 export type MobileTab = 'chart' | PanelId
+/** Разделы телефонной навигации */
+export const MOBILE_TABS: { id: MobileTab; label: string; icon: string }[] = [
+  { id: 'chart', label: 'График', icon: 'chart' },
+  { id: 'screener', label: 'Отбор', icon: 'filter' },
+  { id: 'watchlist', label: 'Список', icon: 'list' },
+  { id: 'checklist', label: 'Чеклист', icon: 'checklist' },
+  { id: 'alerts', label: 'Оповещения', icon: 'bell' },
+]
 export type Tool = 'cursor' | 'trend' | 'ray' | 'hline' | 'hray' | 'vline' | 'cross' | 'rect' | 'fib' | 'long' | 'short' | 'text' | 'measure'
 export type Theme = 'dark' | 'light'
 export type ThemePref = 'system' | Theme
@@ -195,6 +203,7 @@ interface Saved {
   colors?: Partial<Record<Theme, CustomColors>>
   atrTable?: boolean
   panelWidth?: number
+  listTab?: BoundTab
 }
 
 const saved = load<Saved>('app', {})
@@ -255,6 +264,8 @@ export const app = reactive({
   atrTable: saved.atrTable ?? true,
   /** телефон: показывать все окна раскладки сразу (столбцом), а не одно */
   phoneStack: saved.phoneStack ?? false,
+  /** телефон: откуда листаются монеты на графике — последняя открытая вкладка, «Отбор» или «Список» */
+  listTab: (saved.listTab === 'screener' ? 'screener' : 'watchlist') as BoundTab,
 
   // не сохраняется
   tool: 'cursor' as Tool,
@@ -291,7 +302,7 @@ export const app = reactive({
 
 persist(
   'app',
-  () => [app.themePref, app.layout, app.panes, app.active, app.panel, app.panelOpen, app.magnet, app.sync, app.favTfs, app.templates, app.templateId, app.tabTemplates, app.searchFilter, app.drawingsHidden, app.phoneStack, app.defaults, app.colors, app.atrTable, app.panelWidth],
+  () => [app.themePref, app.layout, app.panes, app.active, app.panel, app.panelOpen, app.magnet, app.sync, app.favTfs, app.templates, app.templateId, app.tabTemplates, app.searchFilter, app.drawingsHidden, app.phoneStack, app.defaults, app.colors, app.atrTable, app.panelWidth, app.listTab],
   () => ({
     themePref: app.themePref,
     layout: app.layout,
@@ -312,6 +323,7 @@ persist(
     colors: app.colors,
     atrTable: app.atrTable,
     panelWidth: app.panelWidth,
+    listTab: app.listTab,
   }),
 )
 
@@ -335,6 +347,8 @@ window.addEventListener('resize', () => {
 /** Телефон (в том числе повёрнутый набок): нижняя навигация, панели на весь экран */
 export const isPhone = computed(() => viewport.w < 720 || viewport.h < 500)
 export const isLandscape = computed(() => viewport.w > viewport.h)
+/** Телефон набок: высоты мало, поэтому панели уходят с верха и низа в узкую колонку сбоку */
+export const phoneWide = computed(() => isPhone.value && viewport.h < 500 && viewport.w > viewport.h)
 
 export const paneCount = computed(() => layoutCount(app.layout))
 export const activeIndex = computed(() => Math.min(app.active, paneCount.value - 1))
@@ -494,6 +508,7 @@ export const currentTab = computed<MobileTab | null>(() => (isPhone.value ? app.
 
 watch(currentTab, (tab) => {
   if (tab !== 'screener' && tab !== 'watchlist') return
+  app.listTab = tab
   const id = app.tabTemplates[tab]
   if (id && id !== app.templateId && app.templates.some((t) => t.id === id)) {
     const keep = app.mobileTab

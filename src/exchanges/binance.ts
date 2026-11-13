@@ -106,4 +106,5 @@ export const binance: ExchangeAdapter = {
   },
 
   status: (market) => marketSocket(market).status,
+  reconnect: () => sockets.forEach((s) => s.reconnect()),
 }
