@@ -4,7 +4,7 @@ import Icon from './Icon.vue'
 import { DRAW_COLORS, defaultVisibility, type Dash, type Visibility } from '../stores/drawings'
 import { hasLineStyle, hasText, isPosition, TEXT_SIZES, type DrawingsLayer } from '../chart/drawings'
 import { riskReward } from '../chart/position'
-import { isPhone, toast } from '../stores/app'
+import { app, isPhone, toast } from '../stores/app'
 import { pasteFromClipboard } from '../chart/setup'
 
 // Панель выбранного рисунка: у линий — цвет, толщина, вид и подпись; у позиции — вход, стоп и цель числами
@@ -16,8 +16,10 @@ const position = computed(() => !!d.value && isPosition(d.value.type) && d.value
 const isText = computed(() => d.value?.type === 'text')
 // цвет выбирается и у линий, и у текста
 const colored = computed(() => styled.value || isText.value)
-// Панель встаёт над рисунком; если сверху места нет — под ним. Размер берётся настоящий
-// (он зависит от вида рисунка), и панель целиком остаётся внутри окна графика.
+// Где стоит панель. Пока её не трогали — сама: на компьютере над рисунком (нет места сверху — под ним),
+// на телефоне — внизу графика, чтобы не закрывать то, что правят. Перетащили за ручку — остаётся там,
+// куда поставили, для всех рисунков; двойное нажатие на ручку возвращает её на место по умолчанию.
+// Размер берётся настоящий (он зависит от вида рисунка), панель целиком остаётся внутри окна графика.
 const bar = ref<HTMLElement>()
 const size = reactive({ w: 0, h: 0 })
 function measure() {
@@ -28,20 +30,61 @@ function measure() {
 }
 onMounted(measure)
 onUpdated(measure)
-const pos = computed(() => {
-  const a = props.layer.anchor.value
-  if (!a) return null
+const MARGIN = 4
+/** свободное место окна: на сколько панель может сдвинуться по каждой оси */
+const free = computed(() => {
   const w = size.w || (position.value ? 330 : 280)
   const h = size.h || (colored.value ? 80 : position.value ? 104 : 42)
-  const maxX = props.maxX || 9999
-  const maxY = props.maxY || 9999
-  let top = a.y - h - 12
+  return { x: Math.max(0, (props.maxX || 9999) - w - MARGIN * 2), y: Math.max(0, (props.maxY || 9999) - h - MARGIN * 2), h }
+})
+const pos = computed(() => {
+  const f = free.value
+  const px = (left: number, top: number) => ({ left: Math.round(left) + 'px', top: Math.round(top) + 'px', maxWidth: (props.maxX || 9999) - MARGIN * 2 + 'px' })
+  const m = app.drawBarPos
+  if (m) return px(MARGIN + m.x * f.x, MARGIN + m.y * f.y)
+  // телефон: по центру, над кнопками внизу графика
+  if (isPhone.value) return px(MARGIN + f.x / 2, MARGIN + Math.max(0, f.y - 62))
+  const a = props.layer.anchor.value
+  if (!a) return null
+  let top = a.y - f.h - 12
   // сверху не помещается (или там легенда графика) — ставим под рисунком
   if (top < 30) top = a.y + 18
-  top = Math.max(4, Math.min(maxY - h - 4, top))
-  const left = Math.max(4, Math.min(maxX - w - 4, a.x))
-  return { left: left + 'px', top: top + 'px' }
+  return px(MARGIN + Math.max(0, Math.min(f.x, a.x - MARGIN)), MARGIN + Math.max(0, Math.min(f.y, top - MARGIN)))
 })
+
+// ---------- перетаскивание панели за ручку ----------
+
+const moving = ref(false)
+function startMove(e: PointerEvent) {
+  const el = bar.value
+  if (!el || e.button > 0) return
+  e.preventDefault()
+  const grip = e.currentTarget as HTMLElement
+  grip.setPointerCapture(e.pointerId)
+  const x0 = e.clientX - el.offsetLeft
+  const y0 = e.clientY - el.offsetTop
+  let moved = false
+  const move = (ev: PointerEvent) => {
+    if (!moved && Math.hypot(ev.clientX - e.clientX, ev.clientY - e.clientY) < 4) return
+    moved = true
+    moving.value = true
+    const f = free.value
+    const part = (v: number, room: number) => (room > 0 ? Math.min(1, Math.max(0, (v - MARGIN) / room)) : 0)
+    app.drawBarPos = { x: part(ev.clientX - x0, f.x), y: part(ev.clientY - y0, f.y) }
+  }
+  const stop = () => {
+    moving.value = false
+    grip.removeEventListener('pointermove', move)
+    grip.removeEventListener('pointerup', stop)
+    grip.removeEventListener('pointercancel', stop)
+  }
+  grip.addEventListener('pointermove', move)
+  grip.addEventListener('pointerup', stop)
+  grip.addEventListener('pointercancel', stop)
+}
+function resetPlace() {
+  app.drawBarPos = null
+}
 
 const WIDTHS = [1, 2, 3, 4]
 const DASH_LIST: { id: Dash; label: string; pattern: string }[] = [
@@ -102,7 +145,16 @@ function duplicate() {
 </script>
 
 <template>
-  <div v-if="d && pos" ref="bar" class="dbar" :style="pos" @pointerdown.stop @keydown.stop>
+  <div v-if="d && pos" ref="bar" class="dbar" :class="{ moving }" :style="pos" @pointerdown.stop @keydown.stop>
+    <button
+      class="grip"
+      :title="app.drawBarPos ? 'Потяните, чтобы передвинуть панель. Двойное нажатие — вернуть на место по умолчанию' : 'Потяните, чтобы передвинуть панель'"
+      aria-label="Передвинуть панель"
+      @pointerdown="startMove"
+      @dblclick="resetPlace"
+    >
+      <Icon name="grip" :size="14" />
+    </button>
     <div v-if="colored" class="row">
       <button
         v-for="c in DRAW_COLORS"
@@ -199,14 +251,41 @@ function duplicate() {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  padding: 5px 6px;
+  padding: 5px 6px 5px 22px;
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: 8px;
   box-shadow: var(--shadow);
 }
+.dbar.moving {
+  opacity: 0.9;
+}
+/* ручка: полоса во всю высоту слева — за неё панель перетаскивают */
+.grip {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 20px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px 0 0 8px;
+  color: var(--muted);
+  cursor: grab;
+  touch-action: none;
+}
+.grip:hover,
+.dbar.moving .grip {
+  background: var(--hover);
+  color: var(--text);
+}
+.dbar.moving .grip {
+  cursor: grabbing;
+}
+/* не помещается в ширину окна — кнопки переходят на следующую строку */
 .row {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 4px;
 }
@@ -273,6 +352,16 @@ function duplicate() {
   background: var(--border);
 }
 @media (max-width: 719px) {
+  .grip {
+    width: 26px;
+  }
+  .dbar {
+    padding-left: 30px;
+  }
+  .prices label {
+    flex: 1 1 0;
+    min-width: 0;
+  }
   .swatch {
     width: 26px;
     height: 26px;
@@ -282,7 +371,8 @@ function duplicate() {
     min-width: 28px;
   }
   .prices .field {
-    width: 92px;
+    width: 100%;
+    min-width: 70px;
     height: 32px;
   }
 }

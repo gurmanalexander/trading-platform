@@ -57,8 +57,10 @@ function saveNew() {
 
 <template>
   <Dropdown align="right" :side="side">
-    <template #trigger="{ toggle }">
-      <button class="btn" title="Ещё" @click="toggle"><Icon name="more" /></button>
+    <template #trigger="{ toggle, open }">
+      <slot name="trigger" :toggle="toggle" :open="open">
+        <button class="btn" :class="{ on: open }" title="Ещё: настройки и действия" @click="toggle"><Icon name="more" /></button>
+      </slot>
     </template>
     <template #default="{ close }">
       <div class="pm">

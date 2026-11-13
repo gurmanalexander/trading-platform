@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import Icon from './Icon.vue'
+import PhoneMenu from './PhoneMenu.vue'
 import { app, MOBILE_TABS as TABS } from '../stores/app'
 import { unreadAlerts } from '../stores/alerts'
 </script>
@@ -13,6 +14,15 @@ import { unreadAlerts } from '../stores/alerts'
       </span>
       <span>{{ t.label }}</span>
     </button>
+    <!-- настройки и действия нужны в любом разделе, а не только на графике -->
+    <PhoneMenu>
+      <template #trigger="{ toggle, open }">
+        <button :class="{ on: open }" title="Ещё: настройки и действия" @click="toggle">
+          <span class="ico"><Icon name="more" :size="20" /></span>
+          <span>Ещё</span>
+        </button>
+      </template>
+    </PhoneMenu>
   </nav>
 </template>
 
@@ -24,8 +34,14 @@ import { unreadAlerts } from '../stores/alerts'
   padding-bottom: env(safe-area-inset-bottom);
   flex: none;
 }
+.bnav :deep(.dropdown) {
+  display: flex;
+  flex: 0.8 1 0;
+  min-width: 0;
+}
 .bnav button {
-  flex: 1;
+  flex: 1 1 0;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   align-items: center;

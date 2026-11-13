@@ -37,7 +37,6 @@ import { getTf } from '../lib/timeframes'
         </template>
       </Dropdown>
       <button class="btn" :class="{ on: app.drawBarOpen }" title="Рисование" @click="app.drawBarOpen = !app.drawBarOpen"><Icon name="pencil" /></button>
-      <PhoneMenu side />
     </template>
     <span class="grow" />
     <button
@@ -52,6 +51,8 @@ import { getTf } from '../lib/timeframes'
       <Icon :name="t.icon" />
       <i v-if="t.id === 'alerts' && unreadAlerts" class="badge">{{ unreadAlerts }}</i>
     </button>
+    <!-- настройки и действия нужны в любом разделе -->
+    <PhoneMenu side />
   </nav>
 </template>
 

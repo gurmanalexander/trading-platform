@@ -204,6 +204,7 @@ interface Saved {
   atrTable?: boolean
   panelWidth?: number
   listTab?: BoundTab
+  drawBarPos?: { x: number; y: number } | null
 }
 
 const saved = load<Saved>('app', {})
@@ -266,6 +267,13 @@ export const app = reactive({
   phoneStack: saved.phoneStack ?? false,
   /** телефон: откуда листаются монеты на графике — последняя открытая вкладка, «Отбор» или «Список» */
   listTab: (saved.listTab === 'screener' ? 'screener' : 'watchlist') as BoundTab,
+  /**
+   * Куда пользователь перетащил панель свойств рисунка: доли свободного места окна графика (0…1).
+   * null — панель встаёт сама: у рисунка, а на телефоне — внизу графика.
+   */
+  drawBarPos: (saved.drawBarPos && isFinite(saved.drawBarPos.x) && isFinite(saved.drawBarPos.y)
+    ? { x: Math.min(1, Math.max(0, saved.drawBarPos.x)), y: Math.min(1, Math.max(0, saved.drawBarPos.y)) }
+    : null) as { x: number; y: number } | null,
 
   // не сохраняется
   tool: 'cursor' as Tool,
@@ -302,7 +310,7 @@ export const app = reactive({
 
 persist(
   'app',
-  () => [app.themePref, app.layout, app.panes, app.active, app.panel, app.panelOpen, app.magnet, app.sync, app.favTfs, app.templates, app.templateId, app.tabTemplates, app.searchFilter, app.drawingsHidden, app.phoneStack, app.defaults, app.colors, app.atrTable, app.panelWidth, app.listTab],
+  () => [app.themePref, app.layout, app.panes, app.active, app.panel, app.panelOpen, app.magnet, app.sync, app.favTfs, app.templates, app.templateId, app.tabTemplates, app.searchFilter, app.drawingsHidden, app.phoneStack, app.defaults, app.colors, app.atrTable, app.panelWidth, app.listTab, app.drawBarPos],
   () => ({
     themePref: app.themePref,
     layout: app.layout,
@@ -324,6 +332,7 @@ persist(
     atrTable: app.atrTable,
     panelWidth: app.panelWidth,
     listTab: app.listTab,
+    drawBarPos: app.drawBarPos,
   }),
 )
 
