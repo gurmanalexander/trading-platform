@@ -107,6 +107,7 @@ async function prepare() {
   if (!refs.length) return
   freeUrls()
   failed.value = []
+  imagesSent.value = false
   if (!withImages.value) {
     text.value = refs.map((r) => lineOf(r)).join('\n')
     stage.value = 'done'
@@ -161,12 +162,32 @@ async function copyText(silent = false) {
   }
 }
 
+/**
+ * Картинки ушли в другое приложение. Telegram берёт подпись только к одной картинке:
+ * когда их несколько, текст он отбрасывает — тогда список отправляют вторым сообщением.
+ */
+const imagesSent = ref(false)
+const needsSecondStep = computed(() => canShareFiles.value && files.value.length > 1)
+
 function share() {
   // не все мессенджеры берут подпись вместе с картинками — на этот случай список уже лежит в буфере
   if (files.value.length) copyText(true)
-  const data: ShareData = canShareFiles.value ? { files: files.value, text: text.value } : { text: text.value }
-  navigator.share(data).catch((e) => {
-    if ((e as Error)?.name !== 'AbortError') toast('Система не приняла отправку. Сохраните картинки и вставьте список вручную', 'error', 7000)
+  const withFiles = canShareFiles.value
+  const data: ShareData = withFiles ? { files: files.value, text: text.value } : { text: text.value }
+  navigator
+    .share(data)
+    .then(() => {
+      if (withFiles && files.value.length > 1) imagesSent.value = true
+    })
+    .catch((e) => {
+      if ((e as Error)?.name !== 'AbortError') toast('Система не приняла отправку. Сохраните картинки и вставьте список вручную', 'error', 7000)
+    })
+}
+
+/** Только список, без картинок — отдельным сообщением */
+function shareText() {
+  navigator.share({ text: text.value }).catch((e) => {
+    if ((e as Error)?.name !== 'AbortError') copyText()
   })
 }
 
@@ -272,7 +293,14 @@ async function copyImage(s: CoinShot) {
           <Icon name="share" :size="16" />{{ canShareFiles || !shots.length ? 'Отправить' : 'Отправить список' }}
         </button>
       </footer>
-      <p v-if="shots.length && canShareFiles" class="tip muted">Список заодно копируется в буфер: если мессенджер не подставит его подписью к картинкам — вставьте.</p>
+      <div v-if="needsSecondStep" class="second" :class="{ now: imagesSent }">
+        <p>
+          <b v-if="imagesSent">Картинки переданы.</b>
+          Telegram не берёт подпись, когда картинок несколько (WhatsApp берёт). Список уже в буфере — вставьте его в чат или отправьте вторым сообщением.
+        </p>
+        <button class="btn" :class="{ primary: imagesSent }" @click="shareText"><Icon name="share" :size="16" />Отправить список</button>
+      </div>
+      <p v-else-if="shots.length && canShareFiles" class="tip muted">Список уйдёт подписью к картинке и заодно копируется в буфер.</p>
       <p v-else-if="shots.length" class="tip muted">Этот браузер не передаёт картинки в другие приложения: сохраните их файлами или копируйте по одной, список — кнопкой «Список».</p>
     </template>
   </Modal>
@@ -468,6 +496,31 @@ input[type='checkbox'] {
   padding: 0 12px 10px;
   font-size: 11.5px;
 }
+/* второй шаг для мессенджеров, которые не берут подпись к нескольким картинкам */
+.second {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 12px 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 12px;
+  color: var(--muted);
+  flex: none;
+}
+.second p {
+  flex: 1;
+  margin: 0;
+}
+.second b {
+  color: var(--text);
+}
+.second.now {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--text);
+}
 @media (max-width: 719px) {
   .coin {
     height: 40px;
@@ -480,6 +533,17 @@ input[type='checkbox'] {
     flex: 1 1 100%;
     order: 5;
     height: 44px;
+  }
+  .second {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .second .btn {
+    border: 1px solid var(--border);
+  }
+  .second .btn.primary {
+    height: 44px;
+    border: 0;
   }
 }
 </style>
