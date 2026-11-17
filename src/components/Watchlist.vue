@@ -75,7 +75,8 @@ interface Status {
 function positionStatus(key: string): Status | null {
   const p = tracked[key]
   if (!p) return null
-  if (p.status === 'pending') return { text: 'ждёт', cls: 'muted', title: 'Время входа ещё не наступило' }
+  if (p.status === 'pending') return { text: 'ждёт', cls: 'muted', title: 'Вход не исполнен: цена ещё не дошла до уровня входа' }
+  if (p.status === 'missed') return { text: 'без входа', cls: 'muted', title: 'Цена так и не дошла до уровня входа до конца позиции' }
   const value = currentR(key)
   if (value == null) return null
   const mark = p.status === 'tp' ? '✓ ' : p.status === 'sl' ? '✕ ' : ''

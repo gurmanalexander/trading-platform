@@ -55,22 +55,27 @@ export function setPositionPrices(d: Drawing, entry: number, stop: number, targe
 
 export interface PositionState {
   /**
-   * pending — время входа ещё не наступило; open — идёт; tp/sl — закрыта по цели или стопу;
-   * closed — правый край позиции пройден, а ни цель, ни стоп не задеты: итог — по закрытию последней свечи позиции
+   * pending — вход ещё не исполнен: время входа не наступило или цена после него ещё не доходила до уровня входа;
+   * open — идёт; tp/sl — закрыта по цели или стопу; closed — правый край позиции пройден, а ни цель, ни стоп
+   * не задеты: итог — по закрытию последней свечи позиции; missed — до правого края цена так и не дошла до входа
    */
-  status: 'pending' | 'open' | 'tp' | 'sl' | 'closed'
+  status: 'pending' | 'open' | 'tp' | 'sl' | 'closed' | 'missed'
   /** результат в R: сколько рисков прошла цена от входа (у закрытой — итог) */
   r: number
+  /** свеча, на которой исполнился вход (у неисполненной — время входа позиции) */
+  fillTime: number
   /** где сделка сейчас или где закрылась */
   exitTime: number
   exitPrice: number
 }
 
 /**
- * Ход сделки по свечам от времени входа до правого края позиции. Свечи правее края не учитываются:
- * касание цели или стопа после окончания позиции её не закрывает.
- * Если одна свеча задела и стоп, и цель, считаем, что первым был стоп: по свече порядок не восстановить,
- * а это осторожная оценка.
+ * Ход сделки по свечам от времени входа до правого края позиции, как у позиции в TradingView.
+ * Сделка открывается не по времени, а на первой свече, которая коснулась цены входа (как лимитная заявка);
+ * свечи правее края позиции не учитываются.
+ * Внутри одной свечи порядок цен не восстановить, поэтому оценка осторожная: задетый стоп важнее цели,
+ * а на свече входа цель засчитывается, только если свеча открылась по другую сторону входа — иначе
+ * цена могла пройти цель ещё до входа.
  */
 export function evaluatePosition(d: Drawing, bars: Bar[], lastPrice?: number): PositionState {
   const entry = d.pts[0].p
@@ -81,7 +86,8 @@ export function evaluatePosition(d: Drawing, bars: Bar[], lastPrice?: number): P
   const sign = d.type === 'long' ? 1 : -1
   const risk = Math.abs(entry - stop)
   const n = bars.length
-  if (!n || !risk || bars[n - 1].time < t0) return { status: 'pending', r: 0, exitTime: t0, exitPrice: entry }
+  const waiting: PositionState = { status: 'pending', r: 0, fillTime: t0, exitTime: t0, exitPrice: entry }
+  if (!n || !risk || bars[n - 1].time < t0) return waiting
   let lo = 0
   let hi = n
   while (lo < hi) {
@@ -89,23 +95,33 @@ export function evaluatePosition(d: Drawing, bars: Bar[], lastPrice?: number): P
     if (bars[mid].time < t0) lo = mid + 1
     else hi = mid
   }
+  const rOf = (price: number) => (sign * (price - entry)) / risk
+  let fill = -1
   let i = lo
   for (; i < n && bars[i].time <= t1; i++) {
     const b = bars[i]
+    if (fill < 0) {
+      if (b.low > entry || b.high < entry) continue
+      fill = i
+    }
     const hitStop = sign > 0 ? b.low <= stop : b.high >= stop
-    const hitTarget = sign > 0 ? b.high >= target : b.low <= target
-    if (hitStop) return { status: 'sl', r: -1, exitTime: b.time, exitPrice: stop }
-    if (hitTarget) return { status: 'tp', r: Math.abs(target - entry) / risk, exitTime: b.time, exitPrice: target }
+    // на свече входа цель могла быть пройдена ещё до него: верим ей, только если свеча открылась со стороны стопа
+    const fromStopSide = sign > 0 ? b.open <= entry : b.open >= entry
+    const hitTarget = (i > fill || fromStopSide) && (sign > 0 ? b.high >= target : b.low <= target)
+    const fillTime = bars[fill].time
+    if (hitStop) return { status: 'sl', r: -1, fillTime, exitTime: b.time, exitPrice: stop }
+    if (hitTarget) return { status: 'tp', r: Math.abs(target - entry) / risk, fillTime, exitTime: b.time, exitPrice: target }
   }
-  const rOf = (price: number) => (sign * (price - entry)) / risk
-  if (i < n) {
-    // за правым краем уже есть свечи — позиция закончилась по времени
-    const last = i > lo ? bars[i - 1] : null
-    const price = last ? last.close : entry
-    return { status: 'closed', r: rOf(price), exitTime: last ? last.time : t0, exitPrice: price }
+  // за правым краем уже есть свечи — позиция закончилась по времени
+  const over = i < n
+  if (fill < 0) return over ? { ...waiting, status: 'missed' } : waiting
+  const fillTime = bars[fill].time
+  if (over) {
+    const last = bars[i - 1]
+    return { status: 'closed', r: rOf(last.close), fillTime, exitTime: last.time, exitPrice: last.close }
   }
   const price = lastPrice ?? bars[n - 1].close
-  return { status: 'open', r: rOf(price), exitTime: bars[n - 1].time, exitPrice: price }
+  return { status: 'open', r: rOf(price), fillTime, exitTime: bars[n - 1].time, exitPrice: price }
 }
 
 /** Самая поздняя по времени входа позиция среди рисунков инструмента */

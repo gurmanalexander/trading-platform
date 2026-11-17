@@ -1093,21 +1093,23 @@ export class DrawingsLayer {
         ctx.fillRect(x1, Math.min(yE, yT), x2 - x1, Math.abs(yT - yE))
         ctx.fillStyle = withAlpha(c.down, hover || handles ? 0.26 : 0.18)
         ctx.fillRect(x1, Math.min(yE, yS), x2 - x1, Math.abs(yS - yE))
-        // Ход сделки: яркая область от входа до текущей цены (или до закрытия по стопу/цели)
+        // Ход сделки: яркая область от исполнения входа до текущей цены (или до закрытия по стопу/цели)
         // и пунктир от точки входа к этой цене — видно, где сделка сейчас и чем закончилась.
+        // Пока цена не дошла до входа, сделки нет и ход не рисуется.
         const bars = this.host.bars()
         const st = evaluatePosition(d, bars)
-        if (st.status !== 'pending') {
+        if (st.status !== 'pending' && st.status !== 'missed') {
+          const xf = Math.max(x1, this.xOf(st.fillTime) ?? x1)
           const xe = this.xOf(st.exitTime)
           const ye = this.host.series().priceToCoordinate(st.exitPrice)
-          if (xe != null && ye != null && xe > x1) {
+          if (xe != null && ye != null && xe >= xf) {
             const col = (d.type === 'long' ? st.exitPrice >= entry : st.exitPrice <= entry) ? c.up : c.down
             ctx.fillStyle = withAlpha(col, 0.32)
-            ctx.fillRect(x1, Math.min(yE, ye), xe - x1, Math.abs(ye - yE))
+            ctx.fillRect(xf, Math.min(yE, ye), Math.max(1, xe - xf), Math.abs(ye - yE))
             ctx.strokeStyle = col
             ctx.lineWidth = 1
             ctx.setLineDash([4, 3])
-            line({ x: x1, y: yE }, { x: xe, y: ye })
+            line({ x: xf, y: yE }, { x: xe, y: ye })
             ctx.setLineDash([])
           }
         }
@@ -1117,7 +1119,7 @@ export class DrawingsLayer {
         // на мелком масштабе (другой интервал) подписи слиплись бы — показываем их только у выбранной позиции
         if (!hover && !handles && (Math.abs(yT - yS) < 70 || x2 - x1 < 90)) break
         const pct = (v: number) => fmtPct(entry ? ((v - entry) / entry) * 100 : 0)
-        const result = st.status === 'open' ? ` · сейчас ${fmtR(st.r)}` : st.status === 'tp' ? ` · тейк ${fmtR(st.r)}` : st.status === 'sl' ? ' · стоп -1R' : st.status === 'closed' ? ` · закрыта ${fmtR(st.r)}` : ''
+        const result = st.status === 'open' ? ` · сейчас ${fmtR(st.r)}` : st.status === 'tp' ? ` · тейк ${fmtR(st.r)}` : st.status === 'sl' ? ' · стоп -1R' : st.status === 'closed' ? ` · закрыта ${fmtR(st.r)}` : st.status === 'missed' ? ' · вход не исполнен' : bars.length && bars[bars.length - 1].time >= d.pts[0].t ? ' · ждёт входа' : ''
         const texts = [
           `Цель ${fmtPrice(target, prec)} (${pct(target)})`,
           `Стоп ${fmtPrice(stop, prec)} (${pct(stop)})`,

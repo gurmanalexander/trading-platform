@@ -51,8 +51,8 @@ const sides = computed(() => {
 
 // ---------- сделки ----------
 
-const STATE = { pending: 'ждёт входа', open: 'идёт', tp: 'тейк', sl: 'стоп', closed: 'по времени' } as const
-const ORDER = ['open', 'pending', 'tp', 'sl', 'closed']
+const STATE = { pending: 'ждёт входа', open: 'идёт', tp: 'тейк', sl: 'стоп', closed: 'по времени', missed: 'без входа' } as const
+const ORDER = ['open', 'pending', 'tp', 'sl', 'closed', 'missed']
 const trades = computed(() =>
   coins.value
     .filter((c) => tracked[c.key])
@@ -196,7 +196,7 @@ function go(panel: 'screener' | 'watchlist' | 'alerts') {
             <b>{{ name(t.ref) }}</b>
             <span :class="t.p.type === 'long' ? 'up' : 'down'">{{ t.p.type === 'long' ? 'лонг' : 'шорт' }}</span>
             <span class="muted grow">{{ STATE[t.p.status] }} · вход {{ price(t.key, t.p.entry) }}</span>
-            <b v-if="t.r != null && t.p.status !== 'pending'" :class="t.r >= 0 ? 'up' : 'down'">{{ fmtR(t.r) }}</b>
+            <b v-if="t.r != null && t.p.status !== 'pending' && t.p.status !== 'missed'" :class="t.r >= 0 ? 'up' : 'down'">{{ fmtR(t.r) }}</b>
           </button>
           <p v-if="!trades.length" class="muted none">Позиций на графиках монет из списков нет.</p>
         </section>

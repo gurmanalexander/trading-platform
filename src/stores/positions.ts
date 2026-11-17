@@ -12,8 +12,11 @@ export interface Tracked {
   entry: number
   stop: number
   target: number
-  /** правый край позиции, с — после него живая цена сделку не закрывает */
+  /** время входа и правый край позиции, с — после края живая цена сделку не закрывает */
+  start: number
   end: number
+  /** у ждущей входа: цена при последней проверке была выше уровня входа */
+  above?: boolean
   status: PositionState['status']
   /** итог закрытой сделки, R; у открытой считается на лету по текущей цене */
   r: number
@@ -42,7 +45,7 @@ async function evaluate(ref: SymbolRef) {
   const sig = signature(d)
   if (done.get(key) === sig) return
   done.set(key, sig)
-  const base = { type: d.type as 'long' | 'short', entry: d.pts[0].p, target: d.pts[1].p, stop: d.pts[2].p, end: d.pts[1].t }
+  const base = { type: d.type as 'long' | 'short', entry: d.pts[0].p, target: d.pts[1].p, stop: d.pts[2].p, start: d.pts[0].t, end: d.pts[1].t }
   const age = Date.now() / 1000 - d.pts[0].t
   if (age <= 0) {
     tracked[key] = { ...base, status: 'pending', r: 0 }
@@ -53,7 +56,8 @@ async function evaluate(ref: SymbolRef) {
     const { bars } = await adapters[ref.exchange].fetchKlines(ref.market, ref.symbol, tf, 1000)
     if (done.get(key) !== sig) return // пока ждали ответ, позицию изменили
     const st = evaluatePosition(d, bars)
-    tracked[key] = { ...base, status: st.status, r: st.r }
+    const last = bars[bars.length - 1]?.close
+    tracked[key] = { ...base, status: st.status, r: st.r, above: last != null ? last > base.entry : undefined }
   } catch {
     done.delete(key) // повторим при следующем изменении или обновлении списка
   }
@@ -86,18 +90,28 @@ export function useTrackedPositions(source: WatchSource<SymbolRef[]>) {
   })
 }
 
-// Открытая сделка закрывается, как только живая цена доходит до стопа или цели.
-// После правого края позиции живая цена её уже не закрывает: итог уточняется по свечам (не чаще раза в минуту)
+/** Пересчёт по свечам — не чаще раза в минуту */
+function recheck(key: string) {
+  const ref = refs.get(key)
+  if (!ref || Date.now() - (rechecked.get(key) ?? 0) < 60_000) return
+  rechecked.set(key, Date.now())
+  done.delete(key)
+  evaluate(ref)
+}
+
+// Ждущая сделка открывается, когда живая цена доходит до уровня входа; открытая закрывается,
+// как только цена доходит до стопа или цели. После правого края позиции живая цена её уже не меняет:
+// итог уточняется по свечам
 onTicker((key, t) => {
   const p = tracked[key]
-  if (!p || p.status !== 'open') return
-  if (Date.now() / 1000 > p.end) {
-    const ref = refs.get(key)
-    if (ref && Date.now() - (rechecked.get(key) ?? 0) > 60_000) {
-      rechecked.set(key, Date.now())
-      done.delete(key)
-      evaluate(ref)
-    }
+  if (!p || (p.status !== 'open' && p.status !== 'pending')) return
+  const now = Date.now() / 1000
+  if (now > p.end) return recheck(key)
+  if (p.status === 'pending') {
+    if (now < p.start) return
+    // с какой стороны была цена, неизвестно (вход был в будущем) — узнаём по свечам
+    if (p.above === undefined) return recheck(key)
+    if (p.above ? t.last <= p.entry : t.last >= p.entry) tracked[key] = { ...p, status: 'open', r: 0 }
     return
   }
   const sign = p.type === 'long' ? 1 : -1
