@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import Modal from './Modal.vue'
 import { app } from '../stores/app'
-import { settings, total, universe, resetSettings } from '../stores/screener'
+import { settings, state, total, universe, resetSettings } from '../stores/screener'
 
 // Условия отбора — в отдельном окне: биржа и рынок, пороги по обороту и изменению цены, сортировка.
 const close = () => (app.screenerFilterOpen = false)
@@ -39,6 +39,18 @@ const VOLUMES = [10, 30, 50, 100, 300]
         <span>Изменение за 24 часа — от, % (в любую сторону)</span>
         <input v-model.number="settings.minChange" class="field" type="number" min="0" step="1" inputmode="decimal" />
       </label>
+      <label>
+        <span>Что показывать</span>
+        <select v-model="settings.assets" class="field">
+          <option value="crypto">Только криптовалюты</option>
+          <option value="tradfi">Только акции и TradFi (сырьё, валюты, до IPO)</option>
+          <option value="all">Всё вместе</option>
+        </select>
+      </label>
+      <p v-if="settings.exchange === 'binance' && settings.market === 'spot'" class="muted hint">
+        На споте Binance биржа не помечает токенизированные акции (bStocks) в открытых данных — здесь они идут как криптовалюты.
+      </p>
+      <p v-else-if="state.kindsError" class="muted hint">Не удалось получить с биржи список акций — сейчас все инструменты считаются криптовалютами.</p>
       <label>
         <span>Валюта котировки</span>
         <select v-model="settings.quote" class="field">
@@ -78,6 +90,10 @@ const VOLUMES = [10, 30, 50, 100, 300]
   gap: 12px;
   padding: 14px 16px 16px;
   overflow-y: auto;
+}
+.hint {
+  margin: -6px 0 0;
+  font-size: 12px;
 }
 label {
   display: flex;

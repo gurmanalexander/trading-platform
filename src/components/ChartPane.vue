@@ -80,6 +80,7 @@ watch(() => [pane.scale, pane.invert], () => ctrl.value?.applyScale())
 watch(() => pane.indicators, () => ctrl.value?.syncIndicators(), { deep: true })
 watch([theme, () => app.colors], () => ctrl.value?.applyTheme(), { deep: true })
 watch(() => app.drawingsHidden, () => ctrl.value?.draw.redraw())
+watch(() => [app.view.scaleFont, app.view.countdown, app.risk.deposit, app.risk.pct], () => ctrl.value?.applyView())
 
 // ---------- синхронизация с другими панелями ----------
 
@@ -88,7 +89,7 @@ watch(crosshairBus, (v) => {
   if (!c) return
   if (!v || !app.sync.crosshair) c.clearSyncCrosshair()
   // цену показываем только на том же инструменте: у другого она ничего не значит
-  else if (v.pane !== props.index) c.showSyncCrosshair(v.time, v.key === key.value ? v.price : NaN)
+  else if (v.pane !== props.index) c.showSyncCrosshair(v.time, v.key === key.value ? v.price : NaN, v.span)
 })
 watch(dateFocus, () => ctrl.value?.onDateFocus())
 watch(timeBus, (v) => {

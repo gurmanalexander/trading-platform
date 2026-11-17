@@ -124,6 +124,7 @@ function saveNew() {
         <button class="menu-item" @click="(app.syncOpen = true), close()"><Icon name="cloud" :size="16" />Синхронизация устройств…</button>
         <button class="menu-item" @click="(app.transfer = { code: '' }), close()"><Icon name="share" :size="16" />Перенос с другого устройства</button>
         <button class="menu-item" @click="(app.colorsOpen = true), close()"><Icon name="pencil" :size="16" />Свои цвета</button>
+        <button class="menu-item" @click="(app.viewOpen = true), close()"><Icon name="text" :size="16" />Шрифты, таймер, размер позиции</button>
 
         <div class="menu-title">Тема</div>
         <div class="icons">

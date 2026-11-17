@@ -3,6 +3,7 @@ import { decimalsOf } from '../lib/format'
 import { getJson } from './http'
 import { StreamSocket } from './ws'
 import type { ExchangeAdapter } from './types'
+import { bybitKind, type KindMap } from './tradfi'
 
 const REST = ['https://api.bybit.com', 'https://api.bytick.com']
 const CATEGORY: Record<MarketId, string> = { spot: 'spot', futures: 'linear' }
@@ -105,6 +106,30 @@ export const bybit: ExchangeAdapter = {
         changePct: +r.price24hPcnt * 100 || 0,
         quoteVolume: +r.turnover24h || 0,
       })
+    }
+    return out
+  },
+
+  async fetchKinds(market) {
+    const out: KindMap = new Map()
+    const add = (list: any[]) => {
+      for (const r of list) {
+        const kind = bybitKind(r)
+        if (kind) out.set(r.symbol, kind)
+      }
+    }
+    if (market === 'spot') {
+      // спот отдаётся одним ответом; акции — xstocks и mstocks
+      for (const type of ['xstocks', 'mstocks']) add((await api(`/v5/market/instruments-info?category=spot&symbolType=${type}`)).list ?? [])
+      return out
+    }
+    // фьючерсы — страницами по 1000
+    let cursor = ''
+    for (let page = 0; page < 10; page++) {
+      const res = await api(`/v5/market/instruments-info?category=linear&limit=1000${cursor ? '&cursor=' + encodeURIComponent(cursor) : ''}`)
+      add(res.list ?? [])
+      cursor = res.nextPageCursor ?? ''
+      if (!cursor) break
     }
     return out
   },

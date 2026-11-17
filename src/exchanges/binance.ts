@@ -3,6 +3,7 @@ import { decimalsOf } from '../lib/format'
 import { getJson } from './http'
 import { StreamSocket, type StreamConfig } from './ws'
 import type { ExchangeAdapter } from './types'
+import { binanceFuturesKind, type KindMap } from './tradfi'
 
 // Спот: data-api.binance.vision / data-stream.binance.vision — официальные адреса «только рыночные данные».
 // Фьючерсы USDⓈ-M: свечи и тикеры идут по маршруту /market; прежний общий адрес оставлен запасным.
@@ -101,6 +102,18 @@ export const binance: ExchangeAdapter = {
         changePct: open ? ((last - open) / open) * 100 : 0,
         quoteVolume,
       })
+    }
+    return out
+  },
+
+  async fetchKinds(market) {
+    const out: KindMap = new Map()
+    // на споте Binance отличить токенизированные акции по открытым данным нельзя: такого поля нет
+    if (market !== 'futures') return out
+    const info = await getJson(REST.futures, '/fapi/v1/exchangeInfo')
+    for (const r of info.symbols ?? []) {
+      const kind = binanceFuturesKind(r)
+      if (kind) out.set(r.symbol, kind)
     }
     return out
   },

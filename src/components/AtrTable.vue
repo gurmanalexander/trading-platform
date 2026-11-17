@@ -110,6 +110,7 @@ const t = computed(() => {
 
 <style scoped>
 .atr-table {
+  zoom: var(--legend-zoom, 1);
   border-collapse: collapse;
   font-size: 11px;
   line-height: 1.25;

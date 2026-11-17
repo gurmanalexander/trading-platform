@@ -34,6 +34,7 @@ const HotkeysDialog = defineAsyncComponent(() => import('./components/HotkeysDia
 const TextDialog = defineAsyncComponent(() => import('./components/TextDialog.vue'))
 const TradeTextDialog = defineAsyncComponent(() => import('./components/TradeTextDialog.vue'))
 const ColorsDialog = defineAsyncComponent(() => import('./components/ColorsDialog.vue'))
+const ViewDialog = defineAsyncComponent(() => import('./components/ViewDialog.vue'))
 const Dashboard = defineAsyncComponent(() => import('./components/Dashboard.vue'))
 const TutorialDialog = defineAsyncComponent(() => import('./components/TutorialDialog.vue'))
 const SyncDialog = defineAsyncComponent(() => import('./components/SyncDialog.vue'))
@@ -51,8 +52,9 @@ watch(
   { immediate: true },
 )
 
-// Свои цвета перекрывают переменные темы; сброшенный цвет возвращается к стандартному
-const CSS_VARS = { up: '--up', down: '--down', bg: '--bg', accent: '--accent' } as const
+// Свои цвета перекрывают переменные темы; сброшенный цвет возвращается к стандартному.
+// Цвета свечей сюда не входят: рост и падение в цифрах интерфейса — всегда стандартные зелёный и красный
+const CSS_VARS = { bg: '--bg', accent: '--accent' } as const
 watch(
   [theme, () => app.colors],
   () => {
@@ -65,6 +67,13 @@ watch(
     }
   },
   { immediate: true, deep: true },
+)
+
+// Крупная легенда и таблица ATR — для тех, кому мелко: масштаб относительно обычных 12px
+watch(
+  () => app.view.legendFont,
+  (px) => document.documentElement.style.setProperty('--legend-zoom', String(px / 12)),
+  { immediate: true },
 )
 
 // ---------- что видно на телефоне ----------
@@ -383,6 +392,7 @@ onBeforeUnmount(() => {
     <TextDialog v-if="app.textEdit" :key="app.textEdit.id ?? 'new'" />
     <TradeTextDialog v-if="app.tradeTextOpen" />
     <ColorsDialog v-if="app.colorsOpen" />
+    <ViewDialog v-if="app.viewOpen" />
     <TransferDialog v-if="app.transfer" />
     <ShareDialog v-if="app.shareOpen" />
     <ListShareDialog v-if="app.listShareOpen" />

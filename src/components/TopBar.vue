@@ -316,6 +316,7 @@ function fullscreen() {
           <Icon :name="t.icon" :size="16" />{{ t.label }}
         </button>
         <button class="menu-item" @click="(app.colorsOpen = true), close()"><Icon name="pencil" :size="16" />Свои цвета…</button>
+        <button class="menu-item" @click="(app.viewOpen = true), close()"><Icon name="text" :size="16" />Шрифты, таймер, размер позиции…</button>
         <div class="menu-sep" />
         <button class="menu-item" @click="(app.syncOpen = true), close()"><Icon name="cloud" :size="16" />Синхронизация устройств…</button>
         <button class="menu-item" @click="(app.transfer = { code: '' }), close()"><Icon name="phone" :size="16" />Разовый перенос (QR, ссылка, файл)…</button>

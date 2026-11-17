@@ -205,7 +205,36 @@ interface Saved {
   panelWidth?: number
   listTab?: BoundTab
   drawBarPos?: { x: number; y: number } | null
+  view?: Partial<ViewSettings>
+  risk?: Partial<RiskSettings>
 }
+
+/** Вид: размеры шрифтов (для тех, кому мелко) и таймер свечи */
+export interface ViewSettings {
+  /** шрифт шкал цены и времени и подписей рисунков, px */
+  scaleFont: number
+  /** шрифт легенды (цены свечи, ATR) и таблицы ATR, px */
+  legendFont: number
+  /** время до закрытия свечи под последней ценой на шкале */
+  countdown: boolean
+}
+
+/** Объём позиции: депозит и риск на сделку в процентах от него */
+export interface RiskSettings {
+  deposit: number
+  pct: number
+}
+
+export const SCALE_FONTS = [11, 12, 13, 14, 16, 18, 20, 24]
+export const LEGEND_FONTS = [12, 13, 14, 16, 18, 20, 24]
+const pick = (v: unknown, list: number[], def: number) => (typeof v === 'number' && list.includes(v) ? v : def)
+const sanitizeView = (v?: Partial<ViewSettings>): ViewSettings => ({
+  scaleFont: pick(v?.scaleFont, SCALE_FONTS, 11),
+  legendFont: pick(v?.legendFont, LEGEND_FONTS, 12),
+  countdown: v?.countdown !== false,
+})
+const positive = (v: unknown, def: number, max: number) => (typeof v === 'number' && isFinite(v) && v >= 0 ? Math.min(max, v) : def)
+const sanitizeRisk = (v?: Partial<RiskSettings>): RiskSettings => ({ deposit: positive(v?.deposit, 0, 1e12), pct: positive(v?.pct, 1, 100) })
 
 const saved = load<Saved>('app', {})
 const PANELS: PanelId[] = ['screener', 'watchlist', 'checklist', 'alerts']
@@ -275,6 +304,9 @@ export const app = reactive({
     ? { x: Math.min(1, Math.max(0, saved.drawBarPos.x)), y: Math.min(1, Math.max(0, saved.drawBarPos.y)) }
     : null) as { x: number; y: number } | null,
 
+  view: sanitizeView(saved.view),
+  risk: sanitizeRisk(saved.risk),
+
   // не сохраняется
   tool: 'cursor' as Tool,
   mobileTab: 'chart' as MobileTab,
@@ -306,13 +338,14 @@ export const app = reactive({
   /** код синхронизации, пришедший по ссылке: окно синхронизации откроется с ним */
   syncCode: '',
   colorsOpen: false,
+  viewOpen: false,
   /** окно переноса настроек; code — данные, пришедшие по ссылке с другого устройства */
   transfer: null as null | { code: string },
 })
 
 persist(
   'app',
-  () => [app.themePref, app.layout, app.panes, app.active, app.panel, app.panelOpen, app.magnet, app.sync, app.favTfs, app.templates, app.templateId, app.tabTemplates, app.searchFilter, app.drawingsHidden, app.phoneStack, app.defaults, app.colors, app.atrTable, app.panelWidth, app.listTab, app.drawBarPos],
+  () => [app.themePref, app.layout, app.panes, app.active, app.panel, app.panelOpen, app.magnet, app.sync, app.favTfs, app.templates, app.templateId, app.tabTemplates, app.searchFilter, app.drawingsHidden, app.phoneStack, app.defaults, app.colors, app.atrTable, app.panelWidth, app.listTab, app.drawBarPos, app.view, app.risk],
   () => ({
     themePref: app.themePref,
     layout: app.layout,
@@ -335,6 +368,8 @@ persist(
     panelWidth: app.panelWidth,
     listTab: app.listTab,
     drawBarPos: app.drawBarPos,
+    view: app.view,
+    risk: app.risk,
   }),
 )
 
@@ -365,7 +400,7 @@ export const paneCount = computed(() => layoutCount(app.layout))
 export const activeIndex = computed(() => Math.min(app.active, paneCount.value - 1))
 export const activePane = computed(() => app.panes[activeIndex.value])
 export const modalOpen = computed(
-  () => !!(app.search || app.indicatorsOpen || app.indSettings || app.intervalInput || app.hotkeysOpen || app.gotoOpen || app.textEdit || app.tradeTextOpen || app.shareOpen || app.listShareOpen || app.dashboardOpen || app.screenerFilterOpen || app.syncOpen || app.tutorialOpen || app.colorsOpen || app.transfer),
+  () => !!(app.search || app.indicatorsOpen || app.indSettings || app.intervalInput || app.hotkeysOpen || app.gotoOpen || app.textEdit || app.tradeTextOpen || app.shareOpen || app.listShareOpen || app.dashboardOpen || app.screenerFilterOpen || app.syncOpen || app.tutorialOpen || app.colorsOpen || app.viewOpen || app.transfer),
 )
 
 // ---------- действия ----------
@@ -554,7 +589,7 @@ export function dismissToast(id: number) {
  * биржа по умолчанию. Раскладка, открытая монета и тема — у каждого устройства свои.
  */
 export function exportSettings() {
-  return { favTfs: app.favTfs, templates: app.templates, tabTemplates: app.tabTemplates, colors: app.colors, defaults: app.defaults, atrTable: app.atrTable }
+  return { favTfs: app.favTfs, templates: app.templates, tabTemplates: app.tabTemplates, colors: app.colors, defaults: app.defaults, atrTable: app.atrTable, risk: app.risk }
 }
 
 export function importSettings(raw: unknown) {
@@ -570,4 +605,5 @@ export function importSettings(raw: unknown) {
   if (v.colors) app.colors = { dark: sanitizeColors(v.colors.dark), light: sanitizeColors(v.colors.light) }
   if (v.defaults) app.defaults = { exchange: v.defaults.exchange === 'bybit' ? 'bybit' : 'binance', market: v.defaults.market === 'spot' ? 'spot' : 'futures' }
   if (typeof v.atrTable === 'boolean') app.atrTable = v.atrTable
+  if (v.risk) app.risk = sanitizeRisk(v.risk)
 }

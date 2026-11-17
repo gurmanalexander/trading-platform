@@ -31,6 +31,7 @@ import { dayStats } from '../stores/atr'
 import { clearView, getView, setView, viewKey, type ChartView } from '../stores/views'
 import { chartColors, withAlpha, type ChartColors } from './theme'
 import { DrawingsLayer } from './drawings'
+import { countdownPrimitive } from './countdown'
 import { heikinAshi, heikinBar, lowerBound } from './bars'
 
 export interface Legend {
@@ -162,7 +163,7 @@ export class ChartController {
       layout: {
         background: { type: ColorType.Solid, color: c.bg },
         textColor: c.text,
-        fontSize: 11,
+        fontSize: app.view.scaleFont,
         fontFamily: FONT,
         panes: { separatorColor: c.border, separatorHoverColor: withAlpha(c.accent, 0.25), enableResize: true },
       },
@@ -708,6 +709,19 @@ export class ChartController {
     }
     this.main = s
     this.draw.attach(s)
+    s.attachPrimitive(
+      countdownPrimitive({
+        last: () => {
+          const b = this.shown[this.shown.length - 1]
+          return b ? { time: b.time, close: b.close, up: b.close >= b.open } : null
+        },
+        tfSec: () => this.tf.sec,
+        yOf: (p) => this.main.priceToCoordinate(p) as number | null,
+        fontSize: () => app.view.scaleFont,
+        enabled: () => app.view.countdown && this.live,
+        colors: () => (isOhlc(this.pane.chartType) ? this.colors : { up: this.colors.line, down: this.colors.line }),
+      }),
+    )
     this.alertLines = []
     this.setAlertLines(this.alertPrices)
   }
@@ -806,13 +820,18 @@ export class ChartController {
     this.centerOn(t)
   }
 
-  /** Перекрестие, пришедшее из другой панели. price = NaN — показать только момент времени */
-  showSyncCrosshair(t: number, price: number) {
+  /**
+   * Перекрестие, пришедшее из другой панели. price = NaN — показать только момент времени.
+   * span — длина свечи панели-источника: если её свеча (например, сегодняшняя дневная) захватывает
+   * последнюю свечу этого окна, или курсор там правее данных, перекрестие встаёт на последнюю свечу,
+   * а не пропадает и не уезжает на начало дня за край экрана.
+   */
+  showSyncCrosshair(t: number, price: number, span = 0) {
     const b = this.bars
     const n = b.length
     if (!n || this.pointerInside) return
-    const i = lowerBound(b, t + 1) - 1
-    if (i < 0 || t >= b[n - 1].time + this.tf.sec) {
+    const i = t + span > b[n - 1].time ? n - 1 : lowerBound(b, t + 1) - 1
+    if (i < 0) {
       this.clearSyncCrosshair()
       return
     }
@@ -873,6 +892,12 @@ export class ChartController {
   goRealtime() {
     this.chart.timeScale().scrollToRealTime()
     this.scheduleSaveView()
+  }
+
+  /** Размер шрифта шкал поменяли в настройках */
+  applyView() {
+    this.chart.applyOptions({ layout: { fontSize: app.view.scaleFont } })
+    this.draw.redraw()
   }
 
   applyTheme() {
@@ -1007,9 +1032,16 @@ export class ChartController {
     if (!this.pointerInside && this.syncIdx >= 0) return
     this.syncIdx = -1
     if (this.pointerInside && app.sync.crosshair && paneCount.value > 1) {
-      if (param.time !== undefined && param.point) {
+      // правее последней свечи библиотека времени не сообщает — считаем его по номеру свечи сами,
+      // иначе перекрестие в остальных окнах пропадает, стоит увести курсор за последнюю свечу
+      let t: number | null = param.time !== undefined ? (param.time as number) - this.tz : null
+      if (t === null && param.point && this.bars.length) {
+        const lg = this.chart.timeScale().coordinateToLogical(param.point.x)
+        if (lg !== null && lg > this.bars.length - 1) t = this.logicalToTime(lg)
+      }
+      if (t !== null && param.point) {
         const price = (param.paneIndex ?? 0) === 0 ? (this.main.coordinateToPrice(param.point.y) as number | null) : null
-        crosshairBus.value = { pane: this.paneIndex, key: symbolKey(this.pane.symbol), time: (param.time as number) - this.tz, price: price ?? NaN }
+        crosshairBus.value = { pane: this.paneIndex, key: symbolKey(this.pane.symbol), time: t, price: price ?? NaN, span: this.tf.sec }
       } else if (crosshairBus.value?.pane === this.paneIndex) {
         crosshairBus.value = null
       }

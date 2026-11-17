@@ -131,6 +131,37 @@ export function latestPosition(list: Drawing[] | undefined): Drawing | null {
   return best
 }
 
+export interface PositionSize {
+  /** сколько монет купить или продать */
+  qty: number
+  /** объём позиции в валюте котировки (обычно $) */
+  notional: number
+  /** сколько теряется на стопе */
+  risk: number
+}
+
+/** Объём позиции: при срабатывании стопа теряется ровно pct% депозита. null — депозит не задан */
+export function positionSize(d: Drawing, deposit: number, pct: number): PositionSize | null {
+  const dist = Math.abs(d.pts[0].p - d.pts[2].p)
+  if (!(deposit > 0 && pct > 0 && dist > 0)) return null
+  const risk = (deposit * pct) / 100
+  const qty = risk / dist
+  return { qty, notional: qty * d.pts[0].p, risk }
+}
+
+/** Количество монет: «1 234», «12.5», «0.0123» */
+export function fmtQty(v: number): string {
+  if (v >= 1e6) return (v / 1e6).toFixed(2) + 'M'
+  if (v >= 1000) return Math.round(v).toLocaleString('ru-RU')
+  if (v >= 10) return String(+v.toFixed(1))
+  return String(+v.toPrecision(3))
+}
+
+/** Сумма в долларах: «1 250 $», «12.5 $» */
+export function fmtUsd(v: number): string {
+  return (v >= 100 ? Math.round(v).toLocaleString('ru-RU') : String(+v.toFixed(2))) + ' $'
+}
+
 /** «+1.2R», «-0.5R», «0R» */
 export function fmtR(r: number): string {
   if (!isFinite(r) || Math.abs(r) < 0.05) return '0R'
