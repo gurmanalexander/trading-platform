@@ -12,6 +12,8 @@ export interface Tracked {
   entry: number
   stop: number
   target: number
+  /** правый край позиции, с — после него живая цена сделку не закрывает */
+  end: number
   status: PositionState['status']
   /** итог закрытой сделки, R; у открытой считается на лету по текущей цене */
   r: number
@@ -21,12 +23,16 @@ export const tracked = shallowReactive<Record<string, Tracked>>({})
 
 /** подпись позиции, для которой состояние уже посчитано: id + точки */
 const done = new Map<string, string>()
+const refs = new Map<string, SymbolRef>()
+/** когда позицию, у которой прошёл правый край, последний раз пересчитывали по свечам, мс */
+const rechecked = new Map<string, number>()
 const signature = (d: Drawing) => d.id + d.type + JSON.stringify(d.pts)
 // интервал свечей подбирается так, чтобы путь от входа до сейчас уместился в один запрос
 const TFS = ['1m', '5m', '15m', '1h', '4h', '1d']
 
 async function evaluate(ref: SymbolRef) {
   const key = symbolKey(ref)
+  refs.set(key, ref)
   const d = latestPosition(drawings[key])
   if (!d) {
     done.delete(key)
@@ -36,7 +42,7 @@ async function evaluate(ref: SymbolRef) {
   const sig = signature(d)
   if (done.get(key) === sig) return
   done.set(key, sig)
-  const base = { type: d.type as 'long' | 'short', entry: d.pts[0].p, target: d.pts[1].p, stop: d.pts[2].p }
+  const base = { type: d.type as 'long' | 'short', entry: d.pts[0].p, target: d.pts[1].p, stop: d.pts[2].p, end: d.pts[1].t }
   const age = Date.now() / 1000 - d.pts[0].t
   if (age <= 0) {
     tracked[key] = { ...base, status: 'pending', r: 0 }
@@ -80,10 +86,20 @@ export function useTrackedPositions(source: WatchSource<SymbolRef[]>) {
   })
 }
 
-// Открытая сделка закрывается, как только живая цена доходит до стопа или цели
+// Открытая сделка закрывается, как только живая цена доходит до стопа или цели.
+// После правого края позиции живая цена её уже не закрывает: итог уточняется по свечам (не чаще раза в минуту)
 onTicker((key, t) => {
   const p = tracked[key]
   if (!p || p.status !== 'open') return
+  if (Date.now() / 1000 > p.end) {
+    const ref = refs.get(key)
+    if (ref && Date.now() - (rechecked.get(key) ?? 0) > 60_000) {
+      rechecked.set(key, Date.now())
+      done.delete(key)
+      evaluate(ref)
+    }
+    return
+  }
   const sign = p.type === 'long' ? 1 : -1
   if (sign * (t.last - p.stop) <= 0) tracked[key] = { ...p, status: 'sl', r: -1 }
   else if (sign * (t.last - p.target) >= 0) tracked[key] = { ...p, status: 'tp', r: Math.abs(p.target - p.entry) / Math.abs(p.entry - p.stop) }

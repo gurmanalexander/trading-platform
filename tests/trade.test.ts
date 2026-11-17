@@ -116,6 +116,14 @@ describe('ход сделки', () => {
     expect(evaluatePosition(pos('short', 100, 80, 105), bars)).toMatchObject({ status: 'sl', r: -1, exitTime: 160, exitPrice: 105 })
   })
 
+  it('свечи правее края позиции не учитываются: касание цели после окончания её не закрывает', () => {
+    // позиция длится 1000 с: до свечи 1100 включительно
+    const bars = [bar(100, 101, 99, 100), bar(1100, 108, 100, 104), bar(1160, 130, 100, 125)]
+    expect(evaluatePosition(pos('long', 100, 120, 95), bars)).toMatchObject({ status: 'closed', r: 0.8, exitTime: 1100, exitPrice: 104 })
+    // пока за краем свечей нет — сделка ещё идёт
+    expect(evaluatePosition(pos('long', 100, 120, 95), bars.slice(0, 2)).status).toBe('open')
+  })
+
   it('свеча задела и стоп, и цель — считаем стоп', () => {
     expect(evaluatePosition(pos('long', 100, 120, 95), [bar(100, 125, 90, 110)]).status).toBe('sl')
   })

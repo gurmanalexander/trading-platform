@@ -103,11 +103,11 @@ function pickSymbol() {
       </button>
       <span v-if="legend" class="ohlc" :class="legend.up ? 'up' : 'down'">
         <template v-if="!tiny">
-          <span><i>О</i>{{ fmtPrice(legend.o, precision) }}</span>
-          <span><i>В</i>{{ fmtPrice(legend.h, precision) }}</span>
-          <span><i>Н</i>{{ fmtPrice(legend.l, precision) }}</span>
+          <span><i>O</i>{{ fmtPrice(legend.o, precision) }}</span>
+          <span><i>H</i>{{ fmtPrice(legend.h, precision) }}</span>
+          <span><i>L</i>{{ fmtPrice(legend.l, precision) }}</span>
         </template>
-        <span><i v-if="!tiny">З</i>{{ fmtPrice(legend.c, precision) }}</span>
+        <span><i v-if="!tiny">C</i>{{ fmtPrice(legend.c, precision) }}</span>
         <span :class="legend.chg >= 0 ? 'up' : 'down'">{{ fmtPct(legend.chgPct) }}</span>
       </span>
       <span v-if="countdown && !tiny" class="muted countdown" title="До закрытия свечи">{{ countdown }}</span>

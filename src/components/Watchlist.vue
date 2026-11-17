@@ -79,7 +79,7 @@ function positionStatus(key: string): Status | null {
   const value = currentR(key)
   if (value == null) return null
   const mark = p.status === 'tp' ? '✓ ' : p.status === 'sl' ? '✕ ' : ''
-  const state = p.status === 'tp' ? 'закрыта по тейку' : p.status === 'sl' ? 'закрыта по стопу' : 'открыта'
+  const state = p.status === 'tp' ? 'закрыта по тейку' : p.status === 'sl' ? 'закрыта по стопу' : p.status === 'closed' ? 'закрыта по времени' : 'открыта'
   return { text: mark + fmtR(value), cls: value >= 0 ? 'up' : 'down', title: `Последняя позиция (${p.type === 'long' ? 'лонг' : 'шорт'}) ${state}` }
 }
 
