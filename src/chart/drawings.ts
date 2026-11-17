@@ -41,6 +41,8 @@ interface Geometry {
 
 const FIB_LEVELS = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1]
 const HANDLE = 4.5
+/** отступ маркера горизонтального уровня от правого края области цены, px */
+const HLINE_HANDLE_INSET = 36
 const FONT = '11px -apple-system, "Segoe UI", Roboto, sans-serif'
 const DASHES: Record<Dash, number[]> = { solid: [], dashed: [6, 4], dotted: [1.5, 3.5] }
 
@@ -271,7 +273,8 @@ export class DrawingsLayer {
     const sp = s as XY[]
     switch (d.type) {
       case 'hline':
-        return { sp, handles: [{ x: w / 2, y: sp[0].y }] }
+        // маркер уровня — у правого края, как в TradingView: не закрывает свечи в середине экрана
+        return { sp, handles: [{ x: Math.max(w / 2, w - HLINE_HANDLE_INSET), y: sp[0].y }] }
       case 'vline':
         return { sp, handles: [{ x: sp[0].x, y: h / 2 }] }
       case 'long':
@@ -348,8 +351,8 @@ export class DrawingsLayer {
       const p = rel(e)
       const hit = this.hit(p.x, p.y, 6)
       const id = hit?.d.id ?? null
-      // над маркером выбранного рисунка курсор показывает, куда его можно тянуть
-      const cur = hit && hit.handle >= 0 ? this.handleCursor(hit.d, hit.handle) : hit && hit.d.id === this.selectedId.value ? 'move' : ''
+      // маркеры видны при наведении, и рисунок можно тянуть сразу, не выбирая его заранее
+      const cur = hit && hit.handle >= 0 ? this.handleCursor(hit.d, hit.handle) : hit ? 'move' : ''
       if (cur !== this.hoverCursor) {
         this.hoverCursor = cur
         el.dataset.cursor = cur
@@ -845,6 +848,7 @@ export class DrawingsLayer {
    * Что под указателем. Выбранный рисунок важнее остальных: его маркеры проверяются первыми,
    * а сам он — раньше линий, идущих через весь экран. Иначе позицию, вход которой стоит на уровне,
    * не взять ни за край, ни за линию входа: уровень перехватывал бы каждое нажатие.
+   * Маркеры невыбранных рисунков тоже ловятся — их показывают при наведении, и тянуть можно сразу.
    */
   private hit(x: number, y: number, tol: number): { d: Drawing; handle: number } | null {
     if (app.drawingsHidden) return null
@@ -859,7 +863,12 @@ export class DrawingsLayer {
       const d = this.list[i]
       if (!this.shown(d)) continue
       const g = d === cur ? curGeo : this.geometry(d, size.width, size.height)
-      if (!g || !this.bodyHit(d, g.sp, x, y, tol, size)) continue
+      if (!g) continue
+      if (d !== cur && !isSingle(d.type)) {
+        const k = g.handles.findIndex((p) => Math.hypot(x - p.x, y - p.y) <= tol + HANDLE)
+        if (k >= 0) return { d, handle: k }
+      }
+      if (!this.bodyHit(d, g.sp, x, y, tol, size)) continue
       if (d !== cur && cur && curGeo && ENDLESS.has(d.type) && !ENDLESS.has(cur.type) && this.bodyHit(cur, curGeo.sp, x, y, tol, size)) return { d: cur, handle: -1 }
       return { d, handle: -1 }
     }
@@ -1108,7 +1117,7 @@ export class DrawingsLayer {
         // на мелком масштабе (другой интервал) подписи слиплись бы — показываем их только у выбранной позиции
         if (!hover && !handles && (Math.abs(yT - yS) < 70 || x2 - x1 < 90)) break
         const pct = (v: number) => fmtPct(entry ? ((v - entry) / entry) * 100 : 0)
-        const result = st.status === 'open' ? ` · сейчас ${fmtR(st.r)}` : st.status === 'tp' ? ` · тейк ${fmtR(st.r)}` : st.status === 'sl' ? ' · стоп -1R' : ''
+        const result = st.status === 'open' ? ` · сейчас ${fmtR(st.r)}` : st.status === 'tp' ? ` · тейк ${fmtR(st.r)}` : st.status === 'sl' ? ' · стоп -1R' : st.status === 'closed' ? ` · закрыта ${fmtR(st.r)}` : ''
         const texts = [
           `Цель ${fmtPrice(target, prec)} (${pct(target)})`,
           `Стоп ${fmtPrice(stop, prec)} (${pct(stop)})`,
@@ -1151,7 +1160,8 @@ export class DrawingsLayer {
       }
     }
 
-    if (handles) {
+    // маркеры — у выбранного рисунка и у рисунка под указателем: за них можно тянуть сразу
+    if (handles || hover) {
       ctx.setLineDash([])
       ctx.lineWidth = 1.5
       for (const p of g.handles) {

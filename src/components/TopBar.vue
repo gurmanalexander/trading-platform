@@ -35,7 +35,7 @@ import { TIMEFRAMES, getTf } from '../lib/timeframes'
 import { unreadAlerts } from '../stores/alerts'
 import { cloud } from '../stores/cloud'
 import { chartAt } from '../chart/registry'
-import { snapshotAll } from '../chart/snapshot'
+import { copyAll, copyCanvas, snapshotAll } from '../chart/snapshot'
 
 const pane = activePane
 const favorites = computed(() => TIMEFRAMES.filter((t) => app.favTfs.includes(t.id)))
@@ -287,9 +287,13 @@ function fullscreen() {
         <template #default="{ close }">
           <button class="menu-item" @click="snapshotAll(), close()"><Icon name="windows" :size="16" />Все окна одной картинкой <span class="muted">Alt+Shift+S</span></button>
           <button class="menu-item" @click="chartAt(activeIndex)?.screenshot(), close()"><Icon name="rect" :size="16" />Только активное окно <span class="muted">Alt+S</span></button>
+          <div class="menu-title">В буфер обмена</div>
+          <button class="menu-item" @click="copyAll(), close()"><Icon name="windows" :size="16" />Все окна одной картинкой <span class="muted">Alt+Shift+C</span></button>
+          <button class="menu-item" @click="copyCanvas(chartAt(activeIndex)?.capture() ?? null), close()"><Icon name="rect" :size="16" />Только активное окно</button>
         </template>
       </Dropdown>
     </div>
+    <button v-if="!isPhone" class="btn" title="Копировать снимок всех окон в буфер обмена (Alt+Shift+C)" @click="copyAll()"><Icon name="copy" /></button>
     <button v-if="!isPhone" class="btn" title="Поделиться: уровни, позиции, ссылка и QR-код" @click="app.shareOpen = true"><Icon name="share" /></button>
     <button v-if="!isPhone" class="btn" title="Обзор по монетам списков (Alt+D)" @click="app.dashboardOpen = true"><Icon name="dashboard" /></button>
 

@@ -19,7 +19,7 @@ import { addWatch, activeList } from '../stores/watchlist'
 import { activeIndex } from '../stores/app'
 import { pasteFromClipboard } from '../chart/setup'
 import { chartAt } from '../chart/registry'
-import { snapshotAll } from '../chart/snapshot'
+import { copyAll, copyCanvas, snapshotAll } from '../chart/snapshot'
 import { refreshAll, refreshing } from '../chart/refresh'
 
 // side — меню открывается сбоку от кнопки (телефон набок: кнопка стоит в боковой колонке)
@@ -74,6 +74,9 @@ function saveNew() {
         <button class="menu-item" @click="(app.shareOpen = true), close()"><Icon name="share" :size="16" />Поделиться…</button>
         <button class="menu-item" @click="(paneCount > 1 && app.phoneStack ? snapshotAll() : chartAt(activeIndex)?.screenshot()), close()">
           <Icon name="camera" :size="16" />Снимок графика
+        </button>
+        <button class="menu-item" @click="(paneCount > 1 && app.phoneStack ? copyAll() : copyCanvas(chartAt(activeIndex)?.capture() ?? null)), close()">
+          <Icon name="copy" :size="16" />Копировать снимок в буфер
         </button>
 
         <div class="menu-title">Вид графика</div>

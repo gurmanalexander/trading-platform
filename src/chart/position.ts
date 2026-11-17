@@ -54,8 +54,11 @@ export function setPositionPrices(d: Drawing, entry: number, stop: number, targe
 }
 
 export interface PositionState {
-  /** pending — время входа ещё не наступило; open — идёт; tp/sl — закрыта по цели или стопу */
-  status: 'pending' | 'open' | 'tp' | 'sl'
+  /**
+   * pending — время входа ещё не наступило; open — идёт; tp/sl — закрыта по цели или стопу;
+   * closed — правый край позиции пройден, а ни цель, ни стоп не задеты: итог — по закрытию последней свечи позиции
+   */
+  status: 'pending' | 'open' | 'tp' | 'sl' | 'closed'
   /** результат в R: сколько рисков прошла цена от входа (у закрытой — итог) */
   r: number
   /** где сделка сейчас или где закрылась */
@@ -64,14 +67,17 @@ export interface PositionState {
 }
 
 /**
- * Ход сделки по свечам после времени входа. Если одна свеча задела и стоп, и цель,
- * считаем, что первым был стоп: по свече порядок не восстановить, а это осторожная оценка.
+ * Ход сделки по свечам от времени входа до правого края позиции. Свечи правее края не учитываются:
+ * касание цели или стопа после окончания позиции её не закрывает.
+ * Если одна свеча задела и стоп, и цель, считаем, что первым был стоп: по свече порядок не восстановить,
+ * а это осторожная оценка.
  */
 export function evaluatePosition(d: Drawing, bars: Bar[], lastPrice?: number): PositionState {
   const entry = d.pts[0].p
   const target = d.pts[1].p
   const stop = d.pts[2].p
   const t0 = d.pts[0].t
+  const t1 = Math.max(d.pts[1].t, t0)
   const sign = d.type === 'long' ? 1 : -1
   const risk = Math.abs(entry - stop)
   const n = bars.length
@@ -83,15 +89,23 @@ export function evaluatePosition(d: Drawing, bars: Bar[], lastPrice?: number): P
     if (bars[mid].time < t0) lo = mid + 1
     else hi = mid
   }
-  for (let i = lo; i < n; i++) {
+  let i = lo
+  for (; i < n && bars[i].time <= t1; i++) {
     const b = bars[i]
     const hitStop = sign > 0 ? b.low <= stop : b.high >= stop
     const hitTarget = sign > 0 ? b.high >= target : b.low <= target
     if (hitStop) return { status: 'sl', r: -1, exitTime: b.time, exitPrice: stop }
     if (hitTarget) return { status: 'tp', r: Math.abs(target - entry) / risk, exitTime: b.time, exitPrice: target }
   }
+  const rOf = (price: number) => (sign * (price - entry)) / risk
+  if (i < n) {
+    // за правым краем уже есть свечи — позиция закончилась по времени
+    const last = i > lo ? bars[i - 1] : null
+    const price = last ? last.close : entry
+    return { status: 'closed', r: rOf(price), exitTime: last ? last.time : t0, exitPrice: price }
+  }
   const price = lastPrice ?? bars[n - 1].close
-  return { status: 'open', r: (sign * (price - entry)) / risk, exitTime: bars[n - 1].time, exitPrice: price }
+  return { status: 'open', r: rOf(price), exitTime: bars[n - 1].time, exitPrice: price }
 }
 
 /** Самая поздняя по времени входа позиция среди рисунков инструмента */

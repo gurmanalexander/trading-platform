@@ -63,6 +63,7 @@ export const HOTKEY_GROUPS: HotkeyGroup[] = [
       ['Shift+F', 'Во весь экран'],
       ['Alt+S', 'Снимок окна в PNG'],
       ['Alt+Shift+S', 'Снимок всех окон одной картинкой'],
+      ['Alt+Shift+C', 'Снимок всех окон — в буфер обмена'],
     ],
   },
   {

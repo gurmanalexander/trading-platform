@@ -20,7 +20,7 @@ import { applyShare } from './chart/share'
 import { decodeShare } from './lib/share'
 // синхронизация устройств запускается сама, если была включена
 import './stores/cloud'
-import { snapshotAll } from './chart/snapshot'
+import { copyAll, snapshotAll } from './chart/snapshot'
 import { refreshAll } from './chart/refresh'
 import { parseSetup } from './lib/setup'
 
@@ -119,6 +119,7 @@ function onAlt(e: KeyboardEvent): boolean {
   if (e.shiftKey) {
     if (e.code === 'KeyR') app.tool = 'rect'
     else if (e.code === 'KeyS') snapshotAll()
+    else if (e.code === 'KeyC') copyAll()
     else return false
     return true
   }

@@ -51,7 +51,8 @@ const sides = computed(() => {
 
 // ---------- сделки ----------
 
-const STATE = { pending: 'ждёт входа', open: 'идёт', tp: 'тейк', sl: 'стоп' } as const
+const STATE = { pending: 'ждёт входа', open: 'идёт', tp: 'тейк', sl: 'стоп', closed: 'по времени' } as const
+const ORDER = ['open', 'pending', 'tp', 'sl', 'closed']
 const trades = computed(() =>
   coins.value
     .filter((c) => tracked[c.key])
@@ -60,13 +61,13 @@ const trades = computed(() =>
       return { ...c, p, r: currentR(c.key) }
     })
     // сначала идущие, потом ждущие входа, потом закрытые
-    .sort((a, b) => ['open', 'pending', 'tp', 'sl'].indexOf(a.p.status) - ['open', 'pending', 'tp', 'sl'].indexOf(b.p.status) || (b.r ?? 0) - (a.r ?? 0)),
+    .sort((a, b) => ORDER.indexOf(a.p.status) - ORDER.indexOf(b.p.status) || (b.r ?? 0) - (a.r ?? 0)),
 )
 const tradeStats = computed(() => {
   const t = trades.value
   const by = (s: string) => t.filter((x) => x.p.status === s)
   const sum = (list: typeof t) => list.reduce((acc, x) => acc + (x.r ?? 0), 0)
-  return { open: by('open').length, pending: by('pending').length, tp: by('tp').length, sl: by('sl').length, openR: sum(by('open')), closedR: sum([...by('tp'), ...by('sl')]) }
+  return { open: by('open').length, pending: by('pending').length, tp: by('tp').length, sl: by('sl').length, openR: sum(by('open')), closedR: sum([...by('tp'), ...by('sl'), ...by('closed')]) }
 })
 
 // ---------- уровни ----------
