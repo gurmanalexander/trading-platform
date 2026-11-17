@@ -1,7 +1,15 @@
 import { shallowRef } from 'vue'
 
 /** Перекрестие, которое пользователь ведёт в одной из панелей, — остальные показывают его у себя */
-export const crosshairBus = shallowRef<{ pane: number; key: string; time: number; price: number } | null>(null)
+export const crosshairBus = shallowRef<{
+  pane: number
+  key: string
+  /** начало свечи под курсором (сек UTC); правее данных — момент в будущем */
+  time: number
+  price: number
+  /** длина свечи панели-источника, сек */
+  span: number
+} | null>(null)
 
 /**
  * Просьба показать дату во всех окнах (вставленный сетап или ссылка). key — инструмент, к которому

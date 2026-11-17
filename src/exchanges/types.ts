@@ -2,6 +2,7 @@ import type { Bar, MarketId, SymbolInfo, Ticker } from '../types'
 import type { Timeframe } from '../lib/timeframes'
 import type { SocketStatus } from './ws'
 import type { Ref } from 'vue'
+import type { KindMap } from './tradfi'
 
 export interface KlinesResult {
   bars: Bar[]
@@ -22,6 +23,8 @@ export interface ExchangeAdapter {
   subscribeTicker(market: MarketId, symbol: string, onTicker: (t: Ticker, rawPrices: (string | undefined)[]) => void): () => void
   /** Все торгуемые инструменты рынка с ценой и оборотом */
   fetchSymbols(market: MarketId): Promise<SymbolInfo[]>
+  /** Акции, фонды, сырьё и прочие не криптовалютные инструменты рынка: символ → вид */
+  fetchKinds(market: MarketId): Promise<KindMap>
   status(market: MarketId): Ref<SocketStatus>
   /** Пересоздаёт соединения с биржей: подписки восстанавливаются сами */
   reconnect(): void

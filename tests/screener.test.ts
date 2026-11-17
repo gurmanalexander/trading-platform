@@ -24,7 +24,8 @@ const row = (symbol: string, last: number, changePct: number, quoteVolume: numbe
   changePct,
   quoteVolume,
 })
-const base: Settings = { exchange: 'binance', market: 'futures', minVolume: 30, minChange: 0, quote: 'USDT', sort: 'volume', dir: 'desc', cols: ['price', 'volume'] }
+const base: Settings = { exchange: 'binance', market: 'futures', minVolume: 30, minChange: 0, quote: 'USDT', assets: 'crypto', sort: 'volume', dir: 'desc', cols: ['price', 'volume'] }
+const { binanceFuturesKind, bybitKind } = await import('../src/exchanges/tradfi')
 
 describe('отбор', () => {
   const list = withUsdVolume([row('BTCUSDT', 70000, -1, 9e9), row('ETHUSDT', 2000, 2.5, 4e9), row('DOGEUSDT', 0.1, -6, 5e7), row('TINYUSDT', 1, 12, 2e7), row('BTCUSDC', 70000, -1, 8e8)])
@@ -40,6 +41,30 @@ describe('отбор', () => {
 
   it('фильтр по изменению берёт модуль', () => {
     expect(screen(list, { ...base, minChange: 2 }).map((r) => r.symbol)).toEqual(['ETHUSDT', 'DOGEUSDT'])
+  })
+
+  it('акции и TradFi отдельно от криптовалют', () => {
+    const mixed = [...list, { ...withUsdVolume([row('TSLAUSDT', 400, 1, 3e8)])[0], kind: 'stock' as const }]
+    expect(screen(mixed, base).map((r) => r.symbol)).not.toContain('TSLAUSDT')
+    expect(screen(mixed, { ...base, assets: 'tradfi' }).map((r) => r.symbol)).toEqual(['TSLAUSDT'])
+    expect(screen(mixed, { ...base, assets: 'all' }).map((r) => r.symbol)).toContain('TSLAUSDT')
+  })
+
+  it('вид инструмента — по полям биржи, а не по названию', () => {
+    // Binance USDⓈ-M: COINUSDT — акция Coinbase, SPXUSDT — мемкоин, PAXG — криптовалюта
+    expect(binanceFuturesKind({ contractType: 'TRADIFI_PERPETUAL', underlyingType: 'EQUITY', underlyingSubType: ['TradFi'] })).toBe('stock')
+    expect(binanceFuturesKind({ contractType: 'TRADIFI_PERPETUAL', underlyingType: 'HK_EQUITY', underlyingSubType: ['TradFi'] })).toBe('stock')
+    expect(binanceFuturesKind({ contractType: 'TRADIFI_PERPETUAL', underlyingType: 'COMMODITY', underlyingSubType: ['TradFi'] })).toBe('commodity')
+    expect(binanceFuturesKind({ contractType: 'TRADIFI_PERPETUAL', underlyingType: 'PREMARKET', underlyingSubType: ['Pre-IPO', 'TradFi'] })).toBe('preipo')
+    expect(binanceFuturesKind({ contractType: 'PERPETUAL', underlyingType: 'COIN', underlyingSubType: ['Meme', 'Crypto'] })).toBeNull()
+    expect(binanceFuturesKind({ contractType: 'PERPETUAL', underlyingType: 'COIN', underlyingSubType: ['RWA', 'Crypto'] })).toBeNull()
+    // Bybit: symbolType
+    expect(bybitKind({ symbolType: 'stock', status: 'Trading' })).toBe('stock')
+    expect(bybitKind({ symbolType: 'stock', status: 'PreLaunch' })).toBe('preipo')
+    expect(bybitKind({ symbolType: 'ETF' })).toBe('etf')
+    expect(bybitKind({ symbolType: 'xstocks' })).toBe('stock')
+    expect(bybitKind({ symbolType: 'innovation' })).toBeNull()
+    expect(bybitKind({ symbolType: '' })).toBeNull()
   })
 
   it('сортировки', () => {

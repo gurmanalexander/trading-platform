@@ -6,7 +6,8 @@ import { checkpoint, clipboard, selection, setDefaultStyle, styleFor, visibleOn,
 import { formatSignal, type Signal } from '../lib/signal'
 import { fmtPct, fmtPrice, fmtSpan } from '../lib/format'
 import { withAlpha, type ChartColors } from './theme'
-import { evaluatePosition, fmtR, movePositionHandle, riskReward, setPositionPrices } from './position'
+import { lowerBound } from './bars'
+import { evaluatePosition, fmtQty, fmtR, fmtUsd, movePositionHandle, positionSize, riskReward, setPositionPrices } from './position'
 import { STOP_PART, TAKE_RATIO } from '../lib/atr'
 
 /** Что слою рисунков нужно знать о графике */
@@ -43,7 +44,8 @@ const FIB_LEVELS = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1]
 const HANDLE = 4.5
 /** отступ маркера горизонтального уровня от правого края области цены, px */
 const HLINE_HANDLE_INSET = 36
-const FONT = '11px -apple-system, "Segoe UI", Roboto, sans-serif'
+/** шрифт подписей рисунков — того же размера, что шкалы (размер задаётся в настройках вида) */
+const font = () => `${app.view.scaleFont}px -apple-system, "Segoe UI", Roboto, sans-serif`
 const DASHES: Record<Dash, number[]> = { solid: [], dashed: [6, 4], dotted: [1.5, 3.5] }
 
 const SINGLE = new Set<DrawingType>(['hline', 'vline', 'hray', 'cross', 'text'])
@@ -192,8 +194,8 @@ export class DrawingsLayer {
       if (d.type === 'hline' || d.type === 'hray' || d.type === 'cross') addPrice(d.pts[0].p, d.color)
       else if (isPosition(d.type) && d.pts.length >= 3) {
         // цель и стоп позиции видны на ценовой шкале всегда, вход — у выбранной
-        addPrice(d.pts[1].p, c.up)
-        addPrice(d.pts[2].p, c.down)
+        addPrice(d.pts[1].p, c.profit)
+        addPrice(d.pts[2].p, c.loss)
         if (active) addPrice(d.pts[0].p, c.crossLabel)
       } else if (active && d.type !== 'vline' && d.type !== 'text') d.pts.forEach((p) => addPrice(p.p, d.color))
       if (active && d.type !== 'hline' && d.type !== 'text') {
@@ -216,8 +218,11 @@ export class DrawingsLayer {
   // ---------- координаты ----------
 
   private xOf(t: number): number | null {
-    const lg = this.host.timeToLogical(t)
-    if (lg == null) return null
+    const raw = this.host.timeToLogical(t)
+    if (raw == null) return null
+    // Момент внутри свечи (точку ставили на младшем интервале) — на свече, в которую он попадает,
+    // как в TradingView: иначе точка висела бы между свечами и рисунок «съезжал» с бара
+    const lg = Math.floor(raw + 1e-6)
     // Библиотека переводит в координату только целый номер существующей свечи. Время рисунка
     // может попадать между свечами (другой интервал) или за край данных, поэтому берём
     // ближайшую свечу и сдвигаемся от неё на дробную часть шага.
@@ -227,8 +232,24 @@ export class DrawingsLayer {
     return x0 == null ? null : x0 + (lg - base) * ts.options().barSpacing
   }
 
+  /**
+   * Время, на котором точку показывать на этом графике. Точку ставили на старшем интервале — ищем
+   * внутри той свечи младшую, где цена точки была хаем или лоу: луч, проведённый через хай часовой
+   * свечи, на пятиминутках проходит через хай той самой пятиминутки, а не через начало часа.
+   */
+  private anchorTime(p: Pt): number {
+    const span = p.s ?? 0
+    if (span <= this.host.tfSec()) return p.t
+    const bars = this.host.bars()
+    const tol = 0.5 / 10 ** this.host.precision()
+    for (let i = lowerBound(bars, p.t); i < bars.length && bars[i].time < p.t + span; i++) {
+      if (Math.abs(bars[i].high - p.p) <= tol || Math.abs(bars[i].low - p.p) <= tol) return bars[i].time
+    }
+    return p.t
+  }
+
   private toScreen(p: Pt): XY | null {
-    const x = this.xOf(p.t)
+    const x = this.xOf(this.anchorTime(p))
     const y = this.host.series().priceToCoordinate(p.p)
     if (x == null || y == null) return null
     return { x, y }
@@ -255,7 +276,7 @@ export class DrawingsLayer {
       }
     }
     // цена — с шагом инструмента, без «хвоста» от пересчёта из пикселей
-    return { t: this.host.logicalToTime(idx), p: +price.toFixed(this.host.precision()) }
+    return { t: this.host.logicalToTime(idx), p: +price.toFixed(this.host.precision()), s: this.host.tfSec() }
   }
 
   private geometry(d: Drawing, w: number, h: number): Geometry | null {
@@ -914,7 +935,7 @@ export class DrawingsLayer {
     const sel = this.selectedId.value
     let anchor: XY | null = null
     ctx.save()
-    ctx.font = FONT
+    ctx.font = font()
     ctx.lineJoin = 'round'
     if (!app.drawingsHidden) {
       for (const d of this.list) {
@@ -936,8 +957,9 @@ export class DrawingsLayer {
 
   /** Подпись в цветной плашке; x — центр плашки либо (left = true) её левый край, y — центр */
   private tag(ctx: CanvasRenderingContext2D, lines: string[], x: number, cy: number, bg: string, w: number, h: number, left = false) {
+    const lh = Math.round(app.view.scaleFont * 1.36)
     const bw = Math.max(...lines.map((l) => ctx.measureText(l).width)) + 14
-    const bh = lines.length * 15 + 6
+    const bh = lines.length * lh + 6
     const bx = Math.max(2, Math.min(w - bw - 2, left ? x : x - bw / 2))
     const by = Math.max(2, Math.min(h - bh - 2, cy - bh / 2))
     ctx.fillStyle = bg
@@ -947,7 +969,7 @@ export class DrawingsLayer {
     ctx.fillStyle = '#fff'
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
-    lines.forEach((l, i) => ctx.fillText(l, bx + bw / 2, by + 11 + i * 15))
+    lines.forEach((l, i) => ctx.fillText(l, bx + bw / 2, by + 3 + lh / 2 + i * lh))
   }
 
   private drawOne(ctx: CanvasRenderingContext2D, d: Drawing, w: number, h: number, hover: boolean, handles: boolean): XY[] | null {
@@ -1040,7 +1062,7 @@ export class DrawingsLayer {
         ctx.textAlign = 'left'
         ctx.textBaseline = 'top'
         lines.forEach((l, i) => ctx.fillText(l, sp[0].x, sp[0].y + i * lh))
-        ctx.font = FONT
+        ctx.font = font()
         // маркеры тексту не нужны: его рамка и так показывает выделение
         return [{ x: box.x, y: box.y }]
       }
@@ -1089,9 +1111,9 @@ export class DrawingsLayer {
         const target = d.pts[1].p
         const stop = d.pts[2].p
         ctx.setLineDash([])
-        ctx.fillStyle = withAlpha(c.up, hover || handles ? 0.26 : 0.18)
+        ctx.fillStyle = withAlpha(c.profit, hover || handles ? 0.26 : 0.18)
         ctx.fillRect(x1, Math.min(yE, yT), x2 - x1, Math.abs(yT - yE))
-        ctx.fillStyle = withAlpha(c.down, hover || handles ? 0.26 : 0.18)
+        ctx.fillStyle = withAlpha(c.loss, hover || handles ? 0.26 : 0.18)
         ctx.fillRect(x1, Math.min(yE, yS), x2 - x1, Math.abs(yS - yE))
         // Ход сделки: яркая область от исполнения входа до текущей цены (или до закрытия по стопу/цели)
         // и пунктир от точки входа к этой цене — видно, где сделка сейчас и чем закончилась.
@@ -1103,7 +1125,7 @@ export class DrawingsLayer {
           const xe = this.xOf(st.exitTime)
           const ye = this.host.series().priceToCoordinate(st.exitPrice)
           if (xe != null && ye != null && xe >= xf) {
-            const col = (d.type === 'long' ? st.exitPrice >= entry : st.exitPrice <= entry) ? c.up : c.down
+            const col = (d.type === 'long' ? st.exitPrice >= entry : st.exitPrice <= entry) ? c.profit : c.loss
             ctx.fillStyle = withAlpha(col, 0.32)
             ctx.fillRect(xf, Math.min(yE, ye), Math.max(1, xe - xf), Math.abs(ye - yE))
             ctx.strokeStyle = col
@@ -1120,26 +1142,31 @@ export class DrawingsLayer {
         if (!hover && !handles && (Math.abs(yT - yS) < 70 || x2 - x1 < 90)) break
         const pct = (v: number) => fmtPct(entry ? ((v - entry) / entry) * 100 : 0)
         const result = st.status === 'open' ? ` · сейчас ${fmtR(st.r)}` : st.status === 'tp' ? ` · тейк ${fmtR(st.r)}` : st.status === 'sl' ? ' · стоп -1R' : st.status === 'closed' ? ` · закрыта ${fmtR(st.r)}` : st.status === 'missed' ? ' · вход не исполнен' : bars.length && bars[bars.length - 1].time >= d.pts[0].t ? ' · ждёт входа' : ''
+        const size = positionSize(d, app.risk.deposit, app.risk.pct)
         const texts = [
-          `Цель ${fmtPrice(target, prec)} (${pct(target)})`,
-          `Стоп ${fmtPrice(stop, prec)} (${pct(stop)})`,
+          `Цель ${fmtPrice(target, prec)} (${pct(target)})${size ? ` · +${fmtUsd(size.risk * riskReward(d))}` : ''}`,
+          `Стоп ${fmtPrice(stop, prec)} (${pct(stop)})${size ? ` · −${fmtUsd(size.risk)}` : ''}`,
           `${d.type === 'long' ? 'Лонг' : 'Шорт'} ${fmtPrice(entry, prec)} · R/R ${riskReward(d).toFixed(2)}${result}`,
         ]
+        // объём — второй строкой у входа, если в настройках задан депозит
+        const entryLines = size ? [texts[2], `Объём ${fmtQty(size.qty)} · ${fmtUsd(size.notional)}`] : [texts[2]]
         // узкая позиция: подписи не помещаются между маркерами — выносим их вправо от неё
         const outside = x2 - x1 < Math.max(...texts.map((t) => ctx.measureText(t).width)) + 40
         const x = outside ? x2 + 10 : (x1 + x2) / 2
         const up = d.type === 'long' ? -1 : 1
         // позиция не в фокусе — подписи приглушены, чтобы не закрывать свечи
         ctx.globalAlpha = handles ? 1 : hover ? 0.9 : 0.65
-        this.tag(ctx, [texts[0]], x, yT + up * 13, c.up, w, h, outside)
-        this.tag(ctx, [texts[1]], x, yS - up * 13, c.down, w, h, outside)
-        this.tag(ctx, [texts[2]], x, yE, c.muted, w, h, outside)
+        // подписи цели и стопа — снаружи позиции, на полвысоты плашки от своей линии
+        const off = Math.round(app.view.scaleFont * 1.2)
+        this.tag(ctx, [texts[0]], x, yT + up * off, c.profit, w, h, outside)
+        this.tag(ctx, [texts[1]], x, yS - up * off, c.loss, w, h, outside)
+        this.tag(ctx, entryLines, x, yE, c.muted, w, h, outside)
         ctx.globalAlpha = 1
         break
       }
       case 'measure': {
         const up = d.pts[1].p >= d.pts[0].p
-        const col = up ? c.up : c.down
+        const col = up ? c.profit : c.loss
         const x = Math.min(sp[0].x, sp[1].x)
         const y = Math.min(sp[0].y, sp[1].y)
         const rw = Math.abs(sp[1].x - sp[0].x)

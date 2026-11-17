@@ -3,7 +3,7 @@ import { computed, onMounted, onUpdated, reactive, ref } from 'vue'
 import Icon from './Icon.vue'
 import { DRAW_COLORS, defaultVisibility, type Dash, type Visibility } from '../stores/drawings'
 import { hasLineStyle, hasText, isPosition, TEXT_SIZES, type DrawingsLayer } from '../chart/drawings'
-import { riskReward } from '../chart/position'
+import { fmtQty, fmtUsd, positionSize, riskReward } from '../chart/position'
 import { app, isPhone, toast } from '../stores/app'
 import { pasteFromClipboard } from '../chart/setup'
 
@@ -101,6 +101,11 @@ const VIS: { id: Visibility; label: string }[] = [
 const vis = computed(() => (d.value ? (d.value.vis ?? defaultVisibility(d.value.type)) : 'all'))
 const fmt = (v: number) => String(+v.toFixed(props.precision))
 const rr = computed(() => (d.value && position.value ? riskReward(d.value).toFixed(2) : ''))
+/** объём по депозиту и риску из настроек; пусто, пока депозит не задан */
+const posSize = computed(() => {
+  const s = d.value && position.value ? positionSize(d.value, app.risk.deposit, app.risk.pct) : null
+  return s ? `Объём ${fmtQty(s.qty)} · ${fmtUsd(s.notional)} · риск ${fmtUsd(s.risk)}` : ''
+})
 
 /** Поле цены позиции: 0 — вход, 2 — стоп, 1 — цель (номер точки рисунка) */
 function setPrice(index: 0 | 1 | 2, e: Event) {
@@ -228,6 +233,8 @@ function duplicate() {
       <template v-if="position">
         <b class="kind" :class="d.type === 'long' ? 'up' : 'down'">{{ d.type === 'long' ? 'Лонг' : 'Шорт' }}</b>
         <span class="muted">R/R {{ rr }}</span>
+        <span v-if="posSize" class="muted" title="По депозиту и риску на сделку из настроек «Шрифты, таймер, размер позиции»">{{ posSize }}</span>
+        <button v-else class="btn sm muted" title="Задать депозит и риск на сделку — появится объём позиции" @click="app.viewOpen = true">объём?</button>
         <span class="grow" />
       </template>
       <select class="field vis" title="На каких интервалах показывать" :value="vis" @change="layer.setVisibility(($event.target as HTMLSelectElement).value as Visibility)">

@@ -1,7 +1,8 @@
 import { computed, reactive, shallowRef } from 'vue'
 import { sameSymbol, type ExchangeId, type MarketId, type SymbolRef } from '../types'
 import { load, persist } from '../lib/storage'
-import { loadSymbols, withUsdVolume, type SymbolVolume } from '../exchanges'
+import { adapters, loadSymbols, withUsdVolume, type SymbolVolume } from '../exchanges'
+import { loadKinds, type AssetKind } from '../exchanges/tradfi'
 import { app, activePane, isPhone, setSymbol } from './app'
 import { visibleItems } from './watchlist'
 
@@ -23,13 +24,22 @@ export interface ScreenerSettings {
   /** минимальное изменение за 24 часа по модулю, %; 0 — не учитывать */
   minChange: number
   quote: 'USDT' | 'all'
+  /** криптовалюты, токенизированные акции и прочее TradFi (сырьё, валюты, до IPO) или всё вместе */
+  assets: AssetFilter
   sort: SortKey
   dir: 'asc' | 'desc'
   cols: ScreenerCol[]
 }
 
+export type AssetFilter = 'crypto' | 'tradfi' | 'all'
+
+/** Строка отбора: kind — у акций, фондов, сырья и т.п.; у криптовалют пусто */
+export interface ScreenRow extends SymbolVolume {
+  kind?: AssetKind
+}
+
 const DEFAULT_COLS: ScreenerCol[] = ['price', 'volume']
-const DEFAULTS: ScreenerSettings = { exchange: 'binance', market: 'futures', minVolume: 30, minChange: 0, quote: 'USDT', sort: 'volume', dir: 'desc', cols: DEFAULT_COLS }
+const DEFAULTS: ScreenerSettings = { exchange: 'binance', market: 'futures', minVolume: 30, minChange: 0, quote: 'USDT', assets: 'crypto', sort: 'volume', dir: 'desc', cols: DEFAULT_COLS }
 export const MAX_ROWS = 200
 const REFRESH_MS = 20_000
 
@@ -40,6 +50,7 @@ function parse(s: Partial<ScreenerSettings>): ScreenerSettings {
     minVolume: typeof s.minVolume === 'number' && s.minVolume >= 0 ? s.minVolume : DEFAULTS.minVolume,
     minChange: typeof s.minChange === 'number' && s.minChange >= 0 ? s.minChange : 0,
     quote: s.quote === 'all' ? 'all' : 'USDT',
+    assets: s.assets === 'tradfi' || s.assets === 'all' ? s.assets : 'crypto',
     sort: (['volume', 'change', 'price', 'symbol'] as SortKey[]).includes(s.sort as SortKey) ? (s.sort as SortKey) : 'volume',
     dir: s.dir === 'asc' ? 'asc' : 'desc',
     cols: Array.isArray(s.cols) ? SCREENER_COLS.map((c) => c.id).filter((c) => s.cols!.includes(c)) : DEFAULT_COLS.slice(),
@@ -55,21 +66,38 @@ export function resetSettings() {
 }
 
 /** Сколько условий отбора отличается от исходных — для метки на кнопке фильтра */
-export const filterCount = computed(() => +(settings.minVolume !== DEFAULTS.minVolume) + +(settings.minChange > 0) + +(settings.quote !== DEFAULTS.quote))
+export const filterCount = computed(
+  () => +(settings.minVolume !== DEFAULTS.minVolume) + +(settings.minChange > 0) + +(settings.quote !== DEFAULTS.quote) + +(settings.assets !== DEFAULTS.assets),
+)
 /** Всего инструментов на выбранной бирже и рынке — до фильтров */
 export const universe = computed(() => rows.value.length)
 
-export const state = reactive({ loading: false, error: '', updatedAt: 0 })
-const rows = shallowRef<SymbolVolume[]>([])
+export const state = reactive({
+  loading: false,
+  error: '',
+  updatedAt: 0,
+  /** список акций и TradFi с биржи получить не удалось — фильтр по виду не работает */
+  kindsError: false,
+})
+const rows = shallowRef<ScreenRow[]>([])
 
 export async function refresh() {
   const { exchange, market } = settings
   state.loading = true
   try {
-    const list = withUsdVolume(await loadSymbols(exchange, market, REFRESH_MS - 1000))
+    // какие инструменты — акции и прочее TradFi, биржа сообщает в описании инструментов;
+    // если описание не пришло, отбор всё равно работает, просто без разделения
+    const [list, kinds] = await Promise.all([
+      loadSymbols(exchange, market, REFRESH_MS - 1000),
+      loadKinds(exchange, market, (m) => adapters[exchange].fetchKinds(m)).catch(() => null),
+    ])
     // пока ждали ответ, биржу или рынок могли переключить
     if (exchange !== settings.exchange || market !== settings.market) return
-    rows.value = list
+    state.kindsError = !kinds
+    rows.value = withUsdVolume(list).map((r) => {
+      const kind = kinds?.get(r.symbol)
+      return kind ? { ...r, kind } : r
+    })
     state.error = ''
     state.updatedAt = Date.now()
   } catch (e) {
@@ -80,10 +108,14 @@ export async function refresh() {
 }
 
 /** Отфильтрованный и отсортированный список */
-export function screen(list: SymbolVolume[], s: ScreenerSettings): SymbolVolume[] {
+export function screen<T extends ScreenRow>(list: T[], s: ScreenerSettings): T[] {
   const min = s.minVolume * 1e6
   const out = list.filter(
-    (r) => r.usdVolume >= min && (s.quote === 'all' || r.symbol.endsWith('USDT')) && (!s.minChange || Math.abs(r.changePct) >= s.minChange),
+    (r) =>
+      r.usdVolume >= min &&
+      (s.quote === 'all' || r.symbol.endsWith('USDT')) &&
+      (!s.minChange || Math.abs(r.changePct) >= s.minChange) &&
+      (s.assets === 'all' || (s.assets === 'tradfi') === !!r.kind),
   )
   const sign = s.dir === 'asc' ? 1 : -1
   const value = (r: SymbolVolume) => (s.sort === 'volume' ? r.usdVolume : s.sort === 'change' ? r.changePct : r.last)

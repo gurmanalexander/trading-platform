@@ -10,6 +10,7 @@ import ListMenu from './ListMenu.vue'
 import Dropdown from './Dropdown.vue'
 import ColumnsMenu from './ColumnsMenu.vue'
 import { fmtPct, fmtPriceShort, fmtVolume } from '../lib/format'
+import { ASSET_KIND_NAMES } from '../exchanges/tradfi'
 
 const stop = startAutoRefresh()
 onBeforeUnmount(stop)
@@ -155,7 +156,7 @@ watch(
     <div class="sc-top">
       <button class="btn sm filter" title="Условия отбора: биржа, рынок, объём, изменение цены" @click="app.screenerFilterOpen = true">
         <Icon name="funnel" :size="16" />
-        <span>{{ EXCHANGE_NAMES[settings.exchange] }} · {{ MARKET_NAMES[settings.market] }} · от {{ settings.minVolume }} млн $</span>
+        <span>{{ EXCHANGE_NAMES[settings.exchange] }} · {{ MARKET_NAMES[settings.market] }} · от {{ settings.minVolume }} млн ${{ settings.assets === 'tradfi' ? ' · акции' : '' }}</span>
         <i v-if="filterCount" class="badge" title="Условий изменено">{{ filterCount }}</i>
       </button>
       <span class="muted count" :title="`Подходит ${total.length} из ${universe}` + (state.updatedAt ? ' · обновлено ' + new Date(state.updatedAt).toLocaleTimeString('ru-RU') : '')">{{ total.length }}</span>
@@ -205,7 +206,7 @@ watch(
         @pointercancel="onUp"
         @contextmenu.prevent="onContext($event, r)"
       >
-        <span class="name"><SideMark :item="r" /><b>{{ r.symbol }}</b></span>
+        <span class="name"><SideMark :item="r" /><b>{{ r.symbol }}</b><i v-if="r.kind && settings.assets === 'all'" class="kind">{{ ASSET_KIND_NAMES[r.kind] }}</i></span>
         <template v-for="c in cols" :key="c.id">
           <span v-if="c.id === 'price'" class="num" :class="tone(r.changePct)" :title="'За сутки ' + fmtPct(r.changePct)">{{ fmtPriceShort(r.last) }}</span>
           <span v-else-if="c.id === 'change'" class="num" :class="tone(r.changePct)">{{ fmtPct(r.changePct) }}</span>
@@ -336,6 +337,16 @@ watch(
 .sc-row.active {
   background: var(--accent-soft);
   box-shadow: inset 2px 0 0 var(--accent);
+}
+.kind {
+  flex: none;
+  font-style: normal;
+  font-size: 10px;
+  line-height: 14px;
+  padding: 0 4px;
+  border-radius: 3px;
+  color: var(--muted);
+  border: 1px solid var(--border);
 }
 .name {
   display: flex;

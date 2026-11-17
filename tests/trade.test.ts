@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { atrBounds, atrSpent, dailyAtr, dailyRisk, fiveMinRisk, spentTone, wilderAtr } from '../src/lib/atr'
 import { formatSignal, parseSignal } from '../src/lib/signal'
-import { barStart, evaluatePosition, fmtR, latestPosition, setPositionPrices } from '../src/chart/position'
+import { barStart, evaluatePosition, fmtR, latestPosition, positionSize, setPositionPrices } from '../src/chart/position'
 import type { Drawing } from '../src/stores/drawings'
 
 describe('ATR по формулам индикатора Trader Assistant', () => {
@@ -173,6 +173,13 @@ describe('ход сделки', () => {
     // цель и стоп по одну сторону от входа — отказ, позиция не тронута
     expect(setPositionPrices(d, 100, 110, 120)).toBe(false)
     expect(d.pts[0].p).toBe(0.14991)
+  })
+
+  it('объём позиции: на стопе теряется заданный процент депозита', () => {
+    // депозит 1000 $, риск 1% = 10 $, до стопа 5 $ — 2 монеты по 100 $
+    expect(positionSize(pos('long', 100, 120, 95), 1000, 1)).toEqual({ qty: 2, notional: 200, risk: 10 })
+    expect(positionSize(pos('short', 100, 80, 105), 1000, 1)?.qty).toBe(2)
+    expect(positionSize(pos('long', 100, 120, 95), 0, 1)).toBeNull()
   })
 
   it('формат результата', () => {

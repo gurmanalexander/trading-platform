@@ -6,8 +6,12 @@ export interface ChartColors {
   muted: string
   grid: string
   border: string
+  /** цвета свечей — их можно перекрасить в «Своих цветах» */
   up: string
   down: string
+  /** прибыль и убыток (позиции, линейка) — всегда стандартные зелёный и красный, независимо от цвета свечей */
+  profit: string
+  loss: string
   cross: string
   crossLabel: string
   line: string
@@ -23,6 +27,8 @@ const dark: ChartColors = {
   border: '#2a3240',
   up: '#26a69a',
   down: '#ef5350',
+  profit: '#26a69a',
+  loss: '#ef5350',
   cross: '#7b869a',
   crossLabel: '#323c4e',
   line: '#3d8bff',
@@ -38,6 +44,8 @@ const light: ChartColors = {
   border: '#dfe3ea',
   up: '#089981',
   down: '#f23645',
+  profit: '#089981',
+  loss: '#f23645',
   cross: '#8a93a3',
   crossLabel: '#3a4353',
   line: '#2962ff',

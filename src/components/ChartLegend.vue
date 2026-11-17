@@ -163,6 +163,10 @@ function pickSymbol() {
   font-size: 12px;
   line-height: 20px;
 }
+.legend-main,
+.legend-atr {
+  zoom: var(--legend-zoom, 1);
+}
 .legend-main {
   display: flex;
   flex-wrap: wrap;
