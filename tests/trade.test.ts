@@ -124,6 +124,27 @@ describe('ход сделки', () => {
     expect(evaluatePosition(pos('long', 100, 120, 95), bars.slice(0, 2)).status).toBe('open')
   })
 
+  it('вход исполняется только касанием цены входа, а не наступлением времени', () => {
+    const long = pos('long', 100, 120, 95)
+    // свеча на времени входа идёт выше уровня входа — сделки ещё нет, даже если потом цена ушла к цели
+    const above = [bar(100, 104, 101, 103), bar(160, 125, 102, 124)]
+    expect(evaluatePosition(long, above)).toMatchObject({ status: 'pending', r: 0 })
+    // цена вернулась к входу — сделка открыта с этой свечи
+    const filled = [...above, bar(220, 103, 99.5, 101)]
+    expect(evaluatePosition(long, filled)).toMatchObject({ status: 'open', fillTime: 220, r: 0.2 })
+    // до правого края так и не дошла до входа
+    expect(evaluatePosition(long, [...above, bar(1160, 104, 101, 103)]).status).toBe('missed')
+  })
+
+  it('на свече входа цель считается, только если свеча открылась со стороны стопа', () => {
+    const long = pos('long', 100, 120, 95)
+    const b = (open: number) => ({ time: 100, open, high: 121, low: 99, close: 110, volume: 1 })
+    // открылась выше входа: могла сходить к цели до входа — результат по закрытию
+    expect(evaluatePosition(long, [b(105)]).status).toBe('open')
+    // открылась ниже входа: прошла вход и дошла до цели
+    expect(evaluatePosition(long, [b(99.5)]).status).toBe('tp')
+  })
+
   it('свеча задела и стоп, и цель — считаем стоп', () => {
     expect(evaluatePosition(pos('long', 100, 120, 95), [bar(100, 125, 90, 110)]).status).toBe('sl')
   })
