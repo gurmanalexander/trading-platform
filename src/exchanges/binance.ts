@@ -2,7 +2,7 @@ import type { Bar, MarketId, SymbolInfo } from '../types'
 import { decimalsOf } from '../lib/format'
 import { getJson } from './http'
 import { StreamSocket, type StreamConfig } from './ws'
-import type { ExchangeAdapter } from './types'
+import { oiPeriod, type ExchangeAdapter, type OiPoint } from './types'
 import { binanceFuturesKind, type KindMap } from './tradfi'
 
 // Спот: data-api.binance.vision / data-stream.binance.vision — официальные адреса «только рыночные данные».
@@ -39,6 +39,17 @@ function marketSocket(m: MarketId): StreamSocket {
 
 const DAY = 86_400_000
 const tickerTopic = (symbol: string) => `${symbol.toLowerCase()}@miniTicker`
+const OI_PERIODS: [number, string][] = [
+  [300, '5m'],
+  [900, '15m'],
+  [1800, '30m'],
+  [3600, '1h'],
+  [7200, '2h'],
+  [14400, '4h'],
+  [21600, '6h'],
+  [43200, '12h'],
+  [86400, '1d'],
+]
 
 export const binance: ExchangeAdapter = {
   async fetchKlines(market, symbol, tf, limit, endTime) {
@@ -93,6 +104,32 @@ export const binance: ExchangeAdapter = {
       ticker: { last, changePct: open ? ((last - open) / open) * 100 : 0, high: +r.highPrice, low: +r.lowPrice, quoteVolume: +r.quoteVolume },
       raw: [r.lastPrice, r.openPrice, r.highPrice, r.lowPrice],
     }
+  },
+
+  async fetchOpenInterest(market, symbol, tfSec, count) {
+    if (market !== 'futures') return []
+    const [sec, period] = oiPeriod(OI_PERIODS, tfSec)
+    const out: OiPoint[] = []
+    let end = 0
+    // история не глубже 30 дней и не больше 500 точек за запрос — листаем назад
+    for (let page = 0; page < 3 && out.length < count; page++) {
+      const limit = Math.min(500, Math.max(2, count - out.length))
+      const rows: any[] = await getJson(REST.futures, `/futures/data/openInterestHist?symbol=${symbol}&period=${period}&limit=${limit}${end ? `&endTime=${end}` : ''}`)
+      if (!Array.isArray(rows) || !rows.length) break
+      const pts = rows.map((r) => ({ time: Math.floor(r.timestamp / 1000), value: +r.sumOpenInterest })).filter((p) => p.value > 0)
+      out.unshift(...pts.filter((p) => !out.length || p.time < out[0].time))
+      end = rows[0].timestamp - sec * 1000
+      if (rows.length < limit) break
+    }
+    // текущий открытый интерес — свежее последней точки истории
+    try {
+      const cur = await getJson(REST.futures, `/fapi/v1/openInterest?symbol=${symbol}`)
+      const time = Math.floor(+cur.time / 1000)
+      if (+cur.openInterest > 0 && (!out.length || time > out[out.length - 1].time)) out.push({ time, value: +cur.openInterest })
+    } catch {
+      /* обойдёмся историей */
+    }
+    return out
   },
 
   refreshTicker(market, symbol) {

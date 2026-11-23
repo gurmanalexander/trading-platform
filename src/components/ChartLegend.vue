@@ -57,7 +57,7 @@ const rows = computed(() =>
   props.pane.indicators.map((inst) => {
     const def = indicatorDef(inst.type)!
     const values = props.legend?.ind[inst.id] ?? []
-    const p = def.type === 'vol' ? -1 : (def.precision ?? props.precision)
+    const p = def.type === 'vol' || def.compact ? -1 : (def.precision ?? props.precision)
     const paneIdx = props.indPane[inst.id] ?? 0
     return {
       inst,
@@ -68,7 +68,7 @@ const rows = computed(() =>
       values: inst.visible
         ? def.plots.map((plot, i) => ({
             text: p < 0 ? fmtCompact(values[i]) : fmtPrice(values[i], p),
-            color: inst.colors?.[i] ?? (plot.kind === 'hist' ? '' : plot.color),
+            color: plot.kind === 'line' ? (inst.colors?.[i] ?? plot.color) : '',
           }))
         : [],
     }

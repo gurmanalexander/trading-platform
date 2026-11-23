@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { atr, bollinger, ema, macd, rsi, sma, stochastic, vwap, wma } from '../src/lib/indicators'
+import { atr, bollinger, cumulativeDelta, ema, macd, oiCandles, rsi, sma, stochastic, vwap, wma } from '../src/lib/indicators'
+import { fmtOffset, isTimeZone, tzOffsetSec } from '../src/lib/timezone'
 
 const round = (a: ArrayLike<number>, d = 4) => Array.from(a, (v) => (Number.isNaN(v) ? null : +v.toFixed(d)))
 
@@ -92,5 +93,56 @@ describe('остальные индикаторы', () => {
     expect(v[1]).toBe((10 * 1 + 20 * 3) / 4)
     expect(v[2]).toBe(30)
     expect(v[3]).toBe(35)
+  })
+})
+
+describe('CDV и открытый интерес', () => {
+  const src = (bars: [number, number, number, number, number][]) => {
+    const n = bars.length
+    const f = (k: number) => Float64Array.from(bars, (b) => b[k])
+    return { time: new Float64Array(n), open: f(0), high: f(1), low: f(2), close: f(3), volume: f(4) }
+  }
+
+  it('CDV: объём делится по телу и теням, дельта копится; открытие — прошлое значение', () => {
+    // растущая свеча без теней: вся дельта — покупки; падающая без теней — продажи
+    const s = src([
+      [10, 12, 10, 12, 100],
+      [12, 12, 11, 11, 40],
+      // доджи с тенями: пополам — 0.5 × 50 со знаком «вверх» (close >= open)
+      [11, 12, 10, 11, 50],
+    ])
+    const [c, o, h, l] = cumulativeDelta(s, false)
+    expect(Array.from(c)).toEqual([100, 60, 85])
+    expect(Array.from(o)).toEqual([0, 100, 60])
+    expect(Array.from(h)).toEqual([100, 100, 85])
+    expect(Array.from(l)).toEqual([0, 60, 60])
+  })
+
+  it('CDV: свеча с тенями — доля покупок 0.5·(тени + 2·тело) / диапазон', () => {
+    const [c] = cumulativeDelta(src([[10, 13, 9, 12, 100]]), false)
+    // тени 1 + 1, тело 2: 0.5 * (2 + 4) / 4 = 0.75
+    expect(c[0]).toBeCloseTo(75)
+  })
+
+  it('OI: свечи по значениям на закрытии, открытие — прошлое закрытие', () => {
+    const s = { ...src([[1, 1, 1, 1, 0], [1, 1, 1, 1, 0], [1, 1, 1, 1, 0]]), oi: { close: Float64Array.from([NaN, 10, 12]), high: Float64Array.from([NaN, 11, 15]), low: Float64Array.from([NaN, 9, 12]) } }
+    const [c, o, h, l] = oiCandles(s)
+    expect(round(c)).toEqual([null, 10, 12])
+    expect(round(o)).toEqual([null, 10, 10])
+    expect(round(h)).toEqual([null, 11, 15])
+    expect(round(l)).toEqual([null, 9, 10])
+  })
+})
+
+describe('часовые пояса', () => {
+  it('сдвиг пояса считается на нужную дату с учётом летнего времени', () => {
+    expect(tzOffsetSec('UTC')).toBe(0)
+    expect(tzOffsetSec('Europe/Moscow', Date.UTC(2026, 0, 15))).toBe(3 * 3600)
+    expect(tzOffsetSec('America/New_York', Date.UTC(2026, 0, 15))).toBe(-5 * 3600)
+    expect(tzOffsetSec('America/New_York', Date.UTC(2026, 6, 15))).toBe(-4 * 3600)
+    expect(tzOffsetSec('Asia/Kolkata', Date.UTC(2026, 0, 15))).toBe(5.5 * 3600)
+    expect(fmtOffset(5.5 * 3600)).toBe('UTC+5:30')
+    expect(fmtOffset(-5 * 3600)).toBe('UTC−5')
+    expect(isTimeZone('Mars/Base')).toBe(false)
   })
 })

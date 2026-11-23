@@ -22,11 +22,13 @@ import { EXCHANGE_NAMES, symbolKey, type Bar, type SymbolRef } from '../types'
 import { adapters } from '../exchanges'
 import { getTf, type Timeframe } from '../lib/timeframes'
 import { setPrecision } from '../lib/format'
-import { indicatorDef, resolveParams, toSource, type IndicatorDef, type IndicatorInstance } from '../lib/indicators'
+import { indicatorDef, resolveParams, toSource, type IndicatorDef, type IndicatorInstance, type Source } from '../lib/indicators'
+import type { OiPoint } from '../exchanges/types'
 import { app, paneCount, theme, type ChartType, type PaneState } from '../stores/app'
 import { crosshairBus, dateFocus, timeBus } from '../stores/sync'
 import { focusFraction } from '../lib/setup'
 import { onWake } from '../lib/wake'
+import { tzOffsetSec } from '../lib/timezone'
 import { dayStats } from '../stores/atr'
 import { clearView, getView, setView, viewKey, type ChartView } from '../stores/views'
 import { chartColors, withAlpha, type ChartColors } from './theme'
@@ -57,6 +59,10 @@ interface IndRuntime {
 }
 
 const INITIAL_BARS = 1000
+/** как часто обновляется открытый интерес, мс */
+const OI_POLL_MS = 60_000
+/** сколько точек открытого интереса просим за раз, не больше */
+const OI_MAX_POINTS = 1500
 /** Как часто проверяем, не отстал ли график от времени */
 const WATCH_MS = 15_000
 const MAX_BARS = 30_000
@@ -64,7 +70,6 @@ const MAX_BARS = 30_000
 const FUTURE_MIN = 300
 const FUTURE_MARGIN = 20
 const FUTURE_MAX = 20_000
-const LOCAL_TZ_SEC = -new Date().getTimezoneOffset() * 60
 const FONT = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif'
 
 const isOhlc = (t: ChartType) => t !== 'line' && t !== 'area'
@@ -101,6 +106,8 @@ export class ChartController {
     paneTops: [0] as number[],
     /** id индикатора -> номер его панели (только для индикаторов в отдельных панелях) */
     indPane: {} as Record<string, number>,
+    /** угол под ценовой шкалой и справа от шкалы времени, px — там кнопка часового пояса */
+    corner: { w: 0, h: 0 },
   })
   readonly legend = shallowRef<Legend | null>(null)
   readonly draw: DrawingsLayer
@@ -121,6 +128,11 @@ export class ChartController {
   private futureSig = ''
   private futureCount = 0
   private futureRaf = 0
+  /** открытый интерес текущего инструмента: точки по времени и для какого «инструмент|интервал» они */
+  private oi: OiPoint[] = []
+  private oiKey = ''
+  private oiLoading = false
+  private oiTimer = 0
   /** То, что показывает основная серия: сами свечи либо Хейкен Аши */
   private shown: Bar[] = []
   private tz = 0
@@ -223,6 +235,7 @@ export class ChartController {
     this.chart.timeScale().subscribeVisibleLogicalRangeChange(this.onRange)
     this.offWake = this.live ? onWake(this.onWake) : () => {}
     if (this.live) this.watchTimer = window.setInterval(this.watchStale, WATCH_MS)
+    if (this.live) this.oiTimer = window.setInterval(() => this.loadOi(true), OI_POLL_MS)
     this.resizeObs = new ResizeObserver(() => requestAnimationFrame(() => this.onResize()))
     this.resizeObs.observe(el)
     // capture: колесо над ценовой шкалой перехватываем раньше, чем библиотека начнёт масштабировать время
@@ -363,6 +376,22 @@ export class ChartController {
     }
     const cur = this.ui.paneTops
     if (cur.length !== n || tops.some((t, i) => t !== cur[i])) this.ui.paneTops = tops
+    const w = this.chart.priceScale('right', 0).width()
+    const h = this.chart.timeScale().height()
+    if (w !== this.ui.corner.w || h !== this.ui.corner.h) this.ui.corner = { w, h }
+  }
+
+  /** Сдвиг времени графика: внутри дня — по выбранному поясу, дневные и старше — даты биржи (UTC) */
+  private tzFor(): number {
+    return this.tf.sec >= 86400 ? 0 : tzOffsetSec(app.view.tz)
+  }
+
+  /** Сменили часовой пояс — перезаливаем серии с новым сдвигом, не перечитывая свечи */
+  applyTz() {
+    const tz = this.tzFor()
+    if (tz === this.tz) return
+    this.tz = tz
+    this.setAll()
   }
 
   destroy() {
@@ -377,6 +406,7 @@ export class ChartController {
     clearTimeout(this.saveViewTimer)
     clearTimeout(this.retryTimer)
     clearInterval(this.watchTimer)
+    clearInterval(this.oiTimer)
     this.offWake()
     if (crosshairBus.value?.pane === this.paneIndex) crosshairBus.value = null
     this.token++
@@ -398,9 +428,11 @@ export class ChartController {
     const { symbol } = this.pane
     this.tf = getTf(this.pane.tf)
     // Внутридневные свечи показываем в местном времени; дневные и старше — по датам биржи (UTC)
-    this.tz = this.tf.sec >= 86400 ? 0 : LOCAL_TZ_SEC
+    this.tz = this.tzFor()
     this.bars = []
     this.loadedKey = ''
+    this.oi = []
+    this.oiKey = ''
     this.shown = []
     this.noMore = false
     this.loadingMore = false
@@ -421,6 +453,7 @@ export class ChartController {
       this.setPrecision(res.precision)
       this.rebuildShown()
       this.setAll()
+      this.loadOi()
       this.chart.priceScale('right').applyOptions({ autoScale: true })
       this.chart.timeScale().scrollToPosition(6, false)
       this.ui.loading = false
@@ -738,7 +771,6 @@ export class ChartController {
     const type = this.pane.chartType
     const common = {
       priceFormat: { type: 'price' as const, precision: this.precision, minMove: 1 / 10 ** this.precision },
-      priceLineColor: c.muted,
     }
     let s: ISeriesApi<SeriesType>
     if (type === 'line') {
@@ -750,7 +782,7 @@ export class ChartController {
         0,
       )
     } else if (type === 'bars') {
-      s = this.chart.addSeries(BarSeries, { ...common, upColor: c.up, downColor: c.down, thinBars: false }, 0)
+      s = this.chart.addSeries(BarSeries, { ...common, upColor: c.up, downColor: c.down, thinBars: app.view.thinBars }, 0)
     } else {
       s = this.chart.addSeries(
         CandlestickSeries,
@@ -780,8 +812,11 @@ export class ChartController {
         fontSize: () => app.view.scaleFont,
         enabled: () => app.view.countdown && this.live,
         colors: () => (isOhlc(this.pane.chartType) ? this.colors : { up: this.colors.line, down: this.colors.line }),
+        // в процентной шкале метку подписывает библиотека — в процентах
+        priceText: (p) => (this.pane.scale === 'percent' ? null : this.main.priceFormatter().format(p)),
       }),
     )
+    s.applyOptions({ lastValueVisible: this.pane.scale === 'percent' })
     this.alertLines = []
     this.setAlertLines(this.alertPrices)
   }
@@ -800,6 +835,7 @@ export class ChartController {
     const mode =
       this.pane.scale === 'log' ? PriceScaleMode.Logarithmic : this.pane.scale === 'percent' ? PriceScaleMode.Percentage : PriceScaleMode.Normal
     this.chart.priceScale('right').applyOptions({ mode, invertScale: this.pane.invert })
+    this.main.applyOptions({ lastValueVisible: this.pane.scale === 'percent' })
   }
 
   /** Сдвиг графика на n свечей (отрицательное — в прошлое) */
@@ -957,6 +993,7 @@ export class ChartController {
   /** Размер шрифта шкал поменяли в настройках */
   applyView() {
     this.chart.applyOptions({ layout: { fontSize: app.view.scaleFont } })
+    if (this.pane.chartType === 'bars') this.main.applyOptions({ thinBars: app.view.thinBars })
     this.draw.redraw()
   }
 
@@ -1029,12 +1066,19 @@ export class ChartController {
         if (paneIdx) indPane[inst.id] = paneIdx
         const p = def.precision ?? this.precision
         const priceFormat = { type: 'price' as const, precision: p, minMove: 1 / 10 ** p }
+        const fmt = def.compact ? { type: 'volume' as const } : priceFormat
         def.plots.forEach((plot, i) => {
-          const base = { priceFormat, priceLineVisible: false, lastValueVisible: !def.overlay }
+          const base = { priceFormat: fmt, priceLineVisible: false, lastValueVisible: !def.overlay }
           series.push(
-            plot.kind === 'hist'
-              ? this.chart.addSeries(HistogramSeries, { ...base, lastValueVisible: false }, paneIdx)
-              : this.chart.addSeries(LineSeries, { ...base, color: colors[i], lineWidth: 1, crosshairMarkerVisible: false }, paneIdx),
+            plot.kind === 'candle'
+              ? this.chart.addSeries(
+                  CandlestickSeries,
+                  { ...base, upColor: c.up, downColor: c.down, borderVisible: false, wickUpColor: c.up, wickDownColor: c.down },
+                  paneIdx,
+                )
+              : plot.kind === 'hist'
+                ? this.chart.addSeries(HistogramSeries, { ...base, lastValueVisible: false }, paneIdx)
+                : this.chart.addSeries(LineSeries, { ...base, color: colors[i], lineWidth: 1, crosshairMarkerVisible: false }, paneIdx),
           )
         })
         const host = series[series.length - 1]
@@ -1048,6 +1092,7 @@ export class ChartController {
     const panes = this.chart.panes()
     panes.forEach((p, i) => p.setStretchFactor(i === 0 ? Math.max(3, 5 - panes.length * 0.5) : 1))
     this.ui.indPane = indPane
+    this.loadOi()
     this.computeIndicators(true)
     this.updateLegend()
     // размеры панелей библиотека пересчитывает к следующему кадру
@@ -1059,6 +1104,7 @@ export class ChartController {
     const bars = this.bars
     const n = bars.length
     const src = toSource(bars)
+    if (this.inds.some((r) => r.def.needs === 'oi')) src.oi = this.oiSource()
     const c = this.colors
     const upDim = withAlpha(c.up, 0.45)
     const downDim = withAlpha(c.down, 0.45)
@@ -1067,9 +1113,12 @@ export class ChartController {
       const isVol = r.def.type === 'vol'
       r.series.forEach((s, k) => {
         const arr = r.out[k]
-        const hist = r.def.plots[k].kind === 'hist'
+        const kind = r.def.plots[k].kind
+        const hist = kind === 'hist'
         const pt = (j: number) => {
           const time = (bars[j].time + this.tz) as UTCTimestamp
+          // свечи индикатора: ряды [close, open, high, low]
+          if (kind === 'candle') return { time, close: r.out[0][j], open: r.out[1][j], high: r.out[2][j], low: r.out[3][j] }
           if (!hist) return { time, value: arr[j] }
           const up = isVol ? bars[j].close >= bars[j].open : arr[j] >= 0
           return { time, value: arr[j], color: up ? upDim : downDim }
@@ -1083,6 +1132,82 @@ export class ChartController {
         }
       })
     }
+  }
+
+  // ---------- открытый интерес ----------
+
+  /** Нужен ли графику открытый интерес: есть индикатор OI, а инструмент — фьючерс */
+  private oiWanted(): boolean {
+    return this.pane.symbol.market === 'futures' && this.inds.some((r) => r.def.needs === 'oi')
+  }
+
+  /**
+   * Загружает открытый интерес под загруженные свечи; refresh — плановое обновление: просим
+   * только свежий хвост и вклеиваем его.
+   */
+  private async loadOi(refresh = false) {
+    if (!this.oiWanted() || !this.bars.length || this.oiLoading) return
+    const { symbol } = this.pane
+    const key = `${symbolKey(symbol)}|${this.tf.id}`
+    if (!refresh && key === this.oiKey) return
+    if (refresh && key !== this.oiKey) refresh = false
+    if (refresh && document.visibilityState !== 'visible') return
+    const token = this.token
+    this.oiLoading = true
+    try {
+      const n = this.bars.length
+      const span = this.tf.sec * (refresh ? 3 : n)
+      // шаг точек — не крупнее свечи и не мельче 5 минут
+      const step = Math.max(300, Math.min(this.tf.sec, 86400))
+      const count = Math.min(OI_MAX_POINTS, Math.ceil(span / step) + 2)
+      const pts = await adapters[symbol.exchange].fetchOpenInterest(symbol.market, symbol.symbol, this.tf.sec, refresh ? Math.max(count, 6) : count)
+      if (token !== this.token || this.disposed) return
+      if (refresh && this.oi.length && pts.length) {
+        const from = pts[0].time
+        this.oi = this.oi.filter((p) => p.time < from).concat(pts)
+      } else {
+        this.oi = pts
+      }
+      this.oiKey = key
+      this.computeIndicators(true)
+      this.updateLegend()
+    } catch {
+      /* попробуем при следующем обновлении */
+    } finally {
+      this.oiLoading = false
+    }
+  }
+
+  /** Открытый интерес по свечам: на закрытии свечи (последняя точка до её конца) и размах внутри неё */
+  private oiSource(): NonNullable<Source['oi']> {
+    const bars = this.bars
+    const n = bars.length
+    const close = new Float64Array(n).fill(NaN)
+    const high = new Float64Array(n).fill(NaN)
+    const low = new Float64Array(n).fill(NaN)
+    const pts = this.oiKey === `${symbolKey(this.pane.symbol)}|${this.tf.id}` ? this.oi : []
+    if (!pts.length) return { close, high, low }
+    const sec = this.tf.sec
+    let k = 0
+    for (let i = 0; i < n; i++) {
+      const end = i + 1 < n ? bars[i + 1].time : bars[i].time + sec
+      // точки раньше начала истории интереса — данных нет
+      if (end < pts[0].time) continue
+      let hi = -Infinity
+      let lo = Infinity
+      while (k < pts.length && pts[k].time <= end) {
+        if (pts[k].time > bars[i].time) {
+          hi = Math.max(hi, pts[k].value)
+          lo = Math.min(lo, pts[k].value)
+        }
+        k++
+      }
+      if (k === 0) continue
+      close[i] = pts[k - 1].value
+      high[i] = isFinite(hi) ? hi : close[i]
+      low[i] = isFinite(lo) ? lo : close[i]
+    }
+    return { close, high, low }
   }
 
   // ---------- легенда ----------

@@ -38,10 +38,16 @@ function reset() {
 <template>
   <Modal :title="def?.name ?? 'Индикатор'" :width="340" @close="close">
     <form v-if="def" class="is" @submit.prevent="apply">
-      <label v-for="p in def.params" :key="p.key" class="is-row">
-        <span>{{ p.label }}</span>
-        <input v-model.number="params[p.key]" class="field" type="number" inputmode="decimal" :min="p.min" :max="p.max" :step="p.step ?? 1" />
-      </label>
+      <template v-for="p in def.params" :key="p.key">
+        <label v-if="p.bool" class="is-row check">
+          <span>{{ p.label }}</span>
+          <input :checked="params[p.key] === 1" type="checkbox" @change="params[p.key] = ($event.target as HTMLInputElement).checked ? 1 : 0" />
+        </label>
+        <label v-else class="is-row">
+          <span>{{ p.label }}</span>
+          <input v-model.number="params[p.key]" class="field" type="number" inputmode="decimal" :min="p.min" :max="p.max" :step="p.step ?? 1" />
+        </label>
+      </template>
       <template v-for="(plot, i) in def.plots" :key="i">
         <label v-if="plot.kind === 'line'" class="is-row">
           <span>Цвет: {{ plot.label }}</span>
@@ -68,6 +74,12 @@ function reset() {
   grid-template-columns: 1fr 110px;
   align-items: center;
   gap: 10px;
+}
+.is-row.check {
+  cursor: pointer;
+}
+.is-row.check input {
+  justify-self: start;
 }
 .color {
   width: 110px;

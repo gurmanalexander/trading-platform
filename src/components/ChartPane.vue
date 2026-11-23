@@ -4,6 +4,7 @@ import Icon from './Icon.vue'
 import ChartLegend from './ChartLegend.vue'
 import DrawingBar from './DrawingBar.vue'
 import AtrTable from './AtrTable.vue'
+import Dropdown from './Dropdown.vue'
 import { ChartController } from '../chart/controller'
 import { registerChart } from '../chart/registry'
 import { symbolKey } from '../types'
@@ -16,6 +17,7 @@ import { crosshairBus, dateFocus, timeBus } from '../stores/sync'
 import { useDayStats } from '../stores/atr'
 import { fmtPrice } from '../lib/format'
 import { getTf } from '../lib/timeframes'
+import { fmtOffset, TIMEZONES, tzMenuLabel, tzOffsetSec } from '../lib/timezone'
 
 const props = defineProps<{ index: number }>()
 const pane = app.panes[props.index]
@@ -76,11 +78,18 @@ watch(
   },
 )
 watch(() => pane.chartType, () => ctrl.value?.setChartType())
+watch(() => app.view.tz, () => ctrl.value?.applyTz())
+// подпись пояса в углу под ценовой шкалой, как в TradingView
+const tzLabel = computed(() => fmtOffset(tzOffsetSec(app.view.tz)))
+const tzTitle = computed(() => {
+  const o = TIMEZONES.find((z) => z.id === app.view.tz)
+  return `Часовой пояс графиков: ${o ? tzMenuLabel(o) : app.view.tz}`
+})
 watch(() => [pane.scale, pane.invert], () => ctrl.value?.applyScale())
 watch(() => pane.indicators, () => ctrl.value?.syncIndicators(), { deep: true })
 watch([theme, () => app.colors], () => ctrl.value?.applyTheme(), { deep: true })
 watch(() => app.drawingsHidden, () => ctrl.value?.draw.redraw())
-watch(() => [app.view.scaleFont, app.view.countdown, app.risk.deposit, app.risk.pct], () => ctrl.value?.applyView())
+watch(() => [app.view.scaleFont, app.view.countdown, app.view.thinBars, app.risk.deposit, app.risk.pct], () => ctrl.value?.applyView())
 
 // ---------- синхронизация с другими панелями ----------
 
@@ -298,6 +307,18 @@ function toggleScale(id: ScaleMode) {
       </button>
     </div>
 
+    <Dropdown v-if="ctrl && ctrl.ui.corner.w && ctrl.ui.corner.h" align="right" class="tz-corner" :style="{ width: ctrl.ui.corner.w + 'px', height: ctrl.ui.corner.h + 'px' }">
+      <template #trigger="{ toggle }">
+        <button class="tz-btn" :title="tzTitle" @click="toggle">{{ tzLabel }}</button>
+      </template>
+      <template #default="{ close }">
+        <div class="menu-title">Часовой пояс</div>
+        <button v-for="z in TIMEZONES" :key="z.id" class="menu-item" :class="{ on: app.view.tz === z.id }" @click="(app.view.tz = z.id), close()">
+          {{ z.id === 'local' ? `${z.name} (${fmtOffset(tzOffsetSec(z.id))})` : tzMenuLabel(z) }}
+        </button>
+      </template>
+    </Dropdown>
+
     <button v-if="ctrl?.ui.scrolledBack" class="rt-btn" title="К текущей цене" @click="ctrl.goRealtime()">
       <Icon name="skip" :size="16" />
     </button>
@@ -423,6 +444,37 @@ function toggleScale(id: ScaleMode) {
   box-shadow: var(--shadow);
 }
 .rt-btn:hover {
+  background: var(--hover);
+}
+.pane .tz-corner {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  z-index: 3;
+}
+.tz-btn {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-top: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--muted);
+  font-size: 11px;
+  white-space: nowrap;
+  overflow: hidden;
+  cursor: pointer;
+}
+.menu-title {
+  padding: 6px 10px 4px;
+  font-size: 11px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.tz-btn:hover {
+  color: var(--text);
   background: var(--hover);
 }
 .ctx-menu {
