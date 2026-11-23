@@ -2,7 +2,7 @@ import type { Bar, MarketId, SymbolInfo } from '../types'
 import { decimalsOf } from '../lib/format'
 import { getJson } from './http'
 import { StreamSocket } from './ws'
-import type { ExchangeAdapter } from './types'
+import { oiPeriod, type ExchangeAdapter, type OiPoint } from './types'
 import { bybitKind, type KindMap } from './tradfi'
 
 const REST = ['https://api.bybit.com', 'https://api.bytick.com']
@@ -11,6 +11,15 @@ const WS: Record<MarketId, string> = {
   spot: 'wss://stream.bybit.com/v5/public/spot',
   futures: 'wss://stream.bybit.com/v5/public/linear',
 }
+
+const OI_PERIODS: [number, string][] = [
+  [300, '5min'],
+  [900, '15min'],
+  [1800, '30min'],
+  [3600, '1h'],
+  [14400, '4h'],
+  [86400, '1d'],
+]
 
 const sockets = new Map<MarketId, StreamSocket>()
 function socket(market: MarketId): StreamSocket {
@@ -92,6 +101,38 @@ export const bybit: ExchangeAdapter = {
         [state.lastPrice, state.prevPrice24h, state.highPrice24h, state.lowPrice24h],
       )
     })
+  },
+
+  async fetchTicker(market, symbol) {
+    const r = ((await api(`/v5/market/tickers?category=${CATEGORY[market]}&symbol=${symbol}`)).list ?? [])[0]
+    if (!r) throw new Error('Нет такого инструмента')
+    return {
+      ticker: { last: +r.lastPrice, changePct: +r.price24hPcnt * 100 || 0, high: +r.highPrice24h, low: +r.lowPrice24h, quoteVolume: +r.turnover24h || 0 },
+      raw: [r.lastPrice, r.prevPrice24h, r.highPrice24h, r.lowPrice24h],
+    }
+  },
+
+  async fetchOpenInterest(market, symbol, tfSec, count) {
+    if (market !== 'futures') return []
+    const [, period] = oiPeriod(OI_PERIODS, tfSec)
+    const out: OiPoint[] = []
+    let cursor = ''
+    // биржа отдаёт от новых к старым по 200 точек; страницы — по курсору
+    for (let page = 0; page < 5 && out.length < count; page++) {
+      const limit = Math.min(200, Math.max(2, count - out.length))
+      const res = await api(
+        `/v5/market/open-interest?category=linear&symbol=${symbol}&intervalTime=${period}&limit=${limit}${cursor ? '&cursor=' + encodeURIComponent(cursor) : ''}`,
+      )
+      const rows: any[] = res.list ?? []
+      for (const r of rows) out.push({ time: Math.floor(+r.timestamp / 1000), value: +r.openInterest })
+      cursor = res.nextPageCursor ?? ''
+      if (!cursor || rows.length < limit) break
+    }
+    return out.filter((p) => p.value > 0).sort((a, b) => a.time - b.time)
+  },
+
+  refreshTicker(market, symbol) {
+    socket(market).resubscribe(`tickers.${symbol}`)
   },
 
   async fetchSymbols(market) {

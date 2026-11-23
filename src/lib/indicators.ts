@@ -158,6 +158,88 @@ export function vwap(time: Arr, high: Arr, low: Arr, close: Arr, volume: Arr): F
   return out
 }
 
+/**
+ * Cumulative Delta Volume — как одноимённый индикатор TradingView (LonesomeTheBlue): объём свечи
+ * делится на покупки и продажи по соотношению тела и теней, дельта копится с первой свечи.
+ * Возвращает свечи [close, open, high, low]: открытие — накопленная дельта предыдущей свечи.
+ * ha — свечи Хейкен Аши (так индикатор показывается по умолчанию).
+ */
+export function cumulativeDelta(s: Source, ha: boolean): Float64Array[] {
+  const n = s.close.length
+  const c = blank(n)
+  const o = blank(n)
+  const h = blank(n)
+  const l = blank(n)
+  let cum = 0
+  let prev = NaN
+  for (let i = 0; i < n; i++) {
+    const op = s.open[i]
+    const cl = s.close[i]
+    const tw = s.high[i] - Math.max(op, cl)
+    const bw = Math.min(op, cl) - s.low[i]
+    const body = Math.abs(cl - op)
+    const rate = (cond: boolean) => {
+      const r = (0.5 * (tw + bw + (cond ? 2 * body : 0))) / (tw + bw + body)
+      return isFinite(r) && r !== 0 ? r : 0.5
+    }
+    const vol = s.volume[i]
+    const delta = cl >= op ? vol * rate(op <= cl) : -vol * rate(op > cl)
+    cum += delta
+    // у первой свечи предыдущего значения нет — как nz() в оригинале, открытие от нуля
+    const p = isFinite(prev) ? prev : 0
+    o[i] = p
+    c[i] = cum
+    h[i] = Math.max(cum, p)
+    l[i] = Math.min(cum, p)
+    prev = cum
+  }
+  return ha ? heikin(c, o, h, l) : [c, o, h, l]
+}
+
+/** Свечи [close, open, high, low] → Хейкен Аши в том же порядке */
+function heikin(c: Arr, o: Arr, h: Arr, l: Arr): Float64Array[] {
+  const n = c.length
+  const hc = blank(n)
+  const ho = blank(n)
+  const hh = blank(n)
+  const hl = blank(n)
+  let po = NaN
+  let pc = NaN
+  for (let i = 0; i < n; i++) {
+    if (!isFinite(c[i]) || !isFinite(o[i])) continue
+    const close = (o[i] + h[i] + l[i] + c[i]) / 4
+    const open = isFinite(po) ? (po + pc) / 2 : (o[i] + c[i]) / 2
+    hc[i] = close
+    ho[i] = open
+    hh[i] = Math.max(h[i], open, close)
+    hl[i] = Math.min(l[i], open, close)
+    po = open
+    pc = close
+  }
+  return [hc, ho, hh, hl]
+}
+
+/** Открытый интерес свечами [close, open, high, low]: открытие — значение на закрытии прошлой свечи */
+export function oiCandles(s: Source): Float64Array[] {
+  const n = s.close.length
+  const c = blank(n)
+  const o = blank(n)
+  const h = blank(n)
+  const l = blank(n)
+  const oi = s.oi
+  if (!oi) return [c, o, h, l]
+  for (let i = 0; i < n; i++) {
+    const v = oi.close[i]
+    if (!isFinite(v)) continue
+    const p = i > 0 && isFinite(oi.close[i - 1]) ? oi.close[i - 1] : v
+    c[i] = v
+    o[i] = p
+    h[i] = Math.max(v, p, isFinite(oi.high[i]) ? oi.high[i] : v)
+    l[i] = Math.min(v, p, isFinite(oi.low[i]) ? oi.low[i] : v)
+  }
+  return [c, o, h, l]
+}
+
 // ---------- исходные ряды ----------
 
 export interface Source {
@@ -167,6 +249,8 @@ export interface Source {
   low: Float64Array
   close: Float64Array
   volume: Float64Array
+  /** открытый интерес по свечам (NaN — нет данных): на закрытии свечи и размах внутри неё */
+  oi?: { close: Float64Array; high: Float64Array; low: Float64Array }
 }
 
 export function toSource(bars: Bar[]): Source {
@@ -200,11 +284,14 @@ export interface ParamDef {
   min: number
   max: number
   step?: number
+  /** флажок: 1 — да, 0 — нет */
+  bool?: boolean
 }
 
 export interface PlotDef {
   label: string
-  kind: 'line' | 'hist'
+  /** candle — свечи: calc отдаёт для этого графика четыре ряда [close, open, high, low] */
+  kind: 'line' | 'hist' | 'candle'
   color: string
 }
 
@@ -220,6 +307,10 @@ export interface IndicatorDef {
   levels?: number[]
   /** знаков после запятой; не задано — как у цены инструмента */
   precision?: number
+  /** большие числа (объёмы): подписи сокращённо — 12.3K, 4.5M */
+  compact?: boolean
+  /** нужны данные сверх свечей: oi — открытый интерес (есть только у фьючерсов) */
+  needs?: 'oi'
   calc(s: Source, p: Record<string, number>): Float64Array[]
 }
 
@@ -357,6 +448,27 @@ export const INDICATORS: IndicatorDef[] = [
     plots: [{ label: 'ATR', kind: 'line', color: '#e06c75' }],
     calc: (s, p) => [atr(s.high, s.low, s.close, p.len)],
   },
+  {
+    type: 'cdv',
+    name: 'Cumulative Delta Volume (CDV)',
+    short: 'CDV',
+    overlay: false,
+    params: [{ key: 'ha', label: 'Свечи Хейкен Аши', def: 1, min: 0, max: 1, bool: true }],
+    plots: [{ label: 'CDV', kind: 'candle', color: '#4c8dff' }],
+    compact: true,
+    calc: (s, p) => cumulativeDelta(s, p.ha === 1),
+  },
+  {
+    type: 'oi',
+    name: 'Открытый интерес (Open Interest) — фьючерсы',
+    short: 'OI',
+    overlay: false,
+    params: [],
+    plots: [{ label: 'OI', kind: 'candle', color: '#e8a838' }],
+    compact: true,
+    needs: 'oi',
+    calc: (s) => oiCandles(s),
+  },
 ]
 
 const defs = new Map(INDICATORS.map((d) => [d.type, d]))
@@ -374,7 +486,10 @@ export function newIndicator(type: string): IndicatorInstance | null {
 export function indicatorTitle(inst: IndicatorInstance): string {
   const def = defs.get(inst.type)
   if (!def) return inst.type
-  const args = def.params.map((p) => inst.params[p.key] ?? p.def).join(' ')
+  const args = def.params
+    .filter((p) => !p.bool)
+    .map((p) => inst.params[p.key] ?? p.def)
+    .join(' ')
   return args ? `${def.short} ${args}` : def.short
 }
 

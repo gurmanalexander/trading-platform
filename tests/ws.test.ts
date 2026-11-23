@@ -233,4 +233,38 @@ describe('StreamSocket', () => {
     expect(FakeSocket.all).toHaveLength(2)
     expect(FakeSocket.all[0].readyState).toBe(3)
   })
+
+  it('отклонённую тему через минуту просит снова: отказ мог быть временным', () => {
+    const s = new StreamSocket(cfg)
+    s.subscribe('a', () => {})
+    last().open()
+    last().receive({ ok: false, id: 1 })
+    vi.advanceTimersByTime(500)
+    expect(last().sent).toHaveLength(1)
+    // соединение живо: на проверки приходят ответы
+    for (let i = 0; i < 4; i++) {
+      vi.advanceTimersByTime(15_500)
+      last().receive({ op: 'pong' })
+    }
+    expect(FakeSocket.all).toHaveLength(1)
+    const subs = last().sent.filter((m) => m.op === 'sub')
+    expect(subs[subs.length - 1].args).toEqual(['a'])
+  })
+
+  it('resubscribe отписывается и подписывается на тему заново по порядку', () => {
+    const s = new StreamSocket(cfg)
+    s.subscribe('a', () => {})
+    last().open()
+    s.resubscribe('a')
+    vi.advanceTimersByTime(500)
+    expect(last().sent).toEqual([
+      { op: 'sub', args: ['a'], id: 1 },
+      { op: 'unsub', args: ['a'], id: 2 },
+      { op: 'sub', args: ['a'], id: 3 },
+    ])
+    // тема без подписчиков не переподписывается
+    s.resubscribe('none')
+    vi.advanceTimersByTime(500)
+    expect(last().sent).toHaveLength(3)
+  })
 })

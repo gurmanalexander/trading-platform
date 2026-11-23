@@ -10,11 +10,17 @@ export interface CountdownHost {
   fontSize(): number
   enabled(): boolean
   colors(): { up: string; down: string }
+  /**
+   * Подпись последней цены; null — подписывает сама библиотека. Своя метка нужна потому, что
+   * библиотека подписывает последнюю ВИДИМУЮ свечу: стоит последней уйти за край, метка показывает
+   * чужую цену. В TradingView метка — всегда текущая цена, цветом последнего бара.
+   */
+  priceText(price: number): string | null
 }
 
 /**
- * Время до закрытия свечи — плашкой сразу под меткой последней цены на шкале, как в TradingView.
- * Обновляется раз в секунду.
+ * Метка последней цены и время до закрытия свечи — плашкой сразу под ней, как в TradingView.
+ * Таймер обновляется раз в секунду.
  */
 export function countdownPrimitive(host: CountdownHost): ISeriesPrimitive<Time> {
   let timer = 0
@@ -22,17 +28,21 @@ export function countdownPrimitive(host: CountdownHost): ISeriesPrimitive<Time> 
   const build = () => {
     views = []
     const b = host.last()
+    if (!b) return
+    const y = host.yOf(b.close)
+    if (y == null) return
+    const bg = b.up ? host.colors().up : host.colors().down
+    const price = host.priceText(b.close)
+    if (price !== null) views.push({ coordinate: () => y, text: () => price, textColor: () => '#fff', backColor: () => bg })
     const sec = host.tfSec()
     // у месячных свечей длина плавает — таймер не показываем
-    if (!host.enabled() || !b || sec <= 0 || sec > 7 * 86400) return
+    if (!host.enabled() || sec <= 0 || sec > 7 * 86400) return
     const left = b.time + sec - Math.floor(Date.now() / 1000)
-    const y = host.yOf(b.close)
-    if (left <= 0 || y == null) return
+    if (left <= 0) return
     // высота метки цены у библиотеки — шрифт плюс отступы по 3/12 шрифта сверху и снизу
     const fs = host.fontSize()
-    const bg = b.up ? host.colors().up : host.colors().down
     const text = fmtDuration(left)
-    views = [{ coordinate: () => y + fs * 1.5 + 1, text: () => text, textColor: () => '#fff', backColor: () => bg }]
+    views.push({ coordinate: () => y + fs * 1.5 + 1, text: () => text, textColor: () => '#fff', backColor: () => bg })
   }
   return {
     attached: ({ requestUpdate }) => {

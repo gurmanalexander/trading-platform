@@ -1,4 +1,5 @@
 import { reactive, computed, ref, watch } from 'vue'
+import { isTimeZone, LOCAL_TZ } from '../lib/timezone'
 import type { ExchangeId, MarketId, SymbolRef } from '../types'
 import { load, persist } from '../lib/storage'
 import { indicatorDef, type IndicatorInstance } from '../lib/indicators'
@@ -217,6 +218,10 @@ export interface ViewSettings {
   legendFont: number
   /** время до закрытия свечи под последней ценой на шкале */
   countdown: boolean
+  /** тонкие бары: при увеличении бар остаётся линией в пиксель, как «Тонкие бары» в TradingView */
+  thinBars: boolean
+  /** часовой пояс внутридневных графиков: 'local' — как на устройстве, 'UTC' или пояс IANA */
+  tz: string
 }
 
 /** Объём позиции: депозит и риск на сделку в процентах от него */
@@ -232,6 +237,8 @@ const sanitizeView = (v?: Partial<ViewSettings>): ViewSettings => ({
   scaleFont: pick(v?.scaleFont, SCALE_FONTS, 11),
   legendFont: pick(v?.legendFont, LEGEND_FONTS, 12),
   countdown: v?.countdown !== false,
+  thinBars: v?.thinBars !== false,
+  tz: isTimeZone(v?.tz) ? (v?.tz as string) : LOCAL_TZ,
 })
 const positive = (v: unknown, def: number, max: number) => (typeof v === 'number' && isFinite(v) && v >= 0 ? Math.min(max, v) : def)
 const sanitizeRisk = (v?: Partial<RiskSettings>): RiskSettings => ({ deposit: positive(v?.deposit, 0, 1e12), pct: positive(v?.pct, 1, 100) })

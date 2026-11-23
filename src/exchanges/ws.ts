@@ -28,6 +28,8 @@ const MAX_BACKOFF_MS = 15_000
 const CONNECT_TIMEOUT_MS = 10_000
 /** Сколько ждём ответа на проверочный ping после возвращения приложения */
 const PROBE_MS = 3000
+/** Через сколько снова просим тему, которую биржа однажды отклонила */
+const BAD_RETRY_MS = 60_000
 
 /**
  * Одно WebSocket-соединение на биржу/рынок с подсчётом подписчиков по темам,
@@ -42,8 +44,11 @@ export class StreamSocket {
   private sent = new Set<string>()
   /** Темы запросов на подписку, ещё не подтверждённых сервером: id запроса -> темы */
   private pending = new Map<number, string[]>()
-  /** Темы, которые биржа не принимает (например, инструмента не существует) */
-  private bad = new Set<string>()
+  /**
+   * Темы, которые биржа не приняла (например, инструмента не существует): тема → когда отклонена.
+   * Отказ мог быть и временным, поэтому через BAD_RETRY_MS и при новом соединении тему просим снова.
+   */
+  private bad = new Map<string, number>()
   private outbox: string[] = []
   private sendTimer = 0
   private syncTimer = 0
@@ -123,6 +128,7 @@ export class StreamSocket {
       this.retry = 0
       this.lastMsg = Date.now()
       this.sent.clear()
+      this.bad.clear()
       this.outbox.length = 0
       this.status.value = 'open'
       this.sync()
@@ -209,6 +215,21 @@ export class StreamSocket {
     this.enqueue(this.cfg.ping(this.nextId++))
   }
 
+  /**
+   * Подписка на тему заново: поток по ней замолчал, хотя соединение живо (сервер мог потерять
+   * подписку). Отписка и подписка уходят по порядку, поэтому биржа не сочтёт её повторной.
+   */
+  resubscribe(topic: string) {
+    if (!this.handlers.has(topic)) return
+    this.bad.delete(topic)
+    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return
+    if (this.sent.has(topic)) {
+      this.sent.delete(topic)
+      this.enqueue(this.cfg.encodeUnsub([topic], this.nextId++))
+    }
+    this.sendSub([topic])
+  }
+
   /** Пересоздаёт соединение немедленно — «обновить» по просьбе пользователя */
   reconnect() {
     this.forceReconnect()
@@ -259,7 +280,8 @@ export class StreamSocket {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return
     const add: string[] = []
     const del: string[] = []
-    for (const t of this.bad) if (!this.handlers.has(t)) this.bad.delete(t)
+    const now = Date.now()
+    for (const [t, at] of this.bad) if (!this.handlers.has(t) || now - at > BAD_RETRY_MS) this.bad.delete(t)
     for (const t of this.handlers.keys()) if (!this.sent.has(t) && !this.bad.has(t)) add.push(t)
     for (const t of this.sent) if (!this.handlers.has(t)) del.push(t)
     const n = this.cfg.maxTopicsPerMsg
@@ -302,7 +324,9 @@ export class StreamSocket {
     this.pending.delete(id)
     topics.forEach((t) => this.sent.delete(t))
     if (topics.length === 1) {
-      this.bad.add(topics[0])
+      this.bad.set(topics[0], Date.now())
+      // отказ мог быть временным — через минуту попросим тему ещё раз
+      window.setTimeout(() => this.scheduleSync(), BAD_RETRY_MS + 100)
       return
     }
     for (const t of topics) if (this.handlers.has(t)) this.sendSub([t])

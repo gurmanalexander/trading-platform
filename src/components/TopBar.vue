@@ -146,6 +146,11 @@ function fullscreen() {
         >
           <Icon :name="t.icon" :size="16" />{{ t.label }}
         </button>
+        <div class="menu-sep" />
+        <label class="menu-item check" title="При увеличении бары не толстеют, как «Тонкие бары» в TradingView">
+          <input v-model="app.view.thinBars" type="checkbox" />
+          Тонкие бары
+        </label>
       </template>
     </Dropdown>
 
