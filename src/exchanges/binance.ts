@@ -38,6 +38,7 @@ function marketSocket(m: MarketId): StreamSocket {
 }
 
 const DAY = 86_400_000
+const tickerTopic = (symbol: string) => `${symbol.toLowerCase()}@miniTicker`
 
 export const binance: ExchangeAdapter = {
   async fetchKlines(market, symbol, tf, limit, endTime) {
@@ -72,7 +73,7 @@ export const binance: ExchangeAdapter = {
   },
 
   subscribeTicker(market, symbol, onTicker) {
-    return marketSocket(market).subscribe(`${symbol.toLowerCase()}@miniTicker`, (msg) => {
+    return marketSocket(market).subscribe(tickerTopic(symbol), (msg) => {
       const d = msg.data
       if (!d) return
       const last = +d.c
@@ -82,6 +83,20 @@ export const binance: ExchangeAdapter = {
         [d.c, d.o, d.h, d.l],
       )
     })
+  },
+
+  async fetchTicker(market, symbol) {
+    const r = await getJson(REST[market], `${TICKERS[market]}${market === 'spot' ? '&' : '?'}symbol=${symbol}`)
+    const last = +r.lastPrice
+    const open = +r.openPrice
+    return {
+      ticker: { last, changePct: open ? ((last - open) / open) * 100 : 0, high: +r.highPrice, low: +r.lowPrice, quoteVolume: +r.quoteVolume },
+      raw: [r.lastPrice, r.openPrice, r.highPrice, r.lowPrice],
+    }
+  },
+
+  refreshTicker(market, symbol) {
+    marketSocket(market).resubscribe(tickerTopic(symbol))
   },
 
   async fetchSymbols(market) {

@@ -1,5 +1,5 @@
 import type { IChartApi, IPrimitivePaneRenderer, IPrimitivePaneView, ISeriesApi, ISeriesPrimitive, ISeriesPrimitiveAxisView, Logical, SeriesType, Time } from 'lightweight-charts'
-import { computed, shallowRef } from 'vue'
+import { computed, shallowRef, watch } from 'vue'
 import type { Bar } from '../types'
 import { app } from '../stores/app'
 import { checkpoint, clipboard, selection, setDefaultStyle, styleFor, visibleOn, type Dash, type Drawing, type DrawingType, type Pt, type Visibility } from '../stores/drawings'
@@ -41,7 +41,10 @@ interface Geometry {
 }
 
 const FIB_LEVELS = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1]
+/** половина стороны квадратного маркера */
 const HANDLE = 4.5
+/** попадание по квадратному маркеру с допуском tol */
+const onHandle = (p: XY, x: number, y: number, tol: number) => Math.max(Math.abs(x - p.x), Math.abs(y - p.y)) <= tol + HANDLE
 /** отступ маркера горизонтального уровня от правого края области цены, px */
 const HLINE_HANDLE_INSET = 36
 /** шрифт подписей рисунков — того же размера, что шкалы (размер задаётся в настройках вида) */
@@ -137,6 +140,8 @@ export class DrawingsLayer {
         target.useMediaCoordinateSpace((scope) => this.render(scope.context, scope.mediaSize.width, scope.mediaSize.height)),
     }
     const views: IPrimitivePaneView[] = [{ zOrder: () => 'top', renderer: () => renderer }]
+    // выбор сменился (в том числе в другом окне) — перерисовываем, чтобы маркеры и подписи не оставались
+    this.offs.push(watch(this.selectedId, () => this.redraw()))
     this.primitive = {
       attached: (p) => (this.requestUpdate = p.requestUpdate),
       detached: () => (this.requestUpdate = null),
@@ -384,6 +389,8 @@ export class DrawingsLayer {
         this.redraw()
       }
     })
+    // указатель ушёл из окна — рисунок под ним больше не «наведён», маркеры и подписи прячем
+    on(el, 'pointerleave', () => this.clearHover())
     on(el, 'dblclick', (e) => {
       if (app.tool !== 'cursor') return
       const r = el.getBoundingClientRect()
@@ -412,6 +419,17 @@ export class DrawingsLayer {
       this.tap = null
       this.dragEnd()
     })
+  }
+
+  private clearHover() {
+    if (this.drag || (!this.hoverId && !this.hoverCursor)) return
+    this.hoverCursor = ''
+    this.host.el.dataset.cursor = ''
+    this.host.el.classList.remove('over-drawing')
+    if (this.hoverId) {
+      this.hoverId = null
+      this.redraw()
+    }
   }
 
   /** Подгоняет слой рисования под область цены (без шкал и панелей индикаторов) */
@@ -573,10 +591,8 @@ export class DrawingsLayer {
     }
     const h = this.hit(x, y, tol)
     if (!h) {
-      if (this.selectedId.value) {
-        selection.value = null
-        this.redraw()
-      }
+      // щелчок мимо рисунков снимает выбор, даже если рисунок выбран в другом окне
+      if (selection.value) selection.value = null
       return
     }
     if (touch && h.d.id !== this.selectedId.value) {
@@ -878,7 +894,7 @@ export class DrawingsLayer {
     const curGeo = cur && this.shown(cur) ? this.geometry(cur, size.width, size.height) : null
     if (cur && curGeo && !isSingle(cur.type)) {
       const { handles } = curGeo
-      for (let k = 0; k < handles.length; k++) if (Math.hypot(x - handles[k].x, y - handles[k].y) <= tol + HANDLE) return { d: cur, handle: k }
+      for (let k = 0; k < handles.length; k++) if (onHandle(handles[k], x, y, tol)) return { d: cur, handle: k }
     }
     for (let i = this.list.length - 1; i >= 0; i--) {
       const d = this.list[i]
@@ -886,7 +902,7 @@ export class DrawingsLayer {
       const g = d === cur ? curGeo : this.geometry(d, size.width, size.height)
       if (!g) continue
       if (d !== cur && !isSingle(d.type)) {
-        const k = g.handles.findIndex((p) => Math.hypot(x - p.x, y - p.y) <= tol + HANDLE)
+        const k = g.handles.findIndex((p) => onHandle(p, x, y, tol))
         if (k >= 0) return { d, handle: k }
       }
       if (!this.bodyHit(d, g.sp, x, y, tol, size)) continue
@@ -1138,14 +1154,16 @@ export class DrawingsLayer {
         ctx.strokeStyle = c.text
         ctx.lineWidth = 1
         line({ x: x1, y: Math.round(yE) + 0.5 }, { x: x2, y: Math.round(yE) + 0.5 })
-        // на мелком масштабе (другой интервал) подписи слиплись бы — показываем их только у выбранной позиции
-        if (!hover && !handles && (Math.abs(yT - yS) < 70 || x2 - x1 < 90)) break
+        // подписи — только у позиции в фокусе (выбранной или под указателем): остальные не закрывают свечи
+        if (!hover && !handles) break
         const pct = (v: number) => fmtPct(entry ? ((v - entry) / entry) * 100 : 0)
+        // расстояние от входа в пунктах — шагах цены инструмента, как в TradingView
+        const points = (v: number) => Math.round(Math.abs(v - entry) * 10 ** prec).toLocaleString('ru-RU') + ' п.'
         const result = st.status === 'open' ? ` · сейчас ${fmtR(st.r)}` : st.status === 'tp' ? ` · тейк ${fmtR(st.r)}` : st.status === 'sl' ? ' · стоп -1R' : st.status === 'closed' ? ` · закрыта ${fmtR(st.r)}` : st.status === 'missed' ? ' · вход не исполнен' : bars.length && bars[bars.length - 1].time >= d.pts[0].t ? ' · ждёт входа' : ''
         const size = positionSize(d, app.risk.deposit, app.risk.pct)
         const texts = [
-          `Цель ${fmtPrice(target, prec)} (${pct(target)})${size ? ` · +${fmtUsd(size.risk * riskReward(d))}` : ''}`,
-          `Стоп ${fmtPrice(stop, prec)} (${pct(stop)})${size ? ` · −${fmtUsd(size.risk)}` : ''}`,
+          `Цель ${fmtPrice(target, prec)} (${pct(target)}) · ${points(target)}${size ? ` · +${fmtUsd(size.risk * riskReward(d))}` : ''}`,
+          `Стоп ${fmtPrice(stop, prec)} (${pct(stop)}) · ${points(stop)}${size ? ` · −${fmtUsd(size.risk)}` : ''}`,
           `${d.type === 'long' ? 'Лонг' : 'Шорт'} ${fmtPrice(entry, prec)} · R/R ${riskReward(d).toFixed(2)}${result}`,
         ]
         // объём — второй строкой у входа, если в настройках задан депозит
@@ -1154,8 +1172,8 @@ export class DrawingsLayer {
         const outside = x2 - x1 < Math.max(...texts.map((t) => ctx.measureText(t).width)) + 40
         const x = outside ? x2 + 10 : (x1 + x2) / 2
         const up = d.type === 'long' ? -1 : 1
-        // позиция не в фокусе — подписи приглушены, чтобы не закрывать свечи
-        ctx.globalAlpha = handles ? 1 : hover ? 0.9 : 0.65
+        // под указателем, но не выбрана — подписи чуть прозрачнее
+        ctx.globalAlpha = handles ? 1 : 0.9
         // подписи цели и стопа — снаружи позиции, на полвысоты плашки от своей линии
         const off = Math.round(app.view.scaleFont * 1.2)
         this.tag(ctx, [texts[0]], x, yT + up * off, c.profit, w, h, outside)
@@ -1194,8 +1212,12 @@ export class DrawingsLayer {
       ctx.setLineDash([])
       ctx.lineWidth = 1.5
       for (const p of g.handles) {
+        // квадратные маркеры, как в TradingView; координаты — на середине пикселя, чтобы рамка была чёткой
+        const x = Math.round(p.x - HANDLE) + 0.5
+        const y = Math.round(p.y - HANDLE) + 0.5
+        const side = Math.round(HANDLE * 2)
         ctx.beginPath()
-        ctx.arc(p.x, p.y, HANDLE, 0, Math.PI * 2)
+        ctx.roundRect(x, y, side, side, 1.5)
         ctx.fillStyle = c.bg
         ctx.fill()
         ctx.strokeStyle = isPosition(d.type) ? c.text : d.color

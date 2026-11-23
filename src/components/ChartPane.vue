@@ -144,6 +144,8 @@ function onKey(e: KeyboardEvent) {
 
 function activate() {
   app.active = props.index
+  // рисунок, выбранный в другом окне, теряет фокус: выбранным может быть только один
+  if (selection.value && selection.value.pane !== props.index) selection.value = null
   measurePane()
 }
 

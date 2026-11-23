@@ -60,6 +60,10 @@ const INITIAL_BARS = 1000
 /** Как часто проверяем, не отстал ли график от времени */
 const WATCH_MS = 15_000
 const MAX_BARS = 30_000
+/** пустых точек будущего: не меньше, с запасом до края экрана и не больше */
+const FUTURE_MIN = 300
+const FUTURE_MARGIN = 20
+const FUTURE_MAX = 20_000
 const LOCAL_TZ_SEC = -new Date().getTimezoneOffset() * 60
 const FONT = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif'
 
@@ -106,6 +110,17 @@ export class ChartController {
   tf: Timeframe
 
   private main!: ISeriesApi<SeriesType>
+  /**
+   * Невидимая серия из одних пустых точек времени правее последней свечи. Библиотека ставит
+   * отметки шкалы времени (а с ними вертикальную сетку и подписи) только там, где есть точки
+   * данных, — без них справа от текущей цены сетка обрывается. Пустые точки не двигают «текущий
+   * момент» шкалы: отступ справа и прокрутка к последней свече считаются от настоящих свечей.
+   */
+  private future!: ISeriesApi<'Line'>
+  /** до какого места сейчас достроены пустые точки: «последняя свеча|сдвиг пояса|сколько точек» */
+  private futureSig = ''
+  private futureCount = 0
+  private futureRaf = 0
   /** То, что показывает основная серия: сами свечи либо Хейкен Аши */
   private shown: Bar[] = []
   private tz = 0
@@ -196,6 +211,11 @@ export class ChartController {
     })
 
     this.createMain()
+    this.future = this.chart.addSeries(
+      LineSeries,
+      { color: 'rgba(0,0,0,0)', lastValueVisible: false, priceLineVisible: false, crosshairMarkerVisible: false },
+      0,
+    )
     this.applyScale()
     this.syncIndicators()
 
@@ -362,6 +382,7 @@ export class ChartController {
     this.token++
     this.stopLive()
     cancelAnimationFrame(this.legendRaf)
+    cancelAnimationFrame(this.futureRaf)
     this.draw.destroy()
     this.chart.remove()
   }
@@ -456,6 +477,7 @@ export class ChartController {
   /** Полная перезаливка данных во все серии */
   private setAll() {
     this.main.setData(this.shown.map((b) => this.point(b)))
+    this.syncFuture()
     this.computeIndicators(true)
     const n = this.bars.length
     this.ui.lastTime = n ? this.bars[n - 1].time : 0
@@ -484,6 +506,7 @@ export class ChartController {
       else this.shown[m - 1] = ha
     }
     this.main.update(this.point(this.shown[this.shown.length - 1]))
+    if (isNew) this.syncFuture()
     this.computeIndicators(false)
     if (isNew) this.ui.lastTime = bar.time
     if (this.hoverIdx < 0 || this.hoverIdx >= bars.length - 1) this.scheduleLegend()
@@ -625,6 +648,13 @@ export class ChartController {
     const ts = this.chart.timeScale()
     const r = ts.getVisibleLogicalRange()
     if (r && r.from < 20) this.loadMore()
+    // прокрутили правее, чем достроены пустые точки будущего, — достраиваем (не изнутри события шкалы)
+    if (r && this.bars.length && r.to > this.bars.length - 1 + this.futureCount - FUTURE_MARGIN && !this.futureRaf) {
+      this.futureRaf = requestAnimationFrame(() => {
+        this.futureRaf = 0
+        if (!this.disposed) this.syncFuture()
+      })
+    }
     const back = ts.scrollPosition() < -3
     if (back !== this.ui.scrolledBack) this.ui.scrolledBack = back
     // график ещё доезжает по инерции после жеста — запомним вид, когда он остановится
@@ -633,6 +663,36 @@ export class ChartController {
     if (r && this.pointerInside && app.sync.time && paneCount.value > 1 && this.bars.length) {
       timeBus.value = { pane: this.paneIndex, time: this.logicalToTime((r.from + r.to) / 2), realtime: !back }
     }
+  }
+
+  /** Достраивает пустые точки времени правее последней свечи — на всю видимую часть с запасом */
+  private syncFuture() {
+    const n = this.bars.length
+    if (!n) {
+      if (this.futureSig) this.future.setData([])
+      this.futureSig = ''
+      this.futureCount = 0
+      return
+    }
+    const r = this.chart.timeScale().getVisibleLogicalRange()
+    const need = r ? Math.ceil(r.to - (n - 1)) + FUTURE_MARGIN * 2 : 0
+    let count = Math.max(FUTURE_MIN, this.futureCount)
+    if (need > count) count = Math.min(FUTURE_MAX, Math.ceil(need * 1.5))
+    const last = this.bars[n - 1].time
+    const sig = `${last}|${this.tz}|${count}`
+    if (sig === this.futureSig) return
+    this.futureSig = sig
+    this.futureCount = count
+    const pts: { time: UTCTimestamp }[] = new Array(count)
+    for (let k = 1; k <= count; k++) pts[k - 1] = { time: (this.futureTime(last, k) + this.tz) as UTCTimestamp }
+    this.future.setData(pts)
+  }
+
+  /** Время k-й свечи после свечи last; месячные свечи идут по календарю */
+  private futureTime(last: number, k: number): number {
+    if (this.tf.id !== '1M') return last + k * this.tf.sec
+    const d = new Date(last * 1000)
+    return Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + k, 1) / 1000
   }
 
   // ---------- время <-> индекс ----------

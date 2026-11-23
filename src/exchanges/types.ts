@@ -21,6 +21,10 @@ export interface ExchangeAdapter {
     onReconnect: () => void,
   ): () => void
   subscribeTicker(market: MarketId, symbol: string, onTicker: (t: Ticker, rawPrices: (string | undefined)[]) => void): () => void
+  /** Тикер одного инструмента по REST — запасной путь, если поток по нему замолчал */
+  fetchTicker(market: MarketId, symbol: string): Promise<{ ticker: Ticker; raw: (string | undefined)[] }>
+  /** Подписывается на поток тикера заново (соединение то же) */
+  refreshTicker(market: MarketId, symbol: string): void
   /** Все торгуемые инструменты рынка с ценой и оборотом */
   fetchSymbols(market: MarketId): Promise<SymbolInfo[]>
   /** Акции, фонды, сырьё и прочие не криптовалютные инструменты рынка: символ → вид */

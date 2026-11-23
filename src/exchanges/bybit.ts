@@ -94,6 +94,19 @@ export const bybit: ExchangeAdapter = {
     })
   },
 
+  async fetchTicker(market, symbol) {
+    const r = ((await api(`/v5/market/tickers?category=${CATEGORY[market]}&symbol=${symbol}`)).list ?? [])[0]
+    if (!r) throw new Error('Нет такого инструмента')
+    return {
+      ticker: { last: +r.lastPrice, changePct: +r.price24hPcnt * 100 || 0, high: +r.highPrice24h, low: +r.lowPrice24h, quoteVolume: +r.turnover24h || 0 },
+      raw: [r.lastPrice, r.prevPrice24h, r.highPrice24h, r.lowPrice24h],
+    }
+  },
+
+  refreshTicker(market, symbol) {
+    socket(market).resubscribe(`tickers.${symbol}`)
+  },
+
   async fetchSymbols(market) {
     const rows: any[] = (await api(`/v5/market/tickers?category=${CATEGORY[market]}`)).list ?? []
     const out: SymbolInfo[] = []
