@@ -1,8 +1,8 @@
 {
-  "name": "tvx — торговый терминал",
+  "name": "tvx — trading terminal",
   "short_name": "tvx",
-  "description": "Лёгкий терминал для графиков Binance и Bybit",
-  "lang": "ru",
+  "description": "Free trading terminal for Binance and Bybit charts",
+  "lang": "en",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

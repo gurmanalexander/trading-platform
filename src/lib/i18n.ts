@@ -51,7 +51,10 @@ if (typeof window !== 'undefined') {
     } catch {
       /* без сохранения */
     }
-    if (typeof document !== 'undefined') document.documentElement.lang = lang
+    if (typeof document !== 'undefined') {
+      document.documentElement.lang = lang
+      document.title = lang === 'en' ? 'tvx — trading terminal' : 'tvx — торговый терминал'
+    }
   }
   apply(i18n.lang)
   watch(() => i18n.lang, apply)

@@ -30,7 +30,8 @@ ATR toolkit, screener, watchlists and alerts — no sign-up, no ads, no API keys
 - **Fast.** Canvas charts ([Lightweight Charts](https://github.com/tradingview/lightweight-charts)),
   one WebSocket per exchange, up to 8 synchronized charts on screen.
 - **Works everywhere.** Desktop, tablet and phone; install it to your home screen as an app (PWA).
-- **Two languages.** English and Russian, switchable any time.
+- **Two languages.** English and Russian, switchable any time. A short first-run setup picks the language,
+  theme, time zone (your device's by default) and exchange.
 
 ## Features
 
@@ -50,6 +51,12 @@ ATR toolkit, screener, watchlists and alerts — no sign-up, no ads, no API keys
 <tr>
 <td><b>Indicators.</b> Volume, SMA/EMA/WMA, Bollinger Bands, VWAP, RSI, MACD, Stochastic, ATR, Cumulative Delta Volume and Open Interest.</td>
 <td><b>Dark & light themes</b>, custom colors, thin bars, time zones, bigger fonts for the scales and legend.</td>
+</tr>
+<tr>
+<td colspan="2"><img src="docs/screenshots/mobile.png" alt="tvx on a phone: chart and watchlist" /></td>
+</tr>
+<tr>
+<td colspan="2" align="center"><b>Made for phones too.</b> Install it to your home screen, swipe between coins, full-height landscape mode.</td>
 </tr>
 </table>
 
