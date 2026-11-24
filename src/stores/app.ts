@@ -226,6 +226,8 @@ export interface ViewSettings {
   countdown: boolean
   /** тонкие бары: при увеличении бар остаётся линией в пиксель, как «Тонкие бары» в TradingView */
   thinBars: boolean
+  /** горизонтальная линия текущей цены через весь график; метка цены и таймер на шкале остаются в любом случае */
+  priceLine: boolean
   /** часовой пояс внутридневных графиков: 'local' — как на устройстве, 'UTC' или пояс IANA */
   tz: string
 }
@@ -244,6 +246,7 @@ const sanitizeView = (v?: Partial<ViewSettings>): ViewSettings => ({
   legendFont: pick(v?.legendFont, LEGEND_FONTS, 12),
   countdown: v?.countdown !== false,
   thinBars: v?.thinBars !== false,
+  priceLine: v?.priceLine !== false,
   tz: isTimeZone(v?.tz) ? (v?.tz as string) : LOCAL_TZ,
 })
 const positive = (v: unknown, def: number, max: number) => (typeof v === 'number' && isFinite(v) && v >= 0 ? Math.min(max, v) : def)
