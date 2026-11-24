@@ -75,7 +75,7 @@ export default {
   'Условий изменено': 'Filters changed',
   'Подходит {n} из {total} · обновлено {time}': '{n} of {total} match · updated {time}',
   'Подходит {n} из {total}': '{n} of {total} match',
-  'Обновить': 'Refresh',
+  'Обновить отбор': 'Refresh screener',
   'Выбрано: {n}': 'Selected: {n}',
   'Добавить выбранные в список, поставить направление': 'Add selected to a watchlist, set direction',
   'В список': 'To watchlist',

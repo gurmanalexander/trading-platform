@@ -163,7 +163,7 @@ watch(
       </button>
       <span class="muted count" :title="state.updatedAt ? t('Подходит {n} из {total} · обновлено {time}', { n: total.length, total: universe, time: new Date(state.updatedAt).toLocaleTimeString(locale()) }) : t('Подходит {n} из {total}', { n: total.length, total: universe })">{{ total.length }}</span>
       <ColumnsMenu :model-value="settings.cols" :options="SCREENER_COLS" @update:model-value="settings.cols = $event as ScreenerCol[]" />
-      <button class="btn sm" :title="t('Обновить')" :disabled="state.loading" @click="refresh()"><Icon name="refresh" :size="16" /></button>
+      <button class="btn sm" :title="t('Обновить отбор')" :disabled="state.loading" @click="refresh()"><Icon name="refresh" :size="16" /></button>
     </div>
 
     <div v-if="chosen.length" class="sc-sel">
