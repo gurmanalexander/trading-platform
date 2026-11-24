@@ -14,6 +14,8 @@ ATR toolkit, screener, watchlists and alerts — no sign-up, no ads, no API keys
 ![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178c6?logo=typescript&logoColor=white)
 ![PWA](https://img.shields.io/badge/PWA-installable-5a0fc8?logo=pwa&logoColor=white)
 ![No backend](https://img.shields.io/badge/backend-none-555)
+![First load ~210 KB](https://img.shields.io/badge/first%20load-~210%20KB%20gzip-1fb28a)
+[![Stars](https://img.shields.io/github/stars/gurmanalexander/trading-platform?style=flat&logo=github)](https://github.com/gurmanalexander/trading-platform/stargazers)
 
 **English** · [Русский](README.ru.md)
 
@@ -27,6 +29,9 @@ ATR toolkit, screener, watchlists and alerts — no sign-up, no ads, no API keys
   No account, no server, no tracking. Your layouts, drawings and lists stay on your device.
 - **Built for intraday traders.** Levels drawn on the daily chart show up on the 5-minute one,
   positions show live progress in R, the ATR table tells you stop, target and how much of the day's range is gone.
+- **Lightweight.** About **210 KB** on first load — all JavaScript and CSS, gzipped; the whole app with every
+  dialog is ~270 KB. Big web platforms usually download several megabytes of scripts before the first chart appears.
+  No UI kits, no trackers, no backend — it opens instantly and runs smoothly even on an old phone.
 - **Fast.** Canvas charts ([Lightweight Charts](https://github.com/tradingview/lightweight-charts)),
   one WebSocket per exchange, up to 8 synchronized charts on screen.
 - **Works everywhere.** Desktop, tablet and phone; install it to your home screen as an app (PWA).
@@ -41,7 +46,7 @@ ATR toolkit, screener, watchlists and alerts — no sign-up, no ads, no API keys
 <td width="50%"><img src="docs/screenshots/screener.png" alt="Screener and watchlists" /></td>
 </tr>
 <tr>
-<td><b>Long / short positions.</b> Drag entry, stop and target or type them in. Lock the R/R (5:1 by default) and the target follows your stop. Live result in R, position size from your deposit and risk.</td>
+<td><b>Long / short positions.</b> Drag entry, stop and target or type them in — they snap to candle prices with the magnet (hold Shift to place freely). Lock the R/R (5:1 by default) and the target follows your stop. Live result in R, position size from your deposit and risk.</td>
 <td><b>Screener & watchlists.</b> All Binance and Bybit symbols with turnover, 24h change and filters. Color-coded lists, long/short marks, distance to the nearest level in ATR.</td>
 </tr>
 <tr>
@@ -115,8 +120,9 @@ automatically on every push to `main` (`.github/workflows/pages.yml`).
 
 ## Support the project
 
-tvx is free and has no ads. If it helps your trading, you can support its development —
-click the ♥ button in the app, or send USDT directly:
+tvx is free and has no ads. If it helps your trading, you can support its development:
+[open the donate window in the app](https://gurmanalexander.github.io/trading-platform/#donate) (QR codes, copy buttons)
+or send USDT directly:
 
 | Method | Address |
 | --- | --- |
@@ -126,7 +132,8 @@ click the ♥ button in the app, or send USDT directly:
 | USDT · ERC20 (Ethereum) | `0xdb91a73ce273e760cfed4b7ae39d73d7502419b6` |
 
 Send only USDT and only on the network shown — transfers on another network are lost.
-Stars ⭐, bug reports and feature ideas are very welcome too.
+**Not ready to donate? [Star the repository](https://github.com/gurmanalexander/trading-platform) ⭐** — it helps others find tvx.
+Bug reports and feature ideas are very welcome too.
 
 ## Limitations
 
