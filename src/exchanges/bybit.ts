@@ -1,5 +1,6 @@
 import type { Bar, MarketId, SymbolInfo } from '../types'
 import { decimalsOf } from '../lib/format'
+import { t } from '../lib/i18n'
 import { getJson } from './http'
 import { StreamSocket } from './ws'
 import { oiPeriod, type ExchangeAdapter, type OiPoint } from './types'
@@ -43,7 +44,7 @@ function socket(market: MarketId): StreamSocket {
 
 async function api(path: string): Promise<any> {
   const json = await getJson(REST, path)
-  if (json.retCode !== 0) throw new Error(json.retMsg || 'Ошибка Bybit')
+  if (json.retCode !== 0) throw new Error(json.retMsg || t('Ошибка Bybit'))
   return json.result
 }
 
@@ -105,7 +106,7 @@ export const bybit: ExchangeAdapter = {
 
   async fetchTicker(market, symbol) {
     const r = ((await api(`/v5/market/tickers?category=${CATEGORY[market]}&symbol=${symbol}`)).list ?? [])[0]
-    if (!r) throw new Error('Нет такого инструмента')
+    if (!r) throw new Error(t('Нет такого инструмента'))
     return {
       ticker: { last: +r.lastPrice, changePct: +r.price24hPcnt * 100 || 0, high: +r.highPrice24h, low: +r.lowPrice24h, quoteVolume: +r.turnover24h || 0 },
       raw: [r.lastPrice, r.prevPrice24h, r.highPrice24h, r.lowPrice24h],

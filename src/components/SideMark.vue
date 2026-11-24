@@ -1,20 +1,25 @@
 <script setup lang="ts">
 import type { SymbolRef } from '../types'
 import { cycleSide, markOf, sideOf } from '../stores/watchlist'
+import { t } from '../lib/i18n'
 
 // Отметка направления монеты: ▲ лонг, ▼ шорт. Одна и та же в отборе, поиске и списках.
 defineProps<{ item: SymbolRef }>()
+
+function hint(item: SymbolRef): string {
+  const side = sideOf(item)
+  const auto = !markOf(item)
+  if (side === 'long') return auto ? t('Лонг (по последней позиции). Нажмите: нет → лонг → шорт') : t('Лонг. Нажмите: нет → лонг → шорт')
+  if (side === 'short') return auto ? t('Шорт (по последней позиции). Нажмите: нет → лонг → шорт') : t('Шорт. Нажмите: нет → лонг → шорт')
+  return t('Направление не отмечено. Нажмите: нет → лонг → шорт')
+}
 </script>
 
 <template>
   <button
     class="side-mark"
     :class="[sideOf(item) ?? 'none', { manual: !!markOf(item) }]"
-    :title="
-      (sideOf(item) === 'long' ? 'Лонг' : sideOf(item) === 'short' ? 'Шорт' : 'Направление не отмечено') +
-      (markOf(item) || !sideOf(item) ? '' : ' (по последней позиции)') +
-      '. Нажмите: нет → лонг → шорт'
-    "
+    :title="hint(item)"
     @click.stop="cycleSide(item)"
   >
     {{ sideOf(item) === 'long' ? '▲' : sideOf(item) === 'short' ? '▼' : '·' }}

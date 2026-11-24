@@ -1,3 +1,5 @@
+import { t } from '../lib/i18n'
+
 const TIMEOUT_MS = 12_000
 
 export class HttpError extends Error {
@@ -34,12 +36,12 @@ export async function getJson(hosts: string[], path: string): Promise<any> {
     }
   }
   if (lastErr instanceof HttpError) throw lastErr
-  throw new Error('Нет связи с биржей')
+  throw new Error(t('Нет связи с биржей'))
 }
 
 function describeStatus(status: number): string {
-  if (status === 451 || status === 403) return `Биржа недоступна из вашего региона (${status})`
-  if (status === 429 || status === 418) return `Превышен лимит запросов (${status})`
-  if (status === 400) return 'Инструмент или интервал не поддерживается (400)'
-  return `Ошибка биржи (${status})`
+  if (status === 451 || status === 403) return t('Биржа недоступна из вашего региона ({status})', { status })
+  if (status === 429 || status === 418) return t('Превышен лимит запросов ({status})', { status })
+  if (status === 400) return t('Инструмент или интервал не поддерживается (400)')
+  return t('Ошибка биржи ({status})', { status })
 }

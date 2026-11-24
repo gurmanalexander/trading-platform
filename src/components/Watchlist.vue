@@ -30,11 +30,13 @@ import {
 } from '../stores/watchlist'
 import { fmtPct, fmtPrice, fmtVolume, precisionOf } from '../lib/format'
 import { fmtR } from '../chart/position'
+import { plural, t } from '../lib/i18n'
 
 useTickers(() => visibleItems.value)
 useDayStats(() => visibleItems.value)
 useTrackedPositions(() => visibleItems.value)
 
+// подписи — русские строки, переводятся при показе
 const FILTERS: { id: SideFilter; label: string; title: string }[] = [
   { id: 'all', label: 'Все', title: 'Показывать все монеты' },
   { id: 'long', label: '▲ Лонг', title: 'Скрыть монеты, отмеченные как шорт' },
@@ -61,8 +63,8 @@ function atrCell(r: WatchItem) {
 
 function price(r: WatchItem) {
   const key = symbolKey(r)
-  const t = tickers[key]
-  return t ? fmtPrice(t.last, precisionOf(key, t.last)) : '—'
+  const tk = tickers[key]
+  return tk ? fmtPrice(tk.last, precisionOf(key, tk.last)) : '—'
 }
 
 interface Status {
@@ -75,13 +77,13 @@ interface Status {
 function positionStatus(key: string): Status | null {
   const p = tracked[key]
   if (!p) return null
-  if (p.status === 'pending') return { text: 'ждёт', cls: 'muted', title: 'Вход не исполнен: цена ещё не дошла до уровня входа' }
-  if (p.status === 'missed') return { text: 'без входа', cls: 'muted', title: 'Цена так и не дошла до уровня входа до конца позиции' }
+  if (p.status === 'pending') return { text: t('ждёт'), cls: 'muted', title: t('Вход не исполнен: цена ещё не дошла до уровня входа') }
+  if (p.status === 'missed') return { text: t('без входа'), cls: 'muted', title: t('Цена так и не дошла до уровня входа до конца позиции') }
   const value = currentR(key)
   if (value == null) return null
   const mark = p.status === 'tp' ? '✓ ' : p.status === 'sl' ? '✕ ' : ''
-  const state = p.status === 'tp' ? 'закрыта по тейку' : p.status === 'sl' ? 'закрыта по стопу' : p.status === 'closed' ? 'закрыта по времени' : 'открыта'
-  return { text: mark + fmtR(value), cls: value >= 0 ? 'up' : 'down', title: `Последняя позиция (${p.type === 'long' ? 'лонг' : 'шорт'}) ${state}` }
+  const state = p.status === 'tp' ? t('закрыта по тейку') : p.status === 'sl' ? t('закрыта по стопу') : p.status === 'closed' ? t('закрыта по времени') : t('открыта')
+  return { text: mark + fmtR(value), cls: value >= 0 ? 'up' : 'down', title: t('Последняя позиция ({side}) {state}', { side: p.type === 'long' ? t('лонг') : t('шорт'), state }) }
 }
 
 /** Расстояние до ближайшего горизонтального уровня в долях дневного ATR: плюс — уровень выше цены, минус — ниже */
@@ -100,7 +102,7 @@ function levelStatus(key: string): Status | null {
   return {
     text: (dist >= 0 ? '+' : '') + dist.toFixed(2) + 'A',
     cls: dist >= 0 ? 'up' : 'down',
-    title: `До ближайшего уровня ${best}: ${dist.toFixed(2)} ATR (ATR ${fmtPrice(atr, precisionOf(key, last))})`,
+    title: t('До ближайшего уровня {level}: {dist} ATR (ATR {atr})', { level: best, dist: dist.toFixed(2), atr: fmtPrice(atr, precisionOf(key, last)) }),
   }
 }
 
@@ -135,11 +137,15 @@ function addList() {
   nextTick(() => scroller.value?.scrollTo({ top: scroller.value.scrollHeight, behavior: 'smooth' }))
 }
 function rename(l: WatchList) {
-  const name = prompt('Название списка', l.name)?.trim()
+  const name = prompt(t('Название списка'), l.name)?.trim()
   if (name) l.name = name.slice(0, 40)
 }
 function remove(l: WatchList) {
-  if (confirm(`Удалить список «${l.name}»${l.items.length ? ` и ${l.items.length} инструм. в нём` : ''}?`)) deleteList(l.id)
+  const n = l.items.length
+  const text = n
+    ? t('Удалить список «{name}» и {items} в нём?', { name: l.name, items: plural(n, ['инструмент', 'инструмента', 'инструментов'], ['symbol', 'symbols']) })
+    : t('Удалить список «{name}»?', { name: l.name })
+  if (confirm(text)) deleteList(l.id)
 }
 function addTo(l: WatchList) {
   lists.activeId = l.id
@@ -283,17 +289,17 @@ function toggle(l: WatchList, e: MouseEvent) {
 
 /** Куда встанет перетаскиваемое: класс для строки или списка, рисующий линию вставки */
 function rowMark(listId: string, i: number, count: number): string {
-  const t = drag.target
-  if (!drag.active || drag.kind !== 'item' || !t || t.listId !== listId) return ''
-  if (t.index === i) return 'drop-before'
-  return i === count - 1 && t.index >= count ? 'drop-after' : ''
+  const tg = drag.target
+  if (!drag.active || drag.kind !== 'item' || !tg || tg.listId !== listId) return ''
+  if (tg.index === i) return 'drop-before'
+  return i === count - 1 && tg.index >= count ? 'drop-after' : ''
 }
 function listMark(listId: string, i: number): string {
-  const t = drag.target
-  if (!drag.active || !t) return ''
-  if (drag.kind === 'list') return t.index === i ? 'drop-before' : i === lists.all.length - 1 && t.index > i ? 'drop-after' : ''
+  const tg = drag.target
+  if (!drag.active || !tg) return ''
+  if (drag.kind === 'list') return tg.index === i ? 'drop-before' : i === lists.all.length - 1 && tg.index > i ? 'drop-after' : ''
   const list = lists.all[i]
-  return t.listId === listId && (list.collapsed || !list.items.length) ? 'drop-into' : ''
+  return tg.listId === listId && (list.collapsed || !list.items.length) ? 'drop-into' : ''
 }
 
 // при перелистывании клавишами открытая монета остаётся на виду
@@ -306,18 +312,18 @@ watch(
 <template>
   <div class="wl" :class="{ dragging: drag.active }">
     <div class="wl-top">
-      <div class="seg" role="group" aria-label="Фильтр по направлению">
-        <button v-for="f in FILTERS" :key="f.id" :class="{ on: lists.filter === f.id, [f.id]: true }" :title="f.title" @click="lists.filter = f.id">{{ f.label }}</button>
+      <div class="seg" role="group" :aria-label="t('Фильтр по направлению')">
+        <button v-for="f in FILTERS" :key="f.id" :class="{ on: lists.filter === f.id, [f.id]: true }" :title="t(f.title)" @click="lists.filter = f.id">{{ t(f.label) }}</button>
       </div>
       <span class="grow" />
-      <button class="btn sm" title="Поделиться списком: картинки графиков и строки «монета, направление, уровень»" @click="app.listShareOpen = true"><Icon name="share" :size="16" /></button>
-      <button class="btn sm" title="Вставить из буфера: строки с монетами попадут в текущий список" @click="pasteFromClipboard()"><Icon name="paste" :size="16" /></button>
+      <button class="btn sm" :title="t('Поделиться списком: картинки графиков и строки «монета, направление, уровень»')" @click="app.listShareOpen = true"><Icon name="share" :size="16" /></button>
+      <button class="btn sm" :title="t('Вставить из буфера: строки с монетами попадут в текущий список')" @click="pasteFromClipboard()"><Icon name="paste" :size="16" /></button>
       <ColumnsMenu :model-value="lists.cols" :options="LIST_COLS" @update:model-value="lists.cols = $event as ListCol[]" />
-      <button class="btn sm" :class="{ on: draft.open }" title="Новый список" @click="startList"><Icon name="listPlus" :size="16" /></button>
+      <button class="btn sm" :class="{ on: draft.open }" :title="t('Новый список')" @click="startList"><Icon name="listPlus" :size="16" /></button>
     </div>
 
     <form v-if="draft.open" class="draft" @submit.prevent="addList" @keydown.esc.stop="draft.open = false">
-      <input ref="draftInput" v-model="draft.name" class="field" maxlength="40" placeholder="Название списка" autocomplete="off" />
+      <input ref="draftInput" v-model="draft.name" class="field" maxlength="40" :placeholder="t('Название списка')" autocomplete="off" />
       <div class="draft-row">
         <button
           v-for="c in LIST_COLORS"
@@ -326,19 +332,19 @@ watch(
           class="swatch"
           :class="{ on: c === draft.color }"
           :style="{ background: c }"
-          :aria-label="'Цвет ' + c"
+          :aria-label="t('Цвет {color}', { color: c })"
           @click="draft.color = c"
         />
         <span class="grow" />
-        <button type="button" class="btn sm" @click="draft.open = false">Отмена</button>
-        <button class="btn sm primary" type="submit" :disabled="!draft.name.trim()">Создать</button>
+        <button type="button" class="btn sm" @click="draft.open = false">{{ t('Отмена') }}</button>
+        <button class="btn sm primary" type="submit" :disabled="!draft.name.trim()">{{ t('Создать') }}</button>
       </div>
     </form>
 
     <div class="wl-cols" :style="grid">
       <span />
-      <span>Тикер</span>
-      <span v-for="c in cols" :key="c.id" class="num" :title="c.hint || c.label">{{ HEAD[c.id] }}</span>
+      <span>{{ t('Тикер') }}</span>
+      <span v-for="c in cols" :key="c.id" class="num" :title="t(c.hint || c.label)">{{ t(HEAD[c.id]) }}</span>
       <span />
     </div>
 
@@ -347,7 +353,7 @@ watch(
         <header
           class="list-head"
           :class="{ current: l.id === lists.activeId, closed: l.collapsed, moving: drag.active && drag.kind === 'list' && drag.listId === l.id }"
-          :title="l.id === lists.activeId ? 'Текущий список: сюда добавляют Alt+W и вставка' : ''"
+          :title="l.id === lists.activeId ? t('Текущий список: сюда добавляют Alt+W и вставка') : ''"
           @pointerdown="onDown($event, 'list', l.id, li, l.name)"
           @click="toggle(l, $event)"
         >
@@ -357,16 +363,16 @@ watch(
           <span v-if="l.id === lists.activeId" class="cur">★</span>
           <span class="grow" />
           <span class="head-tools">
-            <button class="btn sm" title="Добавить монету в этот список" @click.stop="addTo(l)"><Icon name="plus" :size="15" /></button>
+            <button class="btn sm" :title="t('Добавить монету в этот список')" @click.stop="addTo(l)"><Icon name="plus" :size="15" /></button>
             <Dropdown align="right">
               <template #trigger="{ toggle: open }">
-                <button class="btn sm" title="Настройки списка" @click.stop="open"><Icon name="more" :size="15" /></button>
+                <button class="btn sm" :title="t('Настройки списка')" @click.stop="open"><Icon name="more" :size="15" /></button>
               </template>
               <template #default="{ close }">
                 <button class="menu-item" :class="{ on: l.id === lists.activeId }" @click="(lists.activeId = l.id), close()">
-                  <Icon name="star" :size="16" />Сделать текущим
+                  <Icon name="star" :size="16" />{{ t('Сделать текущим') }}
                 </button>
-                <button class="menu-item" @click="rename(l), close()"><Icon name="pencil" :size="16" />Переименовать…</button>
+                <button class="menu-item" @click="rename(l), close()"><Icon name="pencil" :size="16" />{{ t('Переименовать…') }}</button>
                 <div class="colors">
                   <button
                     v-for="c in LIST_COLORS"
@@ -374,16 +380,16 @@ watch(
                     class="swatch"
                     :class="{ on: c === l.color }"
                     :style="{ background: c }"
-                    :aria-label="'Цвет ' + c"
+                    :aria-label="t('Цвет {color}', { color: c })"
                     @click="l.color = c"
                   />
-                  <label class="swatch custom" title="Свой цвет">
+                  <label class="swatch custom" :title="t('Свой цвет')">
                     <input type="color" :value="l.color" @change="l.color = ($event.target as HTMLInputElement).value" />
                   </label>
                 </div>
                 <template v-if="lists.all.length > 1">
                   <div class="menu-sep" />
-                  <button class="menu-item" @click="remove(l), close()"><Icon name="trash" :size="16" />Удалить список</button>
+                  <button class="menu-item" @click="remove(l), close()"><Icon name="trash" :size="16" />{{ t('Удалить список') }}</button>
                 </template>
               </template>
             </Dropdown>
@@ -410,17 +416,17 @@ watch(
             >
               <i class="tag" />
               <span class="name">
-                <b class="sym">{{ r.symbol }}<i v-if="r.exchange !== 'binance' || r.market !== 'futures'">{{ r.exchange === 'bybit' ? 'bb' : 'bn' }}{{ r.market === 'spot' ? '·с' : '' }}</i></b>
+                <b class="sym">{{ r.symbol }}<i v-if="r.exchange !== 'binance' || r.market !== 'futures'">{{ r.exchange === 'bybit' ? 'bb' : 'bn' }}{{ r.market === 'spot' ? t('·с') : '' }}</i></b>
                 <SideMark :item="r" />
               </span>
               <template v-for="c in cols" :key="c.id">
-                <span v-if="c.id === 'price'" class="num" :class="tone(tickers[symbolKey(r)]?.changePct)" :title="'За сутки ' + fmtPct(tickers[symbolKey(r)]?.changePct)">{{ price(r) }}</span>
+                <span v-if="c.id === 'price'" class="num" :class="tone(tickers[symbolKey(r)]?.changePct)" :title="t('За сутки {pct}', { pct: fmtPct(tickers[symbolKey(r)]?.changePct) })">{{ price(r) }}</span>
                 <span v-else-if="c.id === 'change'" class="num" :class="tone(tickers[symbolKey(r)]?.changePct)">{{ fmtPct(tickers[symbolKey(r)]?.changePct) }}</span>
                 <span v-else-if="c.id === 'volume'" class="num muted">{{ fmtVolume(tickers[symbolKey(r)]?.quoteVolume) }}</span>
                 <span v-else-if="c.id === 'result'" class="num st" :class="status(r)?.cls" :title="status(r)?.title">{{ status(r)?.text ?? '' }}</span>
-                <span v-else class="num" :class="atrCell(r)?.cls" title="Дневной ATR исчерпан от открытия дня">{{ atrCell(r)?.text ?? '' }}</span>
+                <span v-else class="num" :class="atrCell(r)?.cls" :title="t('Дневной ATR исчерпан от открытия дня')">{{ atrCell(r)?.text ?? '' }}</span>
               </template>
-              <button class="btn sm rm" title="Убрать из списка" @click.stop="removeItem(l.id, i)"><Icon name="x" :size="13" /></button>
+              <button class="btn sm rm" :title="t('Убрать из списка')" @click.stop="removeItem(l.id, i)"><Icon name="x" :size="13" /></button>
             </div>
           </template>
         </template>

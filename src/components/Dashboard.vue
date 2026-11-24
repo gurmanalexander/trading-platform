@@ -15,6 +15,7 @@ import { FRESH_BELOW, SPENT_ABOVE, spentTone } from '../lib/atr'
 import { EXCHANGE_NAMES, MARKET_NAMES } from '../types'
 import { fmtPct, fmtPrice, precisionOf } from '../lib/format'
 import { fmtR } from '../chart/position'
+import { locale, t } from '../lib/i18n'
 
 // Обзор: что происходит с монетами из списков — сделки, близость к уровням, исчерпание ATR, оповещения, рынок.
 // Все цифры считаются из того, что уже есть в приложении: списки, рисунки, живые цены, дневные свечи.
@@ -51,6 +52,7 @@ const sides = computed(() => {
 
 // ---------- сделки ----------
 
+// подписи — русские строки, переводятся при показе: t(STATE[status])
 const STATE = { pending: 'ждёт входа', open: 'идёт', tp: 'тейк', sl: 'стоп', closed: 'по времени', missed: 'без входа' } as const
 const ORDER = ['open', 'pending', 'tp', 'sl', 'closed', 'missed']
 const trades = computed(() =>
@@ -64,9 +66,9 @@ const trades = computed(() =>
     .sort((a, b) => ORDER.indexOf(a.p.status) - ORDER.indexOf(b.p.status) || (b.r ?? 0) - (a.r ?? 0)),
 )
 const tradeStats = computed(() => {
-  const t = trades.value
-  const by = (s: string) => t.filter((x) => x.p.status === s)
-  const sum = (list: typeof t) => list.reduce((acc, x) => acc + (x.r ?? 0), 0)
+  const all = trades.value
+  const by = (s: string) => all.filter((x) => x.p.status === s)
+  const sum = (list: typeof all) => list.reduce((acc, x) => acc + (x.r ?? 0), 0)
   return { open: by('open').length, pending: by('pending').length, tp: by('tp').length, sl: by('sl').length, openR: sum(by('open')), closedR: sum([...by('tp'), ...by('sl'), ...by('closed')]) }
 })
 
@@ -132,7 +134,7 @@ const fired = computed(() =>
     .sort((a, b) => (b.triggeredAt ?? 0) - (a.triggeredAt ?? 0))
     .slice(0, 5),
 )
-const time = (ms: number) => new Date(ms).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
+const time = (ms: number) => new Date(ms).toLocaleString(locale(), { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
 
 const close = () => (app.dashboardOpen = false)
 function open(ref: SymbolRef) {
@@ -146,114 +148,114 @@ function go(panel: 'screener' | 'watchlist' | 'alerts') {
 </script>
 
 <template>
-  <Modal title="Обзор" :width="1040" @close="close">
+  <Modal :title="t('Обзор')" :width="1040" @close="close">
     <div class="db scroll">
       <div class="tiles">
         <button class="tile" @click="go('watchlist')">
-          <span class="cap"><Icon name="list" :size="15" />Монет в списках</span>
+          <span class="cap"><Icon name="list" :size="15" />{{ t('Монет в списках') }}</span>
           <b>{{ coins.length }}</b>
-          <span class="sub"><i class="up">▲ {{ sides.long }}</i><i class="down">▼ {{ sides.short }}</i><i class="muted">без отметки {{ sides.none }}</i></span>
+          <span class="sub"><i class="up">▲ {{ sides.long }}</i><i class="down">▼ {{ sides.short }}</i><i class="muted">{{ t('без отметки {n}', { n: sides.none }) }}</i></span>
         </button>
         <div class="tile">
-          <span class="cap"><Icon name="trendUp" :size="15" />Сделки</span>
-          <b>{{ tradeStats.open }}<small> идёт</small></b>
+          <span class="cap"><Icon name="trendUp" :size="15" />{{ t('Сделки') }}</span>
+          <b>{{ tradeStats.open }}<small> {{ t('идёт') }}</small></b>
           <span class="sub">
-            <i :class="tradeStats.openR >= 0 ? 'up' : 'down'">{{ fmtR(tradeStats.openR) }} сейчас</i>
-            <i class="muted">ждут {{ tradeStats.pending }}</i>
-            <i class="muted">тейк {{ tradeStats.tp }} · стоп {{ tradeStats.sl }}</i>
+            <i :class="tradeStats.openR >= 0 ? 'up' : 'down'">{{ t('{r} сейчас', { r: fmtR(tradeStats.openR) }) }}</i>
+            <i class="muted">{{ t('ждут {n}', { n: tradeStats.pending }) }}</i>
+            <i class="muted">{{ t('тейк {tp} · стоп {sl}', { tp: tradeStats.tp, sl: tradeStats.sl }) }}</i>
           </span>
         </div>
         <div class="tile">
-          <span class="cap"><Icon name="target" :size="15" />У уровня</span>
+          <span class="cap"><Icon name="target" :size="15" />{{ t('У уровня') }}</span>
           <b>{{ nearCount }}</b>
-          <span class="sub"><i class="muted">ближе {{ NEAR }} ATR</i><i v-if="noLevels" class="muted">без уровней {{ noLevels }}</i></span>
+          <span class="sub"><i class="muted">{{ t('ближе {n} ATR', { n: NEAR }) }}</i><i v-if="noLevels" class="muted">{{ t('без уровней {n}', { n: noLevels }) }}</i></span>
         </div>
         <div class="tile">
-          <span class="cap"><Icon name="gauge" :size="15" />ATR за день</span>
+          <span class="cap"><Icon name="gauge" :size="15" />{{ t('ATR за день') }}</span>
           <b><span class="up">{{ fresh.length }}</span><small> / </small><span class="down">{{ tired.length }}</span></b>
-          <span class="sub"><i class="up">запас хода &lt; {{ FRESH_BELOW }}%</i><i class="down">на исходе &gt; {{ SPENT_ABOVE }}%</i></span>
+          <span class="sub"><i class="up">{{ t('запас хода < {n}%', { n: FRESH_BELOW }) }}</i><i class="down">{{ t('на исходе > {n}%', { n: SPENT_ABOVE }) }}</i></span>
         </div>
         <button class="tile" @click="go('alerts')">
-          <span class="cap"><Icon name="bell" :size="15" />Оповещения</span>
-          <b>{{ waitingAlerts }}<small> ждут</small></b>
-          <span class="sub"><i :class="unreadAlerts ? 'warn' : 'muted'">непрочитанных {{ unreadAlerts }}</i></span>
+          <span class="cap"><Icon name="bell" :size="15" />{{ t('Оповещения') }}</span>
+          <b>{{ waitingAlerts }}<small> {{ t('ждут') }}</small></b>
+          <span class="sub"><i :class="unreadAlerts ? 'warn' : 'muted'">{{ t('непрочитанных {n}', { n: unreadAlerts }) }}</i></span>
         </button>
         <button class="tile" @click="go('screener')">
-          <span class="cap"><Icon name="funnel" :size="15" />Отбор</span>
-          <b>{{ market.total }}<small> из {{ market.universe }}</small></b>
+          <span class="cap"><Icon name="funnel" :size="15" />{{ t('Отбор') }}</span>
+          <b>{{ market.total }}<small> {{ t('из {n}', { n: market.universe }) }}</small></b>
           <span class="sub">
-            <i class="up">растут {{ market.up }}</i><i class="down">падают {{ market.down }}</i>
-            <i class="muted">{{ EXCHANGE_NAMES[screener.exchange] }} · {{ MARKET_NAMES[screener.market] }} · от {{ screener.minVolume }} млн $</i>
+            <i class="up">{{ t('растут {n}', { n: market.up }) }}</i><i class="down">{{ t('падают {n}', { n: market.down }) }}</i>
+            <i class="muted">{{ EXCHANGE_NAMES[screener.exchange] }} · {{ MARKET_NAMES[screener.market] }} · {{ t('от {n} млн $', { n: screener.minVolume }) }}</i>
           </span>
         </button>
       </div>
 
       <div class="cards">
         <section class="card">
-          <h3>Сделки <span class="muted">— последняя позиция каждой монеты</span></h3>
-          <button v-for="t in trades" :key="t.key" class="row" @click="open(t.ref)">
-            <i class="dot" :style="{ background: t.color }" />
-            <b>{{ name(t.ref) }}</b>
-            <span :class="t.p.type === 'long' ? 'up' : 'down'">{{ t.p.type === 'long' ? 'лонг' : 'шорт' }}</span>
-            <span class="muted grow">{{ STATE[t.p.status] }} · вход {{ price(t.key, t.p.entry) }}</span>
-            <b v-if="t.r != null && t.p.status !== 'pending' && t.p.status !== 'missed'" :class="t.r >= 0 ? 'up' : 'down'">{{ fmtR(t.r) }}</b>
+          <h3>{{ t('Сделки') }} <span class="muted">{{ t('— последняя позиция каждой монеты') }}</span></h3>
+          <button v-for="tr in trades" :key="tr.key" class="row" @click="open(tr.ref)">
+            <i class="dot" :style="{ background: tr.color }" />
+            <b>{{ name(tr.ref) }}</b>
+            <span :class="tr.p.type === 'long' ? 'up' : 'down'">{{ tr.p.type === 'long' ? t('лонг') : t('шорт') }}</span>
+            <span class="muted grow">{{ t(STATE[tr.p.status]) }} · {{ t('вход {price}', { price: price(tr.key, tr.p.entry) }) }}</span>
+            <b v-if="tr.r != null && tr.p.status !== 'pending' && tr.p.status !== 'missed'" :class="tr.r >= 0 ? 'up' : 'down'">{{ fmtR(tr.r) }}</b>
           </button>
-          <p v-if="!trades.length" class="muted none">Позиций на графиках монет из списков нет.</p>
+          <p v-if="!trades.length" class="muted none">{{ t('Позиций на графиках монет из списков нет.') }}</p>
         </section>
 
         <section class="card">
-          <h3>Ближе всего к уровню</h3>
+          <h3>{{ t('Ближе всего к уровню') }}</h3>
           <button v-for="l in levels.slice(0, 8)" :key="l.key" class="row" :class="{ near: Math.abs(l.dist) <= NEAR }" @click="open(l.ref)">
             <i class="dot" :style="{ background: l.color }" />
             <b>{{ name(l.ref) }}</b>
-            <span class="muted grow">уровень {{ price(l.key, l.level) }} · {{ fmtPct(l.pct) }}</span>
+            <span class="muted grow">{{ t('уровень {price}', { price: price(l.key, l.level) }) }} · {{ fmtPct(l.pct) }}</span>
             <b :class="l.dist >= 0 ? 'up' : 'down'">{{ (l.dist >= 0 ? '+' : '') + l.dist.toFixed(2) }} ATR</b>
           </button>
-          <p v-if="!levels.length" class="muted none">На монетах из списков нет горизонтальных уровней.</p>
+          <p v-if="!levels.length" class="muted none">{{ t('На монетах из списков нет горизонтальных уровней.') }}</p>
         </section>
 
         <section class="card">
-          <h3>ATR исчерпан <span class="muted">— от открытия дня / по размаху</span></h3>
+          <h3>{{ t('ATR исчерпан') }} <span class="muted">{{ t('— от открытия дня / по размаху') }}</span></h3>
           <div class="two">
             <div>
-              <h4 class="up">Запас хода</h4>
+              <h4 class="up">{{ t('Запас хода') }}</h4>
               <button v-for="x in fresh.slice(0, 6)" :key="x.key" class="row" @click="open(x.ref)">
                 <b>{{ name(x.ref) }}</b><span class="grow" /><span :class="spentTone(x.fromOpen)">{{ x.fromOpen.toFixed(0) }}%</span><span class="muted">/ {{ x.traveled.toFixed(0) }}%</span>
               </button>
-              <p v-if="!fresh.length" class="muted none">нет</p>
+              <p v-if="!fresh.length" class="muted none">{{ t('нет') }}</p>
             </div>
             <div>
-              <h4 class="down">Ход на исходе</h4>
+              <h4 class="down">{{ t('Ход на исходе') }}</h4>
               <button v-for="x in tired.slice(0, 6)" :key="x.key" class="row" @click="open(x.ref)">
                 <b>{{ name(x.ref) }}</b><span class="grow" /><span :class="spentTone(x.fromOpen)">{{ x.fromOpen.toFixed(0) }}%</span><span class="muted">/ {{ x.traveled.toFixed(0) }}%</span>
               </button>
-              <p v-if="!tired.length" class="muted none">нет</p>
+              <p v-if="!tired.length" class="muted none">{{ t('нет') }}</p>
             </div>
           </div>
         </section>
 
         <section class="card">
-          <h3>За сутки в списках <span class="muted">— растут {{ breadth.up }}, падают {{ breadth.down }}</span></h3>
+          <h3>{{ t('За сутки в списках') }} <span class="muted">{{ t('— растут {up}, падают {down}', { up: breadth.up, down: breadth.down }) }}</span></h3>
           <div class="two">
             <div>
-              <h4 class="up">Растут</h4>
+              <h4 class="up">{{ t('Растут') }}</h4>
               <button v-for="m in gainers" :key="m.key" class="row" @click="open(m.ref)">
                 <b>{{ name(m.ref) }}</b><span class="grow" /><span class="up">{{ fmtPct(m.pct) }}</span>
               </button>
-              <p v-if="!gainers.length" class="muted none">нет</p>
+              <p v-if="!gainers.length" class="muted none">{{ t('нет') }}</p>
             </div>
             <div>
-              <h4 class="down">Падают</h4>
+              <h4 class="down">{{ t('Падают') }}</h4>
               <button v-for="m in losers" :key="m.key" class="row" @click="open(m.ref)">
                 <b>{{ name(m.ref) }}</b><span class="grow" /><span class="down">{{ fmtPct(m.pct) }}</span>
               </button>
-              <p v-if="!losers.length" class="muted none">нет</p>
+              <p v-if="!losers.length" class="muted none">{{ t('нет') }}</p>
             </div>
           </div>
         </section>
 
         <section v-if="fired.length" class="card">
-          <h3>Сработавшие оповещения</h3>
+          <h3>{{ t('Сработавшие оповещения') }}</h3>
           <button v-for="a in fired" :key="a.id" class="row" :class="{ near: !a.read }" @click="open(a.ref)">
             <b>{{ name(a.ref) }}</b>
             <span :class="a.dir === 'up' ? 'up' : 'down'">{{ a.dir === 'up' ? '≥' : '≤' }} {{ price(symbolKey(a.ref), a.price) }}</span>
@@ -262,8 +264,8 @@ function go(panel: 'screener' | 'watchlist' | 'alerts') {
           </button>
         </section>
       </div>
-      <p v-if="!coins.length" class="muted none big">В списках пока нет монет. Добавьте их из отбора или вставьте строки сетапов — и здесь появится сводка.</p>
-      <p v-else-if="isPhone" class="muted foot">Касание строки открывает монету.</p>
+      <p v-if="!coins.length" class="muted none big">{{ t('В списках пока нет монет. Добавьте их из отбора или вставьте строки сетапов — и здесь появится сводка.') }}</p>
+      <p v-else-if="isPhone" class="muted foot">{{ t('Касание строки открывает монету.') }}</p>
     </div>
   </Modal>
 </template>

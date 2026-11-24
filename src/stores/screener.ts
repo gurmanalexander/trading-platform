@@ -1,6 +1,7 @@
 import { computed, reactive, shallowRef } from 'vue'
 import { sameSymbol, type ExchangeId, type MarketId, type SymbolRef } from '../types'
 import { load, persist } from '../lib/storage'
+import { t } from '../lib/i18n'
 import { adapters, loadSymbols, withUsdVolume, type SymbolVolume } from '../exchanges'
 import { loadKinds, type AssetKind } from '../exchanges/tradfi'
 import { app, activePane, isPhone, setSymbol } from './app'
@@ -101,7 +102,7 @@ export async function refresh() {
     state.error = ''
     state.updatedAt = Date.now()
   } catch (e) {
-    state.error = e instanceof Error ? e.message : 'Не удалось получить список'
+    state.error = e instanceof Error ? e.message : t('Не удалось получить список')
   } finally {
     state.loading = false
   }

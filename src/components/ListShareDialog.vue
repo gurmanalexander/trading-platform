@@ -11,6 +11,7 @@ import { loadSymbols } from '../exchanges'
 import { precisionOf } from '../lib/format'
 import { nearestLevel, plainPrice, shareLine } from '../lib/listShare'
 import { renderCoins, type CoinShot } from '../chart/batch'
+import { t } from '../lib/i18n'
 
 // «Поделиться списком»: отмечаете монеты — получаете по картинке на каждую (все окна раскладки)
 // и список строк «#монета направление уровень». Дальше — в мессенджер одним действием.
@@ -129,7 +130,7 @@ async function prepare() {
     stage.value = 'done'
   } catch {
     if (cancelled) return
-    toast('Не удалось подготовить картинки', 'error')
+    toast(t('Не удалось подготовить картинки'), 'error')
     stage.value = 'pick'
   }
 }
@@ -154,10 +155,10 @@ const canShareText = !!navigator.share
 async function copyText(silent = false) {
   try {
     await navigator.clipboard.writeText(text.value)
-    if (!silent) toast('Список скопирован')
+    if (!silent) toast(t('Список скопирован'))
     return true
   } catch {
-    if (!silent) prompt('Скопируйте вручную', text.value)
+    if (!silent) prompt(t('Скопируйте вручную'), text.value)
     return false
   }
 }
@@ -180,7 +181,7 @@ function share() {
       if (withFiles && files.value.length > 1) imagesSent.value = true
     })
     .catch((e) => {
-      if ((e as Error)?.name !== 'AbortError') toast('Система не приняла отправку. Сохраните картинки и вставьте список вручную', 'error', 7000)
+      if ((e as Error)?.name !== 'AbortError') toast(t('Система не приняла отправку. Сохраните картинки и вставьте список вручную'), 'error', 7000)
     })
 }
 
@@ -206,35 +207,35 @@ function download() {
 async function copyImage(s: CoinShot) {
   try {
     await navigator.clipboard.write([new ClipboardItem({ 'image/png': s.blob! })])
-    toast(`Картинка ${s.ref.symbol} скопирована`)
+    toast(t('Картинка {symbol} скопирована', { symbol: s.ref.symbol }))
   } catch {
-    toast('Браузер не дал скопировать картинку — сохраните её файлом', 'error')
+    toast(t('Браузер не дал скопировать картинку — сохраните её файлом'), 'error')
   }
 }
 </script>
 
 <template>
-  <Modal title="Поделиться списком" :width="560" @close="close">
+  <Modal :title="t('Поделиться списком')" :width="560" @close="close">
     <!-- 1. выбор монет -->
     <template v-if="stage === 'pick'">
       <div class="ls-body scroll">
-        <p class="note muted">По каждой отмеченной монете — картинка со всеми окнами и строка «#монета направление уровень».</p>
+        <p class="note muted">{{ t('По каждой отмеченной монете — картинка со всеми окнами и строка «#монета направление уровень».') }}</p>
         <section v-for="l in groups" :key="l.id" class="grp" :style="{ '--list': l.color }">
           <header class="grp-head">
             <label class="all">
               <input type="checkbox" :checked="countIn(l) === l.items.length" :indeterminate.prop="countIn(l) > 0 && countIn(l) < l.items.length" @change="toggleList(l)" />
               <i class="tag" />
               <b>{{ l.name }}</b>
-              <span class="muted">{{ countIn(l) }} из {{ l.items.length }}</span>
+              <span class="muted">{{ t('{n} из {total}', { n: countIn(l), total: l.items.length }) }}</span>
             </label>
             <button
               class="auto"
               :class="{ on: l.share }"
               :aria-pressed="l.share"
-              :title="l.share ? 'Монеты этого списка отмечены сразу. Нажмите, чтобы отмечать их вручную' : 'Монеты этого списка отмечаются вручную. Нажмите, чтобы отмечать их сразу'"
+              :title="l.share ? t('Монеты этого списка отмечены сразу. Нажмите, чтобы отмечать их вручную') : t('Монеты этого списка отмечаются вручную. Нажмите, чтобы отмечать их сразу')"
               @click="toggleAuto(l)"
             >
-              <Icon name="check" :size="13" />по умолчанию
+              <Icon name="check" :size="13" />{{ t('по умолчанию') }}
             </button>
           </header>
           <label v-for="r in l.items" :key="symbolKey(r)" class="coin">
@@ -244,16 +245,16 @@ async function copyImage(s: CoinShot) {
             <span class="lvl muted">{{ hint(r).level }}</span>
           </label>
         </section>
-        <p v-if="!groups.length" class="note muted">В списках пока нет монет.</p>
+        <p v-if="!groups.length" class="note muted">{{ t('В списках пока нет монет.') }}</p>
       </div>
       <footer class="ls-foot">
-        <label class="imgs" title="Картинка монеты — все окна текущей раскладки: те же интервалы, индикаторы, рисунки">
+        <label class="imgs" :title="t('Картинка монеты — все окна текущей раскладки: те же интервалы, индикаторы, рисунки')">
           <input v-model="withImages" type="checkbox" />
-          с картинками
+          {{ t('с картинками') }}
         </label>
         <span class="grow" />
-        <span class="muted">монет: {{ chosen.length }}</span>
-        <button class="btn primary" :disabled="!chosen.length" @click="prepare">{{ withImages ? 'Подготовить' : 'Собрать список' }}</button>
+        <span class="muted">{{ t('монет: {n}', { n: chosen.length }) }}</span>
+        <button class="btn primary" :disabled="!chosen.length" @click="prepare">{{ withImages ? t('Подготовить') : t('Собрать список') }}</button>
       </footer>
     </template>
 
@@ -261,47 +262,47 @@ async function copyImage(s: CoinShot) {
     <div v-else-if="stage === 'work'" class="ls-work">
       <div class="spinner" />
       <p>
-        Рисую графики: <b>{{ progress.index + 1 }} из {{ progress.total }}</b> · {{ progress.symbol }}
+        {{ t('Рисую графики:') }} <b>{{ t('{n} из {total}', { n: progress.index + 1, total: progress.total }) }}</b> · {{ progress.symbol }}
       </p>
       <div class="bar" role="progressbar" :aria-valuenow="progress.index" aria-valuemin="0" :aria-valuemax="progress.total">
         <i :style="{ width: (progress.index / Math.max(1, progress.total)) * 100 + '%' }" />
       </div>
-      <button class="btn" @click="cancel">Отмена</button>
+      <button class="btn" @click="cancel">{{ t('Отмена') }}</button>
     </div>
 
     <!-- 3. готово -->
     <template v-else>
       <div class="ls-body scroll">
-        <textarea v-model="text" class="field txt" :rows="Math.min(10, Math.max(3, text.split('\n').length))" spellcheck="false" aria-label="Список монет" />
-        <p v-if="failed.length" class="note down">Не удалось загрузить свечи: {{ failed.join(', ') }} — картинок этих монет нет.</p>
+        <textarea v-model="text" class="field txt" :rows="Math.min(10, Math.max(3, text.split('\n').length))" spellcheck="false" :aria-label="t('Список монет')" />
+        <p v-if="failed.length" class="note down">{{ t('Не удалось загрузить свечи: {symbols} — картинок этих монет нет.', { symbols: failed.join(', ') }) }}</p>
         <template v-if="shots.length">
-          <p class="note muted">Картинок: {{ shots.length }}. Нажатие на картинку копирует её в буфер.</p>
+          <p class="note muted">{{ t('Картинок: {n}. Нажатие на картинку копирует её в буфер.', { n: shots.length }) }}</p>
           <div class="thumbs">
-            <button v-for="s in shots" :key="symbolKey(s.ref)" class="thumb" :title="'Скопировать картинку ' + s.ref.symbol" @click="copyImage(s)">
-              <img :src="s.url" :alt="'График ' + s.ref.symbol" />
+            <button v-for="s in shots" :key="symbolKey(s.ref)" class="thumb" :title="t('Скопировать картинку {symbol}', { symbol: s.ref.symbol })" @click="copyImage(s)">
+              <img :src="s.url" :alt="t('График {symbol}', { symbol: s.ref.symbol })" />
               <span>{{ s.ref.symbol }}</span>
             </button>
           </div>
         </template>
       </div>
       <footer class="ls-foot wrap">
-        <button class="btn" @click="stage = 'pick'"><Icon name="prev" :size="16" />Назад</button>
+        <button class="btn" @click="stage = 'pick'"><Icon name="prev" :size="16" />{{ t('Назад') }}</button>
         <span class="grow" />
-        <button v-if="shots.length" class="btn" title="Сохранить все картинки файлами" @click="download"><Icon name="download" :size="16" />Картинки</button>
-        <button class="btn" :class="{ primary: !canShareText }" @click="copyText()"><Icon name="copy" :size="16" />Список</button>
-        <button v-if="canShareText" class="btn primary" :title="canShareFiles ? 'Отправить картинки и список в мессенджер' : 'Отправить список в мессенджер'" @click="share">
-          <Icon name="share" :size="16" />{{ canShareFiles || !shots.length ? 'Отправить' : 'Отправить список' }}
+        <button v-if="shots.length" class="btn" :title="t('Сохранить все картинки файлами')" @click="download"><Icon name="download" :size="16" />{{ t('Картинки') }}</button>
+        <button class="btn" :class="{ primary: !canShareText }" @click="copyText()"><Icon name="copy" :size="16" />{{ t('Список') }}</button>
+        <button v-if="canShareText" class="btn primary" :title="canShareFiles ? t('Отправить картинки и список в мессенджер') : t('Отправить список в мессенджер')" @click="share">
+          <Icon name="share" :size="16" />{{ canShareFiles || !shots.length ? t('Отправить') : t('Отправить список') }}
         </button>
       </footer>
       <div v-if="needsSecondStep" class="second" :class="{ now: imagesSent }">
         <p>
-          <b v-if="imagesSent">Картинки переданы.</b>
-          Telegram не берёт подпись, когда картинок несколько (WhatsApp берёт). Список уже в буфере — вставьте его в чат или отправьте вторым сообщением.
+          <b v-if="imagesSent">{{ t('Картинки переданы.') }}</b>
+          {{ t('Telegram не берёт подпись, когда картинок несколько (WhatsApp берёт). Список уже в буфере — вставьте его в чат или отправьте вторым сообщением.') }}
         </p>
-        <button class="btn" :class="{ primary: imagesSent }" @click="shareText"><Icon name="share" :size="16" />Отправить список</button>
+        <button class="btn" :class="{ primary: imagesSent }" @click="shareText"><Icon name="share" :size="16" />{{ t('Отправить список') }}</button>
       </div>
-      <p v-else-if="shots.length && canShareFiles" class="tip muted">Список уйдёт подписью к картинке и заодно копируется в буфер.</p>
-      <p v-else-if="shots.length" class="tip muted">Этот браузер не передаёт картинки в другие приложения: сохраните их файлами или копируйте по одной, список — кнопкой «Список».</p>
+      <p v-else-if="shots.length && canShareFiles" class="tip muted">{{ t('Список уйдёт подписью к картинке и заодно копируется в буфер.') }}</p>
+      <p v-else-if="shots.length" class="tip muted">{{ t('Этот браузер не передаёт картинки в другие приложения: сохраните их файлами или копируйте по одной, список — кнопкой «Список».') }}</p>
     </template>
   </Modal>
 </template>
