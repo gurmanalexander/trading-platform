@@ -8,6 +8,12 @@
   --muted: #8a94a6;
   --accent: #3d8bff;
   --accent-soft: color-mix(in srgb, var(--accent) 18%, transparent);
+  /* выбранное и фокус в тёмной теме — светлым, а не синим: синий на чёрном выглядит мутно.
+     Синий акцент остаётся у главных кнопок действий */
+  --sel: #f2f5fa;
+  --sel-bg: rgba(255, 255, 255, 0.1);
+  --sel-border: rgba(255, 255, 255, 0.55);
+  --focus: rgba(255, 255, 255, 0.45);
   --up: #26a69a;
   --down: #ef5350;
   --warn: #f5a623;
@@ -26,6 +32,11 @@
   --muted: #6b7486;
   --accent: #2962ff;
   --accent-soft: color-mix(in srgb, var(--accent) 12%, transparent);
+  /* в светлой теме выбранное — синим акцентом, как было */
+  --sel: var(--accent);
+  --sel-bg: var(--accent-soft);
+  --sel-border: var(--accent);
+  --focus: var(--accent);
   --up: #089981;
   --down: #f23645;
   --warn: #d08400;
@@ -74,7 +85,7 @@ input {
   -webkit-user-select: text;
 }
 :focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--focus);
   outline-offset: -2px;
 }
 
@@ -95,8 +106,8 @@ input {
   background: var(--hover);
 }
 .btn.on {
-  color: var(--accent);
-  background: var(--accent-soft);
+  color: var(--sel);
+  background: var(--sel-bg);
 }
 .btn.primary {
   background: var(--accent);
@@ -130,7 +141,7 @@ input {
 }
 .field:focus {
   outline: none;
-  border-color: var(--accent);
+  border-color: var(--focus);
 }
 
 .up {
@@ -181,7 +192,8 @@ input {
   background: var(--hover);
 }
 .menu-item.on {
-  color: var(--accent);
+  color: var(--sel);
+  background: var(--sel-bg);
 }
 .menu-sep {
   height: 1px;

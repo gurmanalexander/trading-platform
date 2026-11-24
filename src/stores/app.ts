@@ -253,6 +253,14 @@ const positive = (v: unknown, def: number, max: number) => (typeof v === 'number
 const sanitizeRisk = (v?: Partial<RiskSettings>): RiskSettings => ({ deposit: positive(v?.deposit, 0, 1e12), pct: positive(v?.pct, 1, 100) })
 
 const saved = load<Saved>('app', {})
+/** Самый первый запуск: настроек ещё нет — показываем онбординг (язык, тема, пояс, биржа) */
+const firstRun = (() => {
+  try {
+    return !localStorage.getItem('tvx:app') && !localStorage.getItem('tvx:onboarded')
+  } catch {
+    return false
+  }
+})()
 const PANELS: PanelId[] = ['screener', 'watchlist', 'checklist', 'alerts']
 
 function sanitizeTemplates(raw: unknown): Template[] {
@@ -355,6 +363,7 @@ export const app = reactive({
   syncOpen: false,
   tutorialOpen: false,
   donateOpen: false,
+  onboardingOpen: firstRun,
   /** код синхронизации, пришедший по ссылке: окно синхронизации откроется с ним */
   syncCode: '',
   colorsOpen: false,
@@ -421,7 +430,7 @@ export const paneCount = computed(() => layoutCount(app.layout))
 export const activeIndex = computed(() => Math.min(app.active, paneCount.value - 1))
 export const activePane = computed(() => app.panes[activeIndex.value])
 export const modalOpen = computed(
-  () => !!(app.search || app.indicatorsOpen || app.indSettings || app.intervalInput || app.hotkeysOpen || app.gotoOpen || app.textEdit || app.tradeTextOpen || app.shareOpen || app.listShareOpen || app.dashboardOpen || app.screenerFilterOpen || app.syncOpen || app.tutorialOpen || app.donateOpen || app.colorsOpen || app.viewOpen || app.transfer),
+  () => !!(app.search || app.indicatorsOpen || app.indSettings || app.intervalInput || app.hotkeysOpen || app.gotoOpen || app.textEdit || app.tradeTextOpen || app.shareOpen || app.listShareOpen || app.dashboardOpen || app.screenerFilterOpen || app.syncOpen || app.tutorialOpen || app.donateOpen || app.onboardingOpen || app.colorsOpen || app.viewOpen || app.transfer),
 )
 
 // ---------- действия ----------
@@ -627,4 +636,18 @@ export function importSettings(raw: unknown) {
   if (v.defaults) app.defaults = { exchange: v.defaults.exchange === 'bybit' ? 'bybit' : 'binance', market: v.defaults.market === 'spot' ? 'spot' : 'futures' }
   if (typeof v.atrTable === 'boolean') app.atrTable = v.atrTable
   if (v.risk) app.risk = sanitizeRisk(v.risk)
+}
+
+// ---------- первый запуск ----------
+
+/** Онбординг пройден: биржа и рынок по умолчанию — и на них же открываются графики первого запуска */
+export function finishOnboarding(o: { exchange: ExchangeId; market: MarketId }) {
+  app.defaults = { exchange: o.exchange, market: o.market }
+  for (const p of app.panes) p.symbol = { exchange: o.exchange, market: o.market, symbol: p.symbol.symbol }
+  app.onboardingOpen = false
+  try {
+    localStorage.setItem('tvx:onboarded', '1')
+  } catch {
+    /* без сохранения — окно покажется снова только если и настройки не сохранились */
+  }
 }

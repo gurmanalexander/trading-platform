@@ -40,6 +40,7 @@ const ViewDialog = defineAsyncComponent(() => import('./components/ViewDialog.vu
 const Dashboard = defineAsyncComponent(() => import('./components/Dashboard.vue'))
 const TutorialDialog = defineAsyncComponent(() => import('./components/TutorialDialog.vue'))
 const DonateDialog = defineAsyncComponent(() => import('./components/DonateDialog.vue'))
+const OnboardingDialog = defineAsyncComponent(() => import('./components/OnboardingDialog.vue'))
 const SyncDialog = defineAsyncComponent(() => import('./components/SyncDialog.vue'))
 const ShareDialog = defineAsyncComponent(() => import('./components/ShareDialog.vue'))
 const ListShareDialog = defineAsyncComponent(() => import('./components/ListShareDialog.vue'))
@@ -414,6 +415,7 @@ onBeforeUnmount(() => {
     <SyncDialog v-if="app.syncOpen" />
     <TutorialDialog v-if="app.tutorialOpen" />
     <DonateDialog v-if="app.donateOpen" />
+    <OnboardingDialog v-if="app.onboardingOpen" />
     <Dashboard v-if="app.dashboardOpen" />
     <ScreenerFilterDialog v-if="app.screenerFilterOpen" />
     <Toasts />
