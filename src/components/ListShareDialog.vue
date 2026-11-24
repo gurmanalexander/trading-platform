@@ -32,7 +32,7 @@ for (const m of markets) {
 }
 const lastOf = (key: string) => tickers[key]?.last ?? lastByKey[key]
 
-const levelsOf = (key: string) => (drawings[key] ?? []).filter((d) => d.type === 'hline' || d.type === 'hray').map((d) => d.pts[0].p)
+const levelsOf = (key: string) => (drawings[key] ?? []).filter((d) => (d.type === 'hline' || d.type === 'hray') && !d.ind).map((d) => d.pts[0].p)
 
 function lineOf(r: SymbolRef, last = lastOf(symbolKey(r))): string {
   const key = symbolKey(r)

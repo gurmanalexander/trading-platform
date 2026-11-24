@@ -41,6 +41,12 @@ export interface Drawing {
    * Такой текст не уезжает при прокрутке и стоит в одном углу на любом интервале.
    */
   pin?: { x: number; y: number }
+  /**
+   * Рисунок в панели индикатора (тип индикатора: 'rsi', 'macd', 'oi'…): точки — во времени и значениях
+   * индикатора. Нет — рисунок в области цены. Виден на любом графике инструмента, где этот индикатор
+   * показан в отдельной панели.
+   */
+  ind?: string
 }
 
 /** Позиции по умолчанию видны только на внутридневных интервалах: на дневке они сливаются в точку */
@@ -139,7 +145,7 @@ export function addDrawing(key: string, d: Drawing) {
 /** Принимает рисунки инструмента с другого устройства: массив заменяется на месте, графики перерисуются сами */
 export function importDrawings(key: string, raw: unknown) {
   if (!Array.isArray(raw)) return
-  const clean = raw.filter((d) => d && typeof d.id === 'string' && typeof d.type === 'string' && Array.isArray(d.pts) && d.pts.every((p: Pt) => p && isFinite(p.t) && isFinite(p.p)))
+  const clean = raw.filter((d) => d && typeof d.id === 'string' && typeof d.type === 'string' && (d.ind === undefined || typeof d.ind === 'string') && Array.isArray(d.pts) && d.pts.every((p: Pt) => p && isFinite(p.t) && isFinite(p.p)))
   if (!clean.length && !drawings[key]) return
   const cur = drawingsOf(key)
   cur.splice(0, cur.length, ...(clean as Drawing[]))

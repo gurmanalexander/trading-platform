@@ -14,7 +14,7 @@ let focusId = 1
 /** Уровень считается уже существующим, если на этой цене есть горизонтальная линия или луч */
 function hasLevel(key: string, price: number): boolean {
   const eps = Math.abs(price) * 1e-9
-  return (drawings[key] ?? []).some((d) => (d.type === 'hline' || d.type === 'hray') && Math.abs(d.pts[0].p - price) <= eps)
+  return (drawings[key] ?? []).some((d) => (d.type === 'hline' || d.type === 'hray') && !d.ind && Math.abs(d.pts[0].p - price) <= eps)
 }
 
 /**

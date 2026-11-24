@@ -33,7 +33,7 @@ import { tzOffsetSec } from '../lib/timezone'
 import { dayStats } from '../stores/atr'
 import { clearView, getView, setView, viewKey, type ChartView } from '../stores/views'
 import { chartColors, withAlpha, type ChartColors } from './theme'
-import { DrawingsLayer } from './drawings'
+import { DrawingsLayer, type Surface } from './drawings'
 import { countdownPrimitive } from './countdown'
 import { heikinAshi, heikinBar, lowerBound } from './bars'
 
@@ -57,6 +57,8 @@ interface IndRuntime {
   colors: string[]
   series: ISeriesApi<SeriesType>[]
   out: Float64Array[]
+  /** номер панели графика; 0 — поверх свечей */
+  pane: number
 }
 
 const INITIAL_BARS = 1000
@@ -221,6 +223,7 @@ export class ChartController {
       colors: () => this.colors,
       timeToLogical: (t) => this.timeToLogical(t),
       logicalToTime: (l) => this.logicalToTime(l),
+      indSurfaces: () => this.indSurfaces(),
     })
 
     this.createMain()
@@ -1056,6 +1059,7 @@ export class ChartController {
     let hasVolume = false
     const indPane: Record<string, number> = {}
     for (const inst of this.pane.indicators) {
+      let paneIdx = 0
       const def = indicatorDef(inst.type)
       if (!def || !inst.visible) continue
       const colors = def.plots.map((p, i) => inst.colors?.[i] ?? p.color)
@@ -1071,7 +1075,7 @@ export class ChartController {
         )
         this.chart.priceScale('vol', 0).applyOptions({ scaleMargins: { top: 0.82, bottom: 0 } })
       } else {
-        const paneIdx = def.overlay ? 0 : nextPane++
+        paneIdx = def.overlay ? 0 : nextPane++
         if (paneIdx) indPane[inst.id] = paneIdx
         const p = def.precision ?? this.precision
         const priceFormat = { type: 'price' as const, precision: p, minMove: 1 / 10 ** p }
@@ -1094,8 +1098,10 @@ export class ChartController {
         for (const level of def.levels ?? []) {
           host.createPriceLine({ price: level, color: c.muted, lineWidth: 1, lineStyle: LineStyle.Dashed, axisLabelVisible: false })
         }
+        // в панели индикатора тоже рисуют; рисунки привязаны к типу индикатора — у первого такого на графике
+        if (paneIdx && !this.inds.some((r) => r.pane && r.inst.type === inst.type)) this.draw.attach(series[0], inst.type)
       }
-      this.inds.push({ inst, def, params: resolveParams(def, inst), colors, series, out: [] })
+      this.inds.push({ inst, def, params: resolveParams(def, inst), colors, series, out: [], pane: paneIdx })
     }
     this.chart.priceScale('right', 0).applyOptions({ scaleMargins: { top: 0.08, bottom: hasVolume ? 0.2 : 0.08 } })
     const panes = this.chart.panes()
@@ -1104,8 +1110,28 @@ export class ChartController {
     this.loadOi()
     this.computeIndicators(true)
     this.updateLegend()
+    this.draw.redraw()
     // размеры панелей библиотека пересчитывает к следующему кадру
     requestAnimationFrame(() => this.onResize())
+  }
+
+  /** Панели индикаторов, где можно рисовать: по одной на тип индикатора (первый на графике) */
+  private indSurfaces(): Surface[] {
+    const out: Surface[] = []
+    for (const r of this.inds) {
+      if (!r.pane || out.some((s) => s.key === r.inst.type)) continue
+      const series = r.series[0]
+      out.push({
+        key: r.inst.type,
+        pane: r.pane,
+        series,
+        // у крупных значений (объём, открытый интерес) лишние знаки ни к чему
+        precision: r.def.compact ? 2 : (r.def.precision ?? this.precision),
+        values: (i) => r.out.map((a) => a[i]),
+        format: (v) => series.priceFormatter().format(v),
+      })
+    }
+    return out
   }
 
   private computeIndicators(full: boolean) {

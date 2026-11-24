@@ -355,7 +355,7 @@ export const app = reactive({
   /** счётчик запросов «поставить курсор в поле цены оповещения» (Alt+A) */
   alertFocus: 0,
   /** окно ввода текста: новый текст в точке pt либо правка рисунка id */
-  textEdit: null as null | { pane: number; id: string | null; pt: { t: number; p: number } | null; text: string },
+  textEdit: null as null | { pane: number; id: string | null; pt: { t: number; p: number } | null; text: string; ind?: string },
   tradeTextOpen: false,
   /** текст, с которым открывается окно вставки (например, не распознанный автоматически) */
   pasteDraft: '',

@@ -18,7 +18,7 @@ export function shareOptions() {
   const list = drawings[key] ?? []
   const chart = chartAt(activeIndex.value)
   const last = tickers[key]?.last ?? chart?.bars[chart.bars.length - 1]?.close ?? 0
-  const levels = nearestLevels(list.filter((d) => d.type === 'hline' || d.type === 'hray').map((d) => d.pts[0].p), last)
+  const levels = nearestLevels(list.filter((d) => (d.type === 'hline' || d.type === 'hray') && !d.ind).map((d) => d.pts[0].p), last)
   const positions: SharePos[] = list
     .filter((d) => isPosition(d.type) && d.pts.length >= 3)
     .sort((a, b) => b.pts[0].t - a.pts[0].t)
@@ -40,7 +40,7 @@ export function shareOptions() {
     positions,
     date,
     /** уровень, выбранный на графике: его предлагаем первым */
-    selectedLevel: selected && (selected.type === 'hline' || selected.type === 'hray') ? selected.pts[0].p : undefined,
+    selectedLevel: selected && !selected.ind && (selected.type === 'hline' || selected.type === 'hray') ? selected.pts[0].p : undefined,
   }
 }
 
@@ -66,7 +66,7 @@ export function applyShare(pack: SharePack) {
   applySetup({ symbol: pack.symbol, exchange: pack.exchange, market: pack.market, side: pack.side, date: pack.date, level: pack.levels[0] })
   const have = () => drawings[key] ?? []
   for (const level of pack.levels.slice(1)) {
-    if (have().some((d) => (d.type === 'hline' || d.type === 'hray') && same(d.pts[0].p, level))) continue
+    if (have().some((d) => (d.type === 'hline' || d.type === 'hray') && !d.ind && same(d.pts[0].p, level))) continue
     const st = styleFor('hline')
     addDrawing(key, { id: uid(), type: 'hline', pts: [{ t: Math.floor(Date.now() / 1000), p: level }], color: st.color, width: st.width, dash: st.dash })
   }

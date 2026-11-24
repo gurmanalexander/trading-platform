@@ -18,7 +18,7 @@ function apply() {
   const layer = chartAt(edit.pane)?.draw
   if (layer) {
     if (edit.id) layer.setText(edit.id, text.value)
-    else if (edit.pt) layer.addText(edit.pt, text.value)
+    else if (edit.pt) layer.addText(edit.pt, text.value, edit.ind)
   }
   close()
 }
