@@ -19,6 +19,8 @@ export const MOBILE_TABS: { id: MobileTab; label: string; icon: string }[] = [
 ]
 export type Tool = 'cursor' | 'trend' | 'ray' | 'hline' | 'hray' | 'vline' | 'cross' | 'rect' | 'fib' | 'long' | 'short' | 'text' | 'measure'
 export type Theme = 'dark' | 'light'
+/** Магнит, как в TradingView: слабый притягивает только вблизи цены свечи, сильный — всегда к ближайшей */
+export type MagnetMode = 'off' | 'weak' | 'strong'
 export type ThemePref = 'system' | Theme
 
 /** Цвета, которые можно задать самому — отдельно для тёмной и светлой темы */
@@ -191,7 +193,9 @@ interface Saved {
   active?: number
   panel?: PanelId
   panelOpen?: boolean
-  magnet?: boolean
+  /** раньше хранился флажком: true — нынешний слабый магнит */
+  magnet?: boolean | MagnetMode
+  crossMagnet?: boolean
   sync?: Partial<SyncState>
   favTfs?: string[]
   templates?: Template[]
@@ -270,7 +274,9 @@ export const app = reactive({
   panelOpen: saved.panelOpen ?? true,
   /** ширина боковой панели, px; 0 — стандартная */
   panelWidth: typeof saved.panelWidth === 'number' && saved.panelWidth >= 220 ? Math.min(900, saved.panelWidth) : 0,
-  magnet: saved.magnet ?? true,
+  magnet: (saved.magnet === 'off' || saved.magnet === 'weak' || saved.magnet === 'strong' ? saved.magnet : saved.magnet === false ? 'off' : 'weak') as MagnetMode,
+  /** перекрестие притягивается к ценам свечи (силой магнита; при выключенном магните — как слабый) */
+  crossMagnet: saved.crossMagnet === true,
   sync: {
     symbol: saved.sync?.symbol ?? true,
     interval: saved.sync?.interval ?? false,
@@ -352,7 +358,7 @@ export const app = reactive({
 
 persist(
   'app',
-  () => [app.themePref, app.layout, app.panes, app.active, app.panel, app.panelOpen, app.magnet, app.sync, app.favTfs, app.templates, app.templateId, app.tabTemplates, app.searchFilter, app.drawingsHidden, app.phoneStack, app.defaults, app.colors, app.atrTable, app.panelWidth, app.listTab, app.drawBarPos, app.view, app.risk],
+  () => [app.themePref, app.layout, app.panes, app.active, app.panel, app.panelOpen, app.magnet, app.crossMagnet, app.sync, app.favTfs, app.templates, app.templateId, app.tabTemplates, app.searchFilter, app.drawingsHidden, app.phoneStack, app.defaults, app.colors, app.atrTable, app.panelWidth, app.listTab, app.drawBarPos, app.view, app.risk],
   () => ({
     themePref: app.themePref,
     layout: app.layout,
@@ -361,6 +367,7 @@ persist(
     panel: app.panel,
     panelOpen: app.panelOpen,
     magnet: app.magnet,
+    crossMagnet: app.crossMagnet,
     sync: app.sync,
     favTfs: app.favTfs,
     templates: app.templates,

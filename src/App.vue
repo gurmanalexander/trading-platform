@@ -127,12 +127,21 @@ function onAlt(e: KeyboardEvent): boolean {
   const chart = chartAt(activeIndex.value)
   if (e.shiftKey) {
     if (e.code === 'KeyR') app.tool = 'rect'
+    else if (e.code === 'KeyM') {
+      app.crossMagnet = !app.crossMagnet
+      toast(app.crossMagnet ? 'Перекрестие с магнитом: притягивается к ценам свечи' : 'Перекрестие без магнита')
+    }
     else if (e.code === 'KeyS') snapshotAll()
     else if (e.code === 'KeyC') copyAll()
     else return false
     return true
   }
   if (ALT_TOOLS[e.code]) app.tool = ALT_TOOLS[e.code]
+  // линейка: повторное нажатие убирает её
+  else if (e.code === 'KeyM') {
+    if (app.tool === 'measure') app.tool = 'cursor'
+    else if (!chart?.draw.clearMeasure()) app.tool = 'measure'
+  }
   else if (e.code === 'KeyW') addToWatchlist()
   else if (e.code === 'KeyK') togglePanel('checklist')
   else if (e.code === 'KeyD') app.dashboardOpen = true
@@ -192,6 +201,7 @@ function onPlain(e: KeyboardEvent): boolean {
   switch (e.code) {
     case 'Escape':
       if (app.tool !== 'cursor') app.tool = 'cursor'
+      else if (chart?.draw.clearMeasure()) return true
       else if (app.maximized) app.maximized = false
       else return false
       return true
