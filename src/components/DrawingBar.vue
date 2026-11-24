@@ -373,7 +373,7 @@ function duplicate() {
   align-items: flex-end;
   gap: 2px;
 }
-.rr .field {
+.prices .rr .field {
   width: 52px;
 }
 .lock {
