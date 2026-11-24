@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import Icon from './Icon.vue'
-import { app, activePane, showPanel, type Tool } from '../stores/app'
+import Dropdown from './Dropdown.vue'
+import { app, activePane, showPanel, type MagnetMode, type Tool } from '../stores/app'
 import { pasteFromClipboard } from '../chart/setup'
 import { symbolKey } from '../types'
 import { clearDrawings, drawings, redo, selection, undo } from '../stores/drawings'
@@ -21,8 +22,16 @@ const TOOLS: { id: Tool; label: string; sep?: boolean }[] = [
   { id: 'text', label: 'Текст' },
   { id: 'long', label: 'Длинная позиция', sep: true },
   { id: 'short', label: 'Короткая позиция' },
-  { id: 'measure', label: 'Линейка (Shift+щелчок)', sep: true },
+  { id: 'measure', label: 'Линейка (Alt+M или Shift+щелчок)', sep: true },
 ]
+
+const MAGNETS: { id: MagnetMode; label: string; hint: string }[] = [
+  { id: 'off', label: 'Без магнита', hint: 'Точки ставятся точно под курсором' },
+  { id: 'weak', label: 'Слабый магнит', hint: 'Притягивает, только если курсор рядом с ценой свечи' },
+  { id: 'strong', label: 'Сильный магнит', hint: 'Всегда притягивает к ближайшей цене свечи: открытие, хай, лоу, закрытие' },
+]
+const magnetTitle = () =>
+  `${MAGNETS.find((m) => m.id === app.magnet)?.label ?? 'Магнит'}${app.crossMagnet ? ' · перекрестие притягивается' : ''} (Alt+Shift+M — перекрестие с магнитом)`
 
 function clearAll() {
   const key = symbolKey(activePane.value.symbol)
@@ -49,9 +58,24 @@ function clearAll() {
     <span class="sep" />
     <button class="btn" title="Отменить (Ctrl+Z)" @click="undo()"><Icon name="undo" /></button>
     <button class="btn" title="Вернуть (Ctrl+Y)" @click="redo()"><Icon name="redo" /></button>
-    <button class="btn" :class="{ on: app.magnet }" title="Магнит: привязка к ценам свечи" @click="app.magnet = !app.magnet">
-      <Icon name="magnet" />
-    </button>
+    <Dropdown :side="!horizontal">
+      <template #trigger="{ toggle }">
+        <button class="btn magnet" :class="{ on: app.magnet !== 'off', strong: app.magnet === 'strong' }" :title="magnetTitle()" @click="toggle">
+          <Icon name="magnet" />
+          <i v-if="app.crossMagnet" class="cross-dot" />
+        </button>
+      </template>
+      <template #default="{ close }">
+        <button v-for="m in MAGNETS" :key="m.id" class="menu-item" :class="{ on: app.magnet === m.id }" :title="m.hint" @click="(app.magnet = m.id), close()">
+          {{ m.label }}
+        </button>
+        <div class="menu-sep" />
+        <label class="menu-item check" title="Горизонтальная линия перекрестия притягивается к цене свечи под курсором — на шкале видна точная цена уровня">
+          <input v-model="app.crossMagnet" type="checkbox" />
+          Перекрестие с магнитом <span class="muted">Alt+Shift+M</span>
+        </label>
+      </template>
+    </Dropdown>
     <button
       class="btn"
       :class="{ on: app.drawingsHidden }"
@@ -86,6 +110,42 @@ function clearAll() {
   margin: 4px 0;
   background: var(--border);
   flex: none;
+}
+.magnet {
+  position: relative;
+}
+.check {
+  cursor: pointer;
+}
+.check input {
+  accent-color: var(--accent);
+  width: 15px;
+  height: 15px;
+  margin: 0;
+}
+.check .muted {
+  margin-left: auto;
+  padding-left: 12px;
+  font-size: 11px;
+}
+/* сильный магнит — кнопка залита ярче */
+.magnet.strong {
+  color: #fff;
+  background: var(--accent);
+}
+/* перекрестие с магнитом — точка в углу кнопки */
+.cross-dot {
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 1.5px var(--panel);
+}
+.magnet.strong .cross-dot {
+  background: #fff;
 }
 .drawbar.horizontal {
   flex-direction: row;

@@ -260,17 +260,26 @@ export class DrawingsLayer {
     return { x, y }
   }
 
-  /** magnet = false — для позиций: вход, стоп и цель ставятся точно, без притягивания к свече */
-  private toPoint(x: number, y: number, magnet = app.magnet): Pt | null {
+  /**
+   * С какого расстояния (px) точка притягивается к ценам свечи: 0 — магнит выключен,
+   * слабый — только вблизи цены, сильный — всегда к ближайшей из OHLC.
+   */
+  private snapRadius(mode = app.magnet): number {
+    if (mode === 'strong') return Infinity
+    if (mode === 'weak') return this.coarse ? 40 : 28
+    return 0
+  }
+
+  /** magnet = 0 — для позиций: вход, стоп и цель ставятся точно, без притягивания к свече */
+  private toPoint(x: number, y: number, magnet = this.snapRadius()): Pt | null {
     const lg = this.host.chart.timeScale().coordinateToLogical(x)
     let price = this.host.series().coordinateToPrice(y) as number | null
     if (lg == null || price == null) return null
     const idx = Math.round(lg)
-    if (magnet) {
+    if (magnet > 0) {
       const bar = this.host.bars()[idx]
       if (bar) {
-        // с какого расстояния цена притягивается к ценам свечи, px
-        let best = this.coarse ? 40 : 28
+        let best = magnet
         for (const v of [bar.open, bar.high, bar.low, bar.close]) {
           const vy = this.host.series().priceToCoordinate(v)
           if (vy != null && Math.abs(vy - y) < best) {
@@ -389,6 +398,13 @@ export class DrawingsLayer {
         this.redraw()
       }
     })
+    // перекрестие с магнитом: библиотека двигает перекрестие по mousemove (он приходит после
+    // pointermove) в своих элементах внутри окна — наш обработчик на окне срабатывает следом
+    on(el, 'mousemove', (e) => {
+      if (!app.crossMagnet || app.tool !== 'cursor' || this.drag) return
+      const p = rel(e as unknown as PointerEvent)
+      this.snapCrosshair(p.x, p.y)
+    })
     // указатель ушёл из окна — рисунок под ним больше не «наведён», маркеры и подписи прячем
     on(el, 'pointerleave', () => this.clearHover())
     on(el, 'dblclick', (e) => {
@@ -472,7 +488,7 @@ export class DrawingsLayer {
       stopDist = (top != null && bottom != null ? Math.abs(top - bottom) * 0.12 : entry.p * 0.01) / DEFAULT_RR
     }
     const round = (v: number) => +v.toFixed(this.host.precision())
-    const right = this.toPoint(x + Math.max(60, size.width * 0.15), 0, false)
+    const right = this.toPoint(x + Math.max(60, size.width * 0.15), 0, 0)
     const t2 = Math.max(right?.t ?? 0, entry.t + this.host.tfSec())
     return this.newDrawing(type, [entry, { t: t2, p: round(entry.p + sign * stopDist * DEFAULT_RR) }, { t: entry.t, p: round(entry.p - sign * stopDist) }])
   }
@@ -480,7 +496,7 @@ export class DrawingsLayer {
   private toolDown(x: number, y: number) {
     const tool = app.tool
     if (tool === 'cursor') return
-    const pt = this.toPoint(x, y, isPosition(tool) ? false : app.magnet)
+    const pt = this.toPoint(x, y, isPosition(tool) ? 0 : this.snapRadius())
     if (!pt) return
     this.measure = null
     if (this.draft) {
@@ -503,7 +519,7 @@ export class DrawingsLayer {
   }
 
   private toolMove(x: number, y: number, isMouse: boolean) {
-    const pt = this.toPoint(x, y, this.draft && isPosition(this.draft.type) ? false : app.magnet)
+    const pt = this.toPoint(x, y, this.draft && isPosition(this.draft.type) ? 0 : this.snapRadius())
     if (!pt) return
     if (isMouse) this.syncCrosshair(pt)
     const d = this.draft
@@ -558,6 +574,35 @@ export class DrawingsLayer {
     this.draft = null
     this.pressing = false
     this.redraw()
+  }
+
+  /**
+   * Перекрестие с магнитом: горизонтальная линия притягивается к цене свечи под курсором —
+   * на шкале видна точная цена хая, лоя, открытия или закрытия. Сила — как у магнита рисования;
+   * при выключенном магните перекрестие притягивается как слабым. Библиотека ставит перекрестие
+   * по мыши раньше (её обработчики глубже в разметке), здесь его поправляем.
+   */
+  private snapCrosshair(x: number, y: number) {
+    const size = this.host.chart.paneSize(0)
+    if (x < 0 || y < 0 || x > size.width || y > size.height) return
+    const raw = this.host.series().coordinateToPrice(y) as number | null
+    const pt = this.toPoint(x, y, this.snapRadius(app.magnet === 'off' ? 'weak' : app.magnet))
+    if (!pt || raw == null) return
+    const bars = this.host.bars()
+    const n = bars.length
+    // правее последней свечи притягивать не к чему — там остаётся обычное перекрестие
+    if (!n || pt.t < bars[0].time || pt.t > bars[n - 1].time) return
+    if (pt.p === +raw.toFixed(this.host.precision())) return
+    this.host.chart.setCrosshairPosition(pt.p, (pt.t + this.host.tz()) as Time, this.host.series())
+  }
+
+  /** Убирает линейку с графика; true — она была */
+  clearMeasure(): boolean {
+    if (!this.measure && this.draft?.type !== 'measure') return false
+    this.measure = null
+    if (this.draft?.type === 'measure') this.cancelDraft()
+    this.redraw()
+    return true
   }
 
   private syncCrosshair(pt: Pt) {
@@ -625,7 +670,7 @@ export class DrawingsLayer {
         selection.value = { pane: this.host.paneIndex, id: clone.id }
       }
     }
-    const magnet = isPosition(g.d.type) ? false : app.magnet
+    const magnet = isPosition(g.d.type) ? 0 : this.snapRadius()
     if (g.d.pin) {
       // закреплённый текст двигается по экрану, а не по времени и цене
       const size = this.host.chart.paneSize(0)
@@ -641,7 +686,7 @@ export class DrawingsLayer {
       // уровень тянут за любое место: магнит ищет цены той свечи, что под курсором,
       // а не той, где когда-то поставили точку линии (она может быть далеко за экраном)
       const snap = this.toPoint(x, g.orig[0].y + dy, magnet)
-      const own = g.d.type === 'hray' ? this.toPoint(g.orig[0].x + dx, g.orig[0].y + dy, false) : null
+      const own = g.d.type === 'hray' ? this.toPoint(g.orig[0].x + dx, g.orig[0].y + dy, 0) : null
       if (snap) g.d.pts[0] = { t: own?.t ?? g.d.pts[0].t, p: snap.p }
     } else {
       g.orig.forEach((o, i) => {
@@ -777,7 +822,7 @@ export class DrawingsLayer {
     if (!at) return
     checkpoint()
     if (d.pin) {
-      const pt = this.toPoint(at.x, at.y, false)
+      const pt = this.toPoint(at.x, at.y, 0)
       if (pt) d.pts = [pt]
       delete d.pin
     } else d.pin = { x: at.x / size.width, y: at.y / size.height }
@@ -812,7 +857,7 @@ export class DrawingsLayer {
       const size = this.host.chart.paneSize(0)
       const legend = this.host.el.parentElement?.querySelector<HTMLElement>('.legend')
       const top = (legend?.offsetHeight ?? 56) + 14
-      const pt = this.toPoint(14, top, false) ?? { t: 0, p: 0 }
+      const pt = this.toPoint(14, top, 0) ?? { t: 0, p: 0 }
       this.list.push({
         ...this.newDrawing('text', [pt]),
         text,
@@ -1202,7 +1247,19 @@ export class DrawingsLayer {
         const pct = d.pts[0].p ? (diff / d.pts[0].p) * 100 : 0
         const dt = d.pts[1].t - d.pts[0].t
         const nBars = Math.round(dt / this.host.tfSec())
-        this.tag(ctx, [`${diff >= 0 ? '+' : ''}${fmtPrice(diff, prec)} (${fmtPct(pct)})`, `${nBars} бар., ${fmtSpan(dt)}`], mx, up ? y - 24 : y + rh + 24, col, w, h)
+        // в пунктах (шагах цены) и в долях дневного ATR — удобно сравнивать расстояния до уровней
+        const pts = Math.round(Math.abs(diff) * 10 ** prec).toLocaleString('ru-RU') + ' п.'
+        const atr = this.host.atr()
+        const inAtr = atr ? ` · ${(Math.abs(diff) / atr).toFixed(2)} ATR` : ''
+        this.tag(
+          ctx,
+          [`${diff >= 0 ? '+' : ''}${fmtPrice(diff, prec)} (${fmtPct(pct)}) · ${pts}`, `${nBars} бар., ${fmtSpan(dt)}${inAtr}`],
+          mx,
+          up ? y - 24 : y + rh + 24,
+          col,
+          w,
+          h,
+        )
         return sp
       }
     }
