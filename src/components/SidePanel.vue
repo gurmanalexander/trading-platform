@@ -74,7 +74,7 @@ const TABS: { id: PanelId; label: string }[] = [
 }
 .side-tabs button.on {
   color: var(--text);
-  border-bottom-color: var(--accent);
+  border-bottom-color: var(--sel-border);
 }
 .side-body {
   flex: 1;

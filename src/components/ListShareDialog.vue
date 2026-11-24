@@ -518,8 +518,8 @@ input[type='checkbox'] {
   color: var(--text);
 }
 .second.now {
-  border-color: var(--accent);
-  background: var(--accent-soft);
+  border-color: var(--sel-border);
+  background: var(--sel-bg);
   color: var(--text);
 }
 @media (max-width: 719px) {

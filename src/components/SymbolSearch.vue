@@ -183,7 +183,7 @@ const MARKETS: { id: MarketId | 'all'; label: string }[] = [
   color: var(--muted);
 }
 .ss-filters .btn.on {
-  color: var(--accent);
+  color: var(--sel);
 }
 .gap {
   width: 10px;

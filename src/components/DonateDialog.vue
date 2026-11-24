@@ -197,11 +197,11 @@ onBeforeUnmount(() => clearTimeout(copiedTimer))
     background 0.15s;
 }
 .method:hover {
-  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+  border-color: color-mix(in srgb, var(--sel-border) 60%, var(--border));
 }
 .method.on {
-  border-color: var(--accent);
-  background: color-mix(in srgb, var(--accent) 9%, var(--bg));
+  border-color: var(--sel-border);
+  background: var(--sel-bg);
 }
 .m-title {
   font-weight: 600;

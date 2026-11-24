@@ -106,8 +106,8 @@ video {
   color: var(--text);
 }
 .toc button.on {
-  background: var(--accent-soft);
-  color: var(--accent);
+  background: var(--sel-bg);
+  color: var(--sel);
 }
 .toc span {
   flex: 1;

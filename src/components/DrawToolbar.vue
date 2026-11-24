@@ -135,8 +135,8 @@ function clearAll() {
 }
 /* сильный магнит — кнопка залита ярче */
 .magnet.strong {
-  color: #fff;
-  background: var(--accent);
+  color: var(--bg);
+  background: var(--sel);
 }
 /* перекрестие с магнитом — точка в углу кнопки */
 .cross-dot {
@@ -146,11 +146,11 @@ function clearAll() {
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: var(--accent);
+  background: var(--sel);
   box-shadow: 0 0 0 1.5px var(--panel);
 }
 .magnet.strong .cross-dot {
-  background: #fff;
+  background: var(--bg);
 }
 .drawbar.horizontal {
   flex-direction: row;

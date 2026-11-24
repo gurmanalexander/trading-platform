@@ -364,7 +364,7 @@ function toggleScale(id: ScaleMode) {
   content: '';
   position: absolute;
   inset: 0;
-  border: 1px solid var(--accent);
+  border: 1px solid var(--sel-border);
   pointer-events: none;
   z-index: 6;
 }

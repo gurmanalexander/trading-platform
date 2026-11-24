@@ -318,10 +318,10 @@ watch(
   background: var(--hover);
 }
 .sc-row.picked {
-  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  background: var(--sel-bg);
 }
 .sc-row.picked:hover {
-  background: color-mix(in srgb, var(--accent) 22%, transparent);
+  background: color-mix(in srgb, var(--sel) 16%, transparent);
 }
 .sc-sel {
   display: flex;

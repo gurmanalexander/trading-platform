@@ -493,8 +493,8 @@ function fullscreen() {
   place-items: center;
 }
 .pane-tabs button.on {
-  color: var(--accent);
-  background: var(--accent-soft);
+  color: var(--sel);
+  background: var(--sel-bg);
 }
 .sep {
   width: 1px;
@@ -553,7 +553,7 @@ function fullscreen() {
   font-size: 13px;
 }
 .tpl-fav.on {
-  border-color: var(--accent);
+  border-color: var(--sel-border);
 }
 .caret {
   margin-left: -4px;

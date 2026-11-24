@@ -58,7 +58,7 @@ import { t } from '../lib/i18n'
   color: var(--muted);
 }
 .bnav button.on {
-  color: var(--accent);
+  color: var(--sel);
 }
 .ico {
   position: relative;
