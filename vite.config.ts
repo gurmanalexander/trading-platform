@@ -1,3 +1,4 @@
+/// <reference types="vitest/config" />
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 
@@ -10,4 +11,6 @@ export default defineConfig({
     cssCodeSplit: false,
   },
   server: { host: true },
+  // тесты: язык интерфейса по умолчанию — русский (см. tests/setup-lang.ts)
+  test: { setupFiles: ['tests/setup-lang.ts'] },
 })
