@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import Modal from './Modal.vue'
 import { app, LEGEND_FONTS, SCALE_FONTS } from '../stores/app'
-import { fmtOffset, TIMEZONES, tzMenuLabel, tzOffsetSec } from '../lib/timezone'
+import { TIMEZONES, tzMenuLabel } from '../lib/timezone'
 
 // Вид графиков (крупные шрифты, таймер свечи) и объём позиции из депозита и риска
 function num(e: Event): number {
@@ -33,7 +33,7 @@ function num(e: Event): number {
       <label class="vd-row">
         <span>Часовой пояс<small class="muted">время на внутридневных графиках</small></span>
         <select v-model="app.view.tz" class="field">
-          <option v-for="z in TIMEZONES" :key="z.id" :value="z.id">{{ z.id === 'local' ? `${z.name} (${fmtOffset(tzOffsetSec(z.id))})` : tzMenuLabel(z) }}</option>
+          <option v-for="z in TIMEZONES" :key="z.id" :value="z.id">{{ tzMenuLabel(z) }}</option>
         </select>
       </label>
       <label class="vd-row check">

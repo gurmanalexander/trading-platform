@@ -15,6 +15,7 @@ import { addWatch, activeList } from './stores/watchlist'
 import { clipboard, redo, selection, undo } from './stores/drawings'
 import { stepSymbol } from './stores/screener'
 import { scheduleDonatePulse } from './lib/donate'
+import { t } from './lib/i18n'
 import { chartAt } from './chart/registry'
 import { applyPastedText, applySetup, setupTextFromUrl } from './chart/setup'
 import { applyShare } from './chart/share'
@@ -92,7 +93,8 @@ const ALT_TOOLS: Record<string, Tool> = { KeyT: 'trend', KeyH: 'hline', KeyJ: 'h
 
 function addToWatchlist() {
   const s = activePane.value.symbol
-  toast(addWatch(s) ? `${s.symbol} добавлен в список «${activeList.value.name}»` : `${s.symbol} уже есть в списке «${activeList.value.name}»`)
+  const vars = { s: s.symbol, list: activeList.value.name }
+  toast(addWatch(s) ? t('{s} добавлен в список «{list}»', vars) : t('{s} уже есть в списке «{list}»', vars))
 }
 
 function fullscreen() {
@@ -131,7 +133,7 @@ function onAlt(e: KeyboardEvent): boolean {
     if (e.code === 'KeyR') app.tool = 'rect'
     else if (e.code === 'KeyM') {
       app.crossMagnet = !app.crossMagnet
-      toast(app.crossMagnet ? 'Перекрестие с магнитом: притягивается к ценам свечи' : 'Перекрестие без магнита')
+      toast(app.crossMagnet ? t('Перекрестие с магнитом: притягивается к ценам свечи') : t('Перекрестие без магнита'))
     }
     else if (e.code === 'KeyS') snapshotAll()
     else if (e.code === 'KeyC') copyAll()
@@ -283,7 +285,7 @@ function onPaste(e: ClipboardEvent) {
   else if (text.trim()) {
     // молчать нельзя: иначе непонятно, почему вставка «не сработала»
     const one = text.trim().replace(/\s+/g, ' ')
-    toast(`Не понял вставленный текст: «${one.length > 60 ? one.slice(0, 60) + '…' : one}». Нужна монета (#TAOUSDT), можно с датой, направлением и уровнем`, 'error', 7000)
+    toast(t('Не понял вставленный текст: «{text}». Нужна монета (#TAOUSDT), можно с датой, направлением и уровнем', { text: one.length > 60 ? one.slice(0, 60) + '…' : one }), 'error', 7000)
   }
 }
 
@@ -346,7 +348,7 @@ function openFromUrl() {
   if (location.hash.startsWith('#share=')) {
     const pack = decodeShare(location.hash.slice(7))
     if (pack) applyShare(pack)
-    else toast('Ссылка повреждена: не удалось прочитать, чем поделились', 'error')
+    else toast(t('Ссылка повреждена: не удалось прочитать, чем поделились'), 'error')
     history.replaceState(null, '', new URL('./', location.href).pathname)
     return
   }

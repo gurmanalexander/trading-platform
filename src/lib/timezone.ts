@@ -4,6 +4,8 @@
  * подписаны датами биржи (UTC).
  */
 
+import { t } from './i18n'
+
 export interface TimeZoneOption {
   id: string
   /** название города; у местного и UTC — своё */
@@ -98,8 +100,9 @@ export function fmtOffset(sec: number): string {
   return `UTC${sec > 0 ? '+' : '−'}${h}${m ? ':' + String(m).padStart(2, '0') : ''}`
 }
 
-/** Подпись пояса в меню: «(UTC+3) Москва» */
+/** Подпись пояса в меню: «(UTC+3) Москва»; у местного — «Как на устройстве (UTC+3)» */
 export function tzMenuLabel(o: TimeZoneOption): string {
   if (o.id === 'UTC') return 'UTC'
-  return `(${fmtOffset(tzOffsetSec(o.id))}) ${o.name}`
+  if (o.id === LOCAL_TZ) return `${t(o.name)} (${fmtOffset(tzOffsetSec(o.id))})`
+  return `(${fmtOffset(tzOffsetSec(o.id))}) ${t(o.name)}`
 }

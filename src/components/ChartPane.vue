@@ -314,7 +314,7 @@ function toggleScale(id: ScaleMode) {
       <template #default="{ close }">
         <div class="menu-title">Часовой пояс</div>
         <button v-for="z in TIMEZONES" :key="z.id" class="menu-item" :class="{ on: app.view.tz === z.id }" @click="(app.view.tz = z.id), close()">
-          {{ z.id === 'local' ? `${z.name} (${fmtOffset(tzOffsetSec(z.id))})` : tzMenuLabel(z) }}
+          {{ tzMenuLabel(z) }}
         </button>
       </template>
     </Dropdown>
