@@ -83,7 +83,7 @@ const levels = computed(() => {
     if (!last || !atr) continue
     let best: number | null = null
     for (const d of drawings[c.key] ?? []) {
-      if (d.type !== 'hline' && d.type !== 'hray') continue
+      if ((d.type !== 'hline' && d.type !== 'hray') || d.ind) continue
       if (best === null || Math.abs(d.pts[0].p - last) < Math.abs(best - last)) best = d.pts[0].p
     }
     if (best !== null) out.push({ key: c.key, ref: c.ref, color: c.color, level: best, dist: (best - last) / atr, pct: ((best - last) / last) * 100 })

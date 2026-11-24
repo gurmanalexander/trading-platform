@@ -77,7 +77,8 @@ ATR toolkit, screener, watchlists and alerts — no sign-up, no ads, no API keys
   time zone selector (device time by default).
 - **Drawing tools:** trend line, ray, horizontal line and ray, vertical line, cross, rectangle, Fibonacci, long/short
   position, text, ruler (`Alt+M`). Magnet with off / weak / strong modes and a magnet crosshair (`Alt+Shift+M`)
-  that snaps to candle OHLC. Per-interval visibility, undo/redo, copy/paste, keyboard nudging.
+  that snaps to candle OHLC. Per-interval visibility, undo/redo, copy/paste, keyboard nudging. Lines, shapes and
+  the ruler also work in indicator panes (RSI, MACD, OI…), in the indicator's own values.
 - **ATR toolkit:** daily ATR, how much of it is spent, stop / target / slack from daily and 5-minute ATR,
   daily range bounds.
 - **Trade checklist** next to the chart, remembered per coin, can be pinned to the chart as a note.

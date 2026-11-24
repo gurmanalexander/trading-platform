@@ -28,6 +28,27 @@ export interface DrawHost {
   colors(): ChartColors
   timeToLogical(t: number): number | null
   logicalToTime(l: number): number
+  /** панели индикаторов, на которых тоже можно рисовать */
+  indSurfaces(): Surface[]
+}
+
+/**
+ * Где рисуют: область цены или панель индикатора. У каждой — своя шкала значений,
+ * точки рисунков в ней — во времени и значениях этой шкалы.
+ */
+export interface Surface {
+  /** '' — область цены, иначе тип индикатора (он же Drawing.ind) */
+  key: string
+  /** номер панели графика */
+  pane: number
+  /** серия панели: по ней значения переводятся в координаты и обратно */
+  series: ISeriesApi<SeriesType>
+  /** знаков после запятой у значений точек */
+  precision: number
+  /** значения под свечой i — к ним притягивает магнит */
+  values(i: number): number[]
+  /** подпись значения на шкале */
+  format(v: number): string
 }
 
 interface XY {
@@ -40,6 +61,18 @@ interface Geometry {
   sp: XY[]
   /** маркеры, за которые рисунок можно тянуть */
   handles: XY[]
+}
+
+/** Перетаскивание рисунка: start и orig — в координатах панели его поверхности s; rr — R/R позиции в начале, если включена привязка R/R (иначе 0) */
+interface Drag {
+  d: Drawing
+  s: Surface
+  handle: number
+  start: XY
+  orig: XY[]
+  moved: boolean
+  copy: boolean
+  rr: number
 }
 
 const FIB_LEVELS = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1]
@@ -115,44 +148,128 @@ export class DrawingsLayer {
   private hoverCursor = ''
   private pressing = false
   private downAt: XY = { x: 0, y: 0 }
-  /** rr — R/R позиции в начале перетаскивания, если включена привязка R/R (иначе 0) */
-  private drag: { d: Drawing; handle: number; start: XY; orig: XY[]; moved: boolean; copy: boolean; rr: number } | null = null
+  private drag: Drag | null = null
   /** палец опустился на невыбранный рисунок: если не сдвинется — это выбор, иначе прокрутка графика */
   private tap: { id: string; x: number; y: number; at: number } | null = null
   /** последний указатель — палец: ему нужны расстояния побольше */
   private coarse = false
   /** где на экране нарисован каждый текст — чтобы попадать по нему указателем */
   private textBoxes = new Map<string, { x: number; y: number; w: number; h: number }>()
-  private priceLabels: ISeriesPrimitiveAxisView[] = []
-  private timeLabels: ISeriesPrimitiveAxisView[] = []
+  /** метки на шкалах для каждой поверхности */
+  private labels = new Map<string, { prices: ISeriesPrimitiveAxisView[]; times: ISeriesPrimitiveAxisView[] }>()
   /** прокрутка графика отключена на время жеста над рисунком */
   private scrollLocked = false
-  private requestUpdate: (() => void) | null = null
+  /** перерисовка каждой поверхности: ключ — Surface.key */
+  private updaters = new Map<string, () => void>()
   private overlay: HTMLElement | null = null
   private offs: (() => void)[] = []
-
-  private readonly primitive: ISeriesPrimitive<Time>
+  /**
+   * Поверхность, в которой сейчас считаются координаты (см. within). Все расчёты синхронные,
+   * поэтому хватает одного поля; вне within — область цены.
+   */
+  private ctx: Surface | null = null
 
   constructor(private host: DrawHost) {
-    const renderer: IPrimitivePaneRenderer = {
-      draw: (target) =>
-        target.useMediaCoordinateSpace((scope) => this.render(scope.context, scope.mediaSize.width, scope.mediaSize.height)),
-    }
-    const views: IPrimitivePaneView[] = [{ zOrder: () => 'top', renderer: () => renderer }]
     // выбор сменился (в том числе в другом окне) — перерисовываем, чтобы маркеры и подписи не оставались
     this.offs.push(watch(this.selectedId, () => this.redraw()))
-    this.primitive = {
-      attached: (p) => (this.requestUpdate = p.requestUpdate),
-      detached: () => (this.requestUpdate = null),
-      updateAllViews: () => this.buildAxisLabels(),
+  }
+
+  /**
+   * Подключает слой к серии: key '' — основная серия (область цены), иначе — серия панели индикатора
+   * этого типа. Серии индикаторов пересоздаются при каждой их правке — подключаем заново.
+   */
+  attach(series: ISeriesApi<SeriesType>, key = '') {
+    const renderer: IPrimitivePaneRenderer = {
+      draw: (target) =>
+        target.useMediaCoordinateSpace((scope) => this.render(key, scope.context, scope.mediaSize.width, scope.mediaSize.height)),
+    }
+    const views: IPrimitivePaneView[] = [{ zOrder: () => 'top', renderer: () => renderer }]
+    const none: ISeriesPrimitiveAxisView[] = []
+    let update: (() => void) | null = null
+    const primitive: ISeriesPrimitive<Time> = {
+      attached: (p) => {
+        update = p.requestUpdate
+        this.updaters.set(key, p.requestUpdate)
+      },
+      detached: () => {
+        if (this.updaters.get(key) === update) this.updaters.delete(key)
+      },
+      updateAllViews: () => {
+        if (!key) this.buildAxisLabels()
+      },
       paneViews: () => views,
-      priceAxisViews: () => this.priceLabels,
-      timeAxisViews: () => this.timeLabels,
+      priceAxisViews: () => this.labels.get(key)?.prices ?? none,
+      timeAxisViews: () => this.labels.get(key)?.times ?? none,
+    }
+    series.attachPrimitive(primitive)
+  }
+
+  // ---------- поверхности ----------
+
+  private mainSurface(): Surface {
+    const prec = this.host.precision()
+    return {
+      key: '',
+      pane: 0,
+      series: this.host.series(),
+      precision: prec,
+      values: (i) => {
+        const b = this.host.bars()[i]
+        return b ? [b.open, b.high, b.low, b.close] : []
+      },
+      format: (v) => fmtPrice(v, prec),
     }
   }
 
-  attach(series: ISeriesApi<SeriesType>) {
-    series.attachPrimitive(this.primitive)
+  private surfaces(): Surface[] {
+    return [this.mainSurface(), ...this.host.indSurfaces()]
+  }
+
+  /** Поверхность рисунка; null — его индикатора на этом графике нет */
+  private surfaceOf(d: Drawing): Surface | null {
+    const key = d.ind ?? ''
+    return key ? (this.host.indSurfaces().find((s) => s.key === key) ?? null) : this.mainSurface()
+  }
+
+  private get sf(): Surface {
+    return this.ctx ?? this.mainSurface()
+  }
+
+  /** Выполняет fn в координатах поверхности s */
+  private within<T>(s: Surface, fn: () => T): T {
+    const prev = this.ctx
+    this.ctx = s
+    try {
+      return fn()
+    } finally {
+      this.ctx = prev
+    }
+  }
+
+  /** Верхний край панели графика в окне, px (панели разделены полосой в 1 px) */
+  private paneTop(pane: number): number {
+    let top = 0
+    for (let i = 0; i < pane; i++) top += this.host.chart.paneSize(i).height + 1
+    return top
+  }
+
+  /** Размер панели текущей поверхности */
+  private size() {
+    return this.host.chart.paneSize(this.sf.pane)
+  }
+
+  /** Поверхность под точкой окна и вертикаль внутри её панели; null — шкалы или панель без рисования */
+  private surfaceAt(x: number, y: number): { s: Surface; y: number } | null {
+    if (x < 0 || x > this.host.chart.paneSize(0).width) return null
+    for (const s of this.surfaces()) {
+      const top = this.paneTop(s.pane)
+      if (y >= top && y <= top + this.host.chart.paneSize(s.pane).height) return { s, y: y - top }
+    }
+    return null
+  }
+
+  private onSurface(d: Drawing, s: Surface): boolean {
+    return (d.ind ?? '') === s.key
   }
 
   setList(list: Drawing[]) {
@@ -166,7 +283,7 @@ export class DrawingsLayer {
 
   redraw() {
     this.buildAxisLabels()
-    this.requestUpdate?.()
+    for (const update of this.updaters.values()) update()
   }
 
   private shown(d: Drawing): boolean {
@@ -178,21 +295,25 @@ export class DrawingsLayer {
    * у выбранного рисунка на шкалы проецируются все его цены и моменты времени.
    */
   private buildAxisLabels() {
+    this.labels.clear()
+    for (const s of this.surfaces()) this.within(s, () => this.labels.set(s.key, this.axisLabelsOf(s)))
+  }
+
+  private axisLabelsOf(s: Surface) {
     const prices: ISeriesPrimitiveAxisView[] = []
     const times: ISeriesPrimitiveAxisView[] = []
     const c = this.host.colors()
-    const prec = this.host.precision()
     const addPrice = (price: number, bg: string) => {
-      const y = this.host.series().priceToCoordinate(price)
-      if (y != null) prices.push(axisLabel(y, fmtPrice(price, prec), bg))
+      const y = s.series.priceToCoordinate(price)
+      if (y != null) prices.push(axisLabel(y, s.format(price), bg))
     }
     const addTime = (t: number) => {
       const x = this.xOf(t)
       if (x != null) times.push(axisLabel(x, this.timeText(t), c.accent))
     }
     const sel = this.selectedId.value
-    const items = app.drawingsHidden ? [] : this.list.filter((d) => this.shown(d))
-    if (this.draft) items.push(this.draft)
+    const items = app.drawingsHidden ? [] : this.list.filter((d) => this.onSurface(d, s) && this.shown(d))
+    if (this.draft && this.onSurface(this.draft, s)) items.push(this.draft)
     for (const d of items) {
       const active = d.id === sel || d === this.draft
       if (d.type === 'hline' || d.type === 'hray' || d.type === 'cross') addPrice(d.pts[0].p, d.color)
@@ -207,8 +328,7 @@ export class DrawingsLayer {
         if (d.pts.length > 1 && d.pts[1].t !== d.pts[0].t) addTime(d.pts[1].t)
       }
     }
-    this.priceLabels = prices
-    this.timeLabels = times
+    return { prices, times }
   }
 
   /** Подпись времени на шкале — в том же часовом поясе, что и сама шкала */
@@ -243,7 +363,8 @@ export class DrawingsLayer {
    */
   private anchorTime(p: Pt): number {
     const span = p.s ?? 0
-    if (span <= this.host.tfSec()) return p.t
+    // в панели индикатора хаев и лоу свечей нет — точка стоит, где поставили
+    if (span <= this.host.tfSec() || this.sf.key) return p.t
     const bars = this.host.bars()
     const tol = 0.5 / 10 ** this.host.precision()
     for (let i = lowerBound(bars, p.t); i < bars.length && bars[i].time < p.t + span; i++) {
@@ -254,7 +375,7 @@ export class DrawingsLayer {
 
   private toScreen(p: Pt): XY | null {
     const x = this.xOf(this.anchorTime(p))
-    const y = this.host.series().priceToCoordinate(p.p)
+    const y = this.sf.series.priceToCoordinate(p.p)
     if (x == null || y == null) return null
     return { x, y }
   }
@@ -271,33 +392,38 @@ export class DrawingsLayer {
     return 0
   }
 
-  /** magnet — радиус притяжения к ценам свечи, px; 0 — точка ставится точно под курсором */
+  /**
+   * magnet — радиус притяжения к ценам свечи (в панели индикатора — к его значениям), px;
+   * 0 — точка ставится точно под курсором. y — внутри панели текущей поверхности.
+   */
   private toPoint(x: number, y: number, magnet = this.snapRadius()): Pt | null {
+    const s = this.sf
     const lg = this.host.chart.timeScale().coordinateToLogical(x)
-    let price = this.host.series().coordinateToPrice(y) as number | null
+    let price = s.series.coordinateToPrice(y) as number | null
     if (lg == null || price == null) return null
     const idx = Math.round(lg)
+    // У индикатора одна-две линии: сильный магнит не дал бы поставить точку мимо них (уровень 70 на RSI).
+    // В его панели магнит не сильнее слабого и не дальше восьмой части высоты — панель обычно низкая
+    if (s.key && magnet > 0) magnet = Math.min(magnet, this.snapRadius('weak'), this.size().height / 8)
     if (magnet > 0) {
-      const bar = this.host.bars()[idx]
-      if (bar) {
-        let best = magnet
-        for (const v of [bar.open, bar.high, bar.low, bar.close]) {
-          const vy = this.host.series().priceToCoordinate(v)
-          if (vy != null && Math.abs(vy - y) < best) {
-            best = Math.abs(vy - y)
-            price = v
-          }
+      let best = magnet
+      for (const v of s.values(idx)) {
+        if (!isFinite(v)) continue
+        const vy = s.series.priceToCoordinate(v)
+        if (vy != null && Math.abs(vy - y) < best) {
+          best = Math.abs(vy - y)
+          price = v
         }
       }
     }
     // цена — с шагом инструмента, без «хвоста» от пересчёта из пикселей
-    return { t: this.host.logicalToTime(idx), p: +price.toFixed(this.host.precision()), s: this.host.tfSec() }
+    return { t: this.host.logicalToTime(idx), p: +price.toFixed(s.precision), s: this.host.tfSec() }
   }
 
   private geometry(d: Drawing, w: number, h: number): Geometry | null {
     if (d.pin) {
       const at = { x: d.pin.x * w, y: d.pin.y * h }
-      if (d.note) {
+      if (d.note && !this.sf.key) {
         // в окне поменьше легенда занимает больше строк — заметка чеклиста не должна под неё уходить
         const legend = this.host.el.parentElement?.querySelector<HTMLElement>('.legend')
         if (legend && at.x < legend.offsetWidth + 8) at.y = Math.max(at.y, legend.offsetHeight + 10)
@@ -457,12 +583,12 @@ export class DrawingsLayer {
     }
   }
 
-  /** Подгоняет слой рисования под область цены (без шкал и панелей индикаторов) */
+  /** Подгоняет слой рисования под панели графика — область цены и панели индикаторов (без шкал) */
   layoutOverlay() {
     if (!this.overlay) return
-    const size = this.host.chart.paneSize(0)
-    this.overlay.style.width = size.width + 'px'
-    this.overlay.style.height = size.height + 'px'
+    const n = this.host.chart.panes().length
+    this.overlay.style.width = this.host.chart.paneSize(0).width + 'px'
+    this.overlay.style.height = this.paneTop(n - 1) + this.host.chart.paneSize(n - 1).height + 'px'
   }
 
   destroy() {
@@ -476,9 +602,12 @@ export class DrawingsLayer {
     this.host.chart.applyOptions({ handleScroll: !on, handleScale: !on })
   }
 
-  private newDrawing(type: DrawingType, pts: Pt[]): Drawing {
+  /** ind — тип индикатора, в панели которого рисунок; без него — область цены */
+  private newDrawing(type: DrawingType, pts: Pt[], ind = ''): Drawing {
     const st = styleFor(type)
-    return { id: uid(), type, pts, color: st.color, width: st.width, dash: st.dash }
+    const d: Drawing = { id: uid(), type, pts, color: st.color, width: st.width, dash: st.dash }
+    if (ind) d.ind = ind
+    return d
   }
 
   /**
@@ -502,32 +631,53 @@ export class DrawingsLayer {
     return this.newDrawing(type, [entry, { t: t2, p: round(entry.p + sign * stopDist * app.posRR) }, { t: entry.t, p: round(entry.p - sign * stopDist) }])
   }
 
+  /** Поверхность и вертикаль внутри неё для точки окна: у начатой фигуры — её поверхность, даже если указатель ушёл за край */
+  private placeAt(x: number, y: number): { s: Surface; y: number } | null {
+    const s = this.draft ? this.surfaceOf(this.draft) : null
+    return s ? { s, y: y - this.paneTop(s.pane) } : this.surfaceAt(x, y)
+  }
+
   private toolDown(x: number, y: number) {
     const tool = app.tool
     if (tool === 'cursor') return
-    const pt = this.toPoint(x, y, this.snapRadius(app.magnet, tool === 'measure'))
-    if (!pt) return
-    this.measure = null
-    if (this.draft) {
-      // второй щелчок завершает фигуру
-      this.draft.pts[1] = pt
-      this.commit()
-      return
-    }
-    if (tool === 'text') {
-      // текст вводится в отдельном окне; рисунок появится после подтверждения
-      app.tool = 'cursor'
-      app.textEdit = { pane: this.host.paneIndex, id: null, pt, text: '' }
-      return
-    }
-    if (tool === 'long' || tool === 'short') this.draft = this.newPosition(tool, pt, x)
-    else this.draft = this.newDrawing(tool, isSingle(tool) ? [pt] : [pt, { ...pt }])
-    this.downAt = { x, y }
-    this.pressing = true
-    this.redraw()
+    const at = this.placeAt(x, y)
+    if (!at) return
+    // позиция — про цену инструмента: в панели индикатора её не ставим
+    if (at.s.key && !this.draft && isPosition(tool)) return
+    this.within(at.s, () => {
+      const pt = this.toPoint(x, at.y, this.snapRadius(app.magnet, tool === 'measure'))
+      if (!pt) return
+      this.measure = null
+      if (this.draft) {
+        // второй щелчок завершает фигуру
+        this.draft.pts[1] = pt
+        this.commit()
+        return
+      }
+      if (tool === 'text') {
+        // текст вводится в отдельном окне; рисунок появится после подтверждения
+        app.tool = 'cursor'
+        app.textEdit = { pane: this.host.paneIndex, id: null, pt, text: '', ...(at.s.key ? { ind: at.s.key } : {}) }
+        return
+      }
+      if (tool === 'long' || tool === 'short') this.draft = this.newPosition(tool, pt, x)
+      else this.draft = this.newDrawing(tool, isSingle(tool) ? [pt] : [pt, { ...pt }], at.s.key)
+      this.downAt = { x, y }
+      this.pressing = true
+      this.redraw()
+    })
   }
 
   private toolMove(x: number, y: number, isMouse: boolean) {
+    const at = this.placeAt(x, y)
+    if (!at) {
+      if (isMouse) this.host.chart.clearCrosshairPosition()
+      return
+    }
+    this.within(at.s, () => this.toolMoveIn(x, at.y, isMouse))
+  }
+
+  private toolMoveIn(x: number, y: number, isMouse: boolean) {
     const pt = this.toPoint(x, y, this.snapRadius(app.magnet, app.tool === 'measure' || this.draft?.type === 'measure'))
     if (!pt) return
     if (isMouse) this.syncCrosshair(pt)
@@ -535,7 +685,7 @@ export class DrawingsLayer {
     if (!d) return
     if (isPosition(d.type)) {
       // протяжка задаёт цель и правый край; стоп — вчетверо ближе цели
-      if (this.pressing && Math.hypot(x - this.downAt.x, y - this.downAt.y) > 8) {
+      if (this.pressing && Math.hypot(x - this.downAt.x, y + this.paneTop(this.sf.pane) - this.downAt.y) > 8) {
         const sign = d.type === 'long' ? 1 : -1
         const round = (v: number) => +v.toFixed(this.host.precision())
         const dist = Math.max(Math.abs(pt.p - d.pts[0].p), 1 / 10 ** this.host.precision())
@@ -592,17 +742,18 @@ export class DrawingsLayer {
    * по мыши раньше (её обработчики глубже в разметке), здесь его поправляем.
    */
   private snapCrosshair(x: number, y: number) {
-    const size = this.host.chart.paneSize(0)
-    if (x < 0 || y < 0 || x > size.width || y > size.height) return
-    const raw = this.host.series().coordinateToPrice(y) as number | null
-    const pt = this.toPoint(x, y, this.snapRadius(app.magnet === 'off' ? 'weak' : app.magnet))
+    const at = this.surfaceAt(x, y)
+    if (!at) return
+    const { s } = at
+    const raw = s.series.coordinateToPrice(at.y) as number | null
+    const pt = this.within(s, () => this.toPoint(x, at.y, this.snapRadius(app.magnet === 'off' ? 'weak' : app.magnet)))
     if (!pt || raw == null) return
     const bars = this.host.bars()
     const n = bars.length
     // правее последней свечи притягивать не к чему — там остаётся обычное перекрестие
     if (!n || pt.t < bars[0].time || pt.t > bars[n - 1].time) return
-    if (pt.p === +raw.toFixed(this.host.precision())) return
-    this.host.chart.setCrosshairPosition(pt.p, (pt.t + this.host.tz()) as Time, this.host.series())
+    if (pt.p === +raw.toFixed(s.precision)) return
+    this.host.chart.setCrosshairPosition(pt.p, (pt.t + this.host.tz()) as Time, s.series)
   }
 
   /** Убирает линейку с графика; true — она была */
@@ -621,7 +772,7 @@ export class DrawingsLayer {
       this.host.chart.clearCrosshairPosition()
       return
     }
-    this.host.chart.setCrosshairPosition(pt.p, (pt.t + this.host.tz()) as Time, this.host.series())
+    this.host.chart.setCrosshairPosition(pt.p, (pt.t + this.host.tz()) as Time, this.sf.series)
   }
 
   private idleDown(x: number, y: number, tol: number, shift: boolean, ctrl: boolean, touch = false) {
@@ -630,17 +781,17 @@ export class DrawingsLayer {
       this.measure = null
       this.redraw()
     }
-    const size = this.host.chart.paneSize(0)
-    if (x > size.width || y > size.height) return
+    const at = this.surfaceAt(x, y)
+    if (!at) return
     // Shift на рисунке — тянуть его без магнита; Shift+щелчок по пустому месту — линейка
     if (shift && !this.hit(x, y, tol)) {
       // линейка: первая точка здесь, вторая — следующим щелчком
-      const pt = this.toPoint(x, y, this.snapRadius(app.magnet, true))
+      const pt = this.within(at.s, () => this.toPoint(x, at.y, this.snapRadius(app.magnet, true)))
       if (!pt) return
       this.lockScroll(true)
       window.addEventListener('pointerup', () => this.lockScroll(false), { once: true })
       app.tool = 'measure'
-      this.draft = this.newDrawing('measure', [pt, { ...pt }])
+      this.draft = this.newDrawing('measure', [pt, { ...pt }], at.s.key)
       this.redraw()
       return
     }
@@ -657,10 +808,12 @@ export class DrawingsLayer {
       return
     }
     selection.value = { pane: this.host.paneIndex, id: h.d.id }
-    const orig = this.geometry(h.d, size.width, size.height)?.sp ?? h.d.pts.map(() => ({ x, y }))
+    const ly = y - this.paneTop(h.s.pane)
+    const size = this.host.chart.paneSize(h.s.pane)
+    const orig = this.within(h.s, () => this.geometry(h.d, size.width, size.height))?.sp ?? h.d.pts.map(() => ({ x, y: ly }))
     // с зажатым Ctrl тянется копия: оригинал остаётся на месте
     const rr = isPosition(h.d.type) && app.rrLock ? riskReward(h.d) : 0
-    this.drag = { d: h.d, handle: ctrl ? -1 : h.handle, start: { x, y }, orig, moved: false, copy: ctrl, rr }
+    this.drag = { d: h.d, s: h.s, handle: ctrl ? -1 : h.handle, start: { x, y: ly }, orig, moved: false, copy: ctrl, rr }
     this.lockScroll(true)
     this.redraw()
   }
@@ -668,6 +821,10 @@ export class DrawingsLayer {
   private dragMove(x: number, y: number) {
     const g = this.drag
     if (!g) return
+    this.within(g.s, () => this.dragMoveIn(g, x, y - this.paneTop(g.s.pane)))
+  }
+
+  private dragMoveIn(g: Drag, x: number, y: number) {
     const dx = x - g.start.x
     const dy = y - g.start.y
     if (!g.moved) {
@@ -685,7 +842,7 @@ export class DrawingsLayer {
     const magnet = this.snapRadius()
     if (g.d.pin) {
       // закреплённый текст двигается по экрану, а не по времени и цене
-      const size = this.host.chart.paneSize(0)
+      const size = this.size()
       const clamp = (v: number) => Math.min(0.97, Math.max(0, v))
       g.d.pin = { x: clamp((g.orig[0].x + dx) / size.width), y: clamp((g.orig[0].y + dy) / size.height) }
     } else if (g.handle >= 0) {
@@ -750,9 +907,14 @@ export class DrawingsLayer {
   /** Сдвиг выбранного рисунка клавишами: на свечи по времени и на шаги цены по вертикали */
   nudge(bars: number, ticks: number): boolean {
     const d = this.selected()
-    if (!d) return false
+    const s = d && this.surfaceOf(d)
+    if (!d || !s) return false
+    return this.within(s, () => this.nudgeIn(d, bars, ticks))
+  }
+
+  private nudgeIn(d: Drawing, bars: number, ticks: number): boolean {
     checkpoint()
-    const prec = this.host.precision()
+    const prec = this.sf.precision
     const tick = 1 / 10 ** prec
     // по времени рисунок встаёт на границу свечи: сдвиг с 17:12 влево даёт 17:10, а не 17:07
     const tf = this.host.tfSec()
@@ -761,7 +923,7 @@ export class DrawingsLayer {
     const dt = snapped - t0
     if (d.pin) {
       // закреплённый текст сдвигается по экрану: шаг — 4 пикселя
-      const size = this.host.chart.paneSize(0)
+      const size = this.size()
       d.pin = { x: d.pin.x + (bars * 4) / size.width, y: d.pin.y - (ticks * 4) / size.height }
     } else d.pts = d.pts.map((p) => ({ t: p.t + dt, p: +(p.p + ticks * tick).toFixed(prec) }))
     this.redraw()
@@ -801,10 +963,10 @@ export class DrawingsLayer {
     app.textEdit = { pane: this.host.paneIndex, id: d.id, pt: null, text: d.text ?? '' }
   }
 
-  /** Новый текст в точке графика */
-  addText(pt: Pt, text: string): Drawing | null {
+  /** Новый текст в точке графика; ind — тип индикатора, если текст ставят в его панель */
+  addText(pt: Pt, text: string, ind = ''): Drawing | null {
     if (!text.trim()) return null
-    const d: Drawing = { ...this.newDrawing('text', [pt]), text, size: 12 }
+    const d: Drawing = { ...this.newDrawing('text', [pt], ind), text, size: 12 }
     checkpoint()
     this.list.push(d)
     selection.value = { pane: this.host.paneIndex, id: d.id }
@@ -828,16 +990,19 @@ export class DrawingsLayer {
   /** Закрепляет текст на экране или возвращает привязку к времени и цене — не сдвигая его с места */
   togglePin() {
     const d = this.selected()
-    if (!d || d.type !== 'text') return
-    const size = this.host.chart.paneSize(0)
-    const at = this.geometry(d, size.width, size.height)?.sp[0]
-    if (!at) return
-    checkpoint()
-    if (d.pin) {
-      const pt = this.toPoint(at.x, at.y, 0)
-      if (pt) d.pts = [pt]
-      delete d.pin
-    } else d.pin = { x: at.x / size.width, y: at.y / size.height }
+    const s = d && this.surfaceOf(d)
+    if (!d || !s || d.type !== 'text') return
+    this.within(s, () => {
+      const size = this.size()
+      const at = this.geometry(d, size.width, size.height)?.sp[0]
+      if (!at) return
+      checkpoint()
+      if (d.pin) {
+        const pt = this.toPoint(at.x, at.y, 0)
+        if (pt) d.pts = [pt]
+        delete d.pin
+      } else d.pin = { x: at.x / size.width, y: at.y / size.height }
+    })
     this.redraw()
   }
 
@@ -913,7 +1078,8 @@ export class DrawingsLayer {
   /** Вставляет скопированный рисунок со сдвигом на несколько свечей вправо */
   paste(): boolean {
     const src = clipboard.item
-    if (!src) return false
+    // рисунок из панели индикатора вставляется только туда, где этот индикатор есть
+    if (!src || !this.surfaceOf(src)) return false
     const shift = this.host.tfSec() * 3
     const d: Drawing = { ...JSON.parse(JSON.stringify(src)), id: uid() }
     d.pts = d.pts.map((p) => ({ t: p.t + shift, p: p.p }))
@@ -944,10 +1110,19 @@ export class DrawingsLayer {
    * не взять ни за край, ни за линию входа: уровень перехватывал бы каждое нажатие.
    * Маркеры невыбранных рисунков тоже ловятся — их показывают при наведении, и тянуть можно сразу.
    */
-  private hit(x: number, y: number, tol: number): { d: Drawing; handle: number } | null {
+  private hit(x: number, y: number, tol: number): { d: Drawing; s: Surface; handle: number } | null {
     if (app.drawingsHidden) return null
-    const size = this.host.chart.paneSize(0)
-    const cur = this.selected()
+    const at = this.surfaceAt(x, y)
+    if (!at) return null
+    const h = this.within(at.s, () => this.hitIn(at.s, x, at.y, tol))
+    return h && { ...h, s: at.s }
+  }
+
+  /** Попадание среди рисунков поверхности s; y — внутри её панели */
+  private hitIn(s: Surface, x: number, y: number, tol: number): { d: Drawing; handle: number } | null {
+    const size = this.size()
+    const sel = this.selected()
+    const cur = sel && this.onSurface(sel, s) ? sel : null
     const curGeo = cur && this.shown(cur) ? this.geometry(cur, size.width, size.height) : null
     if (cur && curGeo && !isSingle(cur.type)) {
       const { handles } = curGeo
@@ -955,7 +1130,7 @@ export class DrawingsLayer {
     }
     for (let i = this.list.length - 1; i >= 0; i--) {
       const d = this.list[i]
-      if (!this.shown(d)) continue
+      if (!this.onSurface(d, s) || !this.shown(d)) continue
       const g = d === cur ? curGeo : this.geometry(d, size.width, size.height)
       if (!g) continue
       if (d !== cur && !isSingle(d.type)) {
@@ -1004,22 +1179,32 @@ export class DrawingsLayer {
 
   // ---------- отрисовка ----------
 
-  private render(ctx: CanvasRenderingContext2D, w: number, h: number) {
+  /** Отрисовка рисунков поверхности key в её панели (w×h) */
+  private render(key: string, ctx: CanvasRenderingContext2D, w: number, h: number) {
+    const s = key ? this.host.indSurfaces().find((x) => x.key === key) : this.mainSurface()
+    if (s) this.within(s, () => this.renderIn(s, ctx, w, h))
+  }
+
+  private renderIn(s: Surface, ctx: CanvasRenderingContext2D, w: number, h: number) {
     const sel = this.selectedId.value
+    const selected = this.selected()
+    // место панели действий считает та поверхность, где выбранный рисунок
+    const owner = selected ? this.onSurface(selected, s) || (!s.key && !this.surfaceOf(selected)) : !s.key
     let anchor: XY | null = null
     ctx.save()
     ctx.font = font()
     ctx.lineJoin = 'round'
     if (!app.drawingsHidden) {
       for (const d of this.list) {
-        if (!this.shown(d)) continue
+        if (!this.onSurface(d, s) || !this.shown(d)) continue
         const pts = this.drawOne(ctx, d, w, h, d.id === this.hoverId, d.id === sel)
-        if (d.id === sel && pts) anchor = { x: Math.min(...pts.map((p) => p.x)), y: Math.min(...pts.map((p) => p.y)) }
+        if (d.id === sel && pts) anchor = { x: Math.min(...pts.map((p) => p.x)), y: Math.min(...pts.map((p) => p.y)) + this.paneTop(s.pane) }
       }
     }
-    if (this.draft) this.drawOne(ctx, this.draft, w, h, false, true)
-    if (this.measure) this.drawOne(ctx, this.measure, w, h, false, false)
+    if (this.draft && this.onSurface(this.draft, s)) this.drawOne(ctx, this.draft, w, h, false, true)
+    if (this.measure && this.onSurface(this.measure, s)) this.drawOne(ctx, this.measure, w, h, false, false)
     ctx.restore()
+    if (!owner) return
     const prev = this.anchor.value
     if (anchor?.x !== prev?.x || anchor?.y !== prev?.y) {
       // панель действий — вне цикла отрисовки, чтобы не трогать DOM посреди кадра
@@ -1050,7 +1235,8 @@ export class DrawingsLayer {
     if (!g) return null
     const { sp } = g
     const c = this.host.colors()
-    const prec = this.host.precision()
+    const sf = this.sf
+    const prec = sf.precision
     const width = (d.width ?? 1) + (hover ? 1 : 0)
     const dash = DASHES[d.dash ?? 'solid']
     ctx.strokeStyle = d.color
@@ -1165,11 +1351,11 @@ export class DrawingsLayer {
         for (const lvl of FIB_LEVELS) {
           // уровень 0 — в конечной точке, 1 — в начальной
           const price = p1 + (p0 - p1) * lvl
-          const yy = this.host.series().priceToCoordinate(price)
+          const yy = sf.series.priceToCoordinate(price)
           if (yy == null) continue
           const y = crisp(yy)
           line({ x: x0, y }, { x: x1, y })
-          label(`${lvl} (${fmtPrice(price, prec)})`, x0 + 2, y - 2)
+          label(`${lvl} (${sf.format(price)})`, x0 + 2, y - 2)
         }
         break
       }
@@ -1196,7 +1382,7 @@ export class DrawingsLayer {
         if (st.status !== 'pending' && st.status !== 'missed') {
           const xf = Math.max(x1, this.xOf(st.fillTime) ?? x1)
           const xe = this.xOf(st.exitTime)
-          const ye = this.host.series().priceToCoordinate(st.exitPrice)
+          const ye = sf.series.priceToCoordinate(st.exitPrice)
           if (xe != null && ye != null && xe >= xf) {
             const col = (d.type === 'long' ? st.exitPrice >= entry : st.exitPrice <= entry) ? c.profit : c.loss
             ctx.fillStyle = withAlpha(col, 0.32)
@@ -1273,13 +1459,23 @@ export class DrawingsLayer {
         const pct = d.pts[0].p ? (diff / d.pts[0].p) * 100 : 0
         const dt = d.pts[1].t - d.pts[0].t
         const nBars = Math.round(dt / this.host.tfSec())
-        // в пунктах (шагах цены) и в долях дневного ATR — удобно сравнивать расстояния до уровней
-        const pts = t('{n} п.', { n: Math.round(Math.abs(diff) * 10 ** prec).toLocaleString(locale()) })
-        const atr = this.host.atr()
-        const inAtr = atr ? ` · ${(Math.abs(diff) / atr).toFixed(2)} ATR` : ''
+        const span = `${t('{n} бар.', { n: nBars })}, ${fmtSpan(dt)}`
+        let lines: string[]
+        if (sf.key) {
+          // в панели индикатора — разница значений индикатора: пункты и ATR цены тут ни при чём
+          const from = Math.abs(d.pts[0].p)
+          const sign = diff >= 0 ? '+' : '−'
+          lines = [`${sign}${sf.format(Math.abs(diff))}${from ? ` (${fmtPct(pct)})` : ''}`, span]
+        } else {
+          // в пунктах (шагах цены) и в долях дневного ATR — удобно сравнивать расстояния до уровней
+          const pts = t('{n} п.', { n: Math.round(Math.abs(diff) * 10 ** prec).toLocaleString(locale()) })
+          const atr = this.host.atr()
+          const inAtr = atr ? ` · ${(Math.abs(diff) / atr).toFixed(2)} ATR` : ''
+          lines = [`${diff >= 0 ? '+' : ''}${fmtPrice(diff, prec)} (${fmtPct(pct)}) · ${pts}`, `${span}${inAtr}`]
+        }
         this.tag(
           ctx,
-          [`${diff >= 0 ? '+' : ''}${fmtPrice(diff, prec)} (${fmtPct(pct)}) · ${pts}`, `${t('{n} бар.', { n: nBars })}, ${fmtSpan(dt)}${inAtr}`],
+          lines,
           mx,
           up ? y - 24 : y + rh + 24,
           col,

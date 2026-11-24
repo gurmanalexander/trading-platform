@@ -93,7 +93,7 @@ function levelStatus(key: string): Status | null {
   if (!last || !atr) return null
   let best: number | null = null
   for (const d of drawings[key] ?? []) {
-    if (d.type !== 'hline' && d.type !== 'hray') continue
+    if ((d.type !== 'hline' && d.type !== 'hray') || d.ind) continue
     const level = d.pts[0].p
     if (best === null || Math.abs(level - last) < Math.abs(best - last)) best = level
   }
