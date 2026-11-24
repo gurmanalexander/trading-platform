@@ -361,36 +361,70 @@ function fullscreen() {
 </template>
 
 <style scoped>
-/* донат: обычная приглушённая кнопка; изредка сердечко пару раз мягко «вздыхает» (см. lib/donate) */
+/* донат: обычная приглушённая кнопка; время от времени сердечко «стучит» (см. lib/donate):
+   два удара — «тук-тук» — с заливкой цветом и мягкое кольцо, расходящееся от кнопки */
+.donate {
+  position: relative;
+}
 .donate:hover {
   color: #f0566b;
+}
+.donate::after {
+  content: '';
+  position: absolute;
+  inset: 3px;
+  border-radius: 50%;
+  border: 2px solid #f0566b;
+  opacity: 0;
+  pointer-events: none;
 }
 .donate.pulse {
   color: #f0566b;
 }
 .donate.pulse :deep(svg) {
-  animation: heartbeat 1.4s ease-in-out 3;
+  animation: heartbeat 1.3s ease-in-out 2;
+}
+.donate.pulse::after {
+  animation: heart-ring 1.3s ease-out 2;
 }
 @keyframes heartbeat {
-  0%,
+  0% {
+    transform: scale(1);
+    fill: rgba(240, 86, 107, 0);
+  }
+  14% {
+    transform: scale(1.3);
+    fill: rgba(240, 86, 107, 1);
+  }
+  28% {
+    transform: scale(1.02);
+  }
+  42% {
+    transform: scale(1.2);
+    fill: rgba(240, 86, 107, 1);
+  }
+  70% {
+    transform: scale(1);
+    fill: rgba(240, 86, 107, 0.6);
+  }
   100% {
     transform: scale(1);
+    fill: rgba(240, 86, 107, 0);
   }
-  15% {
-    transform: scale(1.22);
+}
+@keyframes heart-ring {
+  0% {
+    transform: scale(0.6);
+    opacity: 0.7;
   }
-  30% {
-    transform: scale(1);
-  }
-  45% {
-    transform: scale(1.14);
-  }
-  60% {
-    transform: scale(1);
+  100% {
+    transform: scale(1.5);
+    opacity: 0;
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .donate.pulse :deep(svg) {
+  .donate.pulse :deep(svg),
+  .donate.pulse::after {
     animation: none;
   }
 }

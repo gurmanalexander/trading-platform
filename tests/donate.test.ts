@@ -1,19 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import { DONATE_METHODS, shouldPulse } from '../src/lib/donate'
 
-const DAY = 86_400_000
 
 describe('донат', () => {
-  it('кнопка оживает не раньше чем через 2 дня использования и не чаще раза в 4 дня', () => {
-    const now = 100 * DAY
-    expect(shouldPulse({ first: now - DAY, pulsed: 0, opened: false }, now)).toBe(false)
-    expect(shouldPulse({ first: now - 3 * DAY, pulsed: 0, opened: false }, now)).toBe(true)
-    expect(shouldPulse({ first: now - 30 * DAY, pulsed: now - 2 * DAY, opened: false }, now)).toBe(false)
-    expect(shouldPulse({ first: now - 30 * DAY, pulsed: now - 5 * DAY, opened: false }, now)).toBe(true)
-  })
-
-  it('после того как окно доната открыли, кнопка больше не анимируется', () => {
-    expect(shouldPulse({ first: 0, pulsed: 0, opened: true }, 100 * DAY)).toBe(false)
+  it('сердечко стучит раз в полторы минуты, а после открытия окна — раз в 15 минут', () => {
+    const now = 1_000_000_000
+    expect(shouldPulse({ first: 0, pulsed: now - 60_000, opened: false }, now)).toBe(false)
+    expect(shouldPulse({ first: 0, pulsed: now - 91_000, opened: false }, now)).toBe(true)
+    expect(shouldPulse({ first: 0, pulsed: now - 5 * 60_000, opened: true }, now)).toBe(false)
+    expect(shouldPulse({ first: 0, pulsed: now - 16 * 60_000, opened: true }, now)).toBe(true)
   })
 
   it('адреса кошельков — в правильном формате своих сетей', () => {

@@ -29,20 +29,19 @@ export const DONATE_METHODS: DonateMethod[] = [
   { id: 'erc20', title: 'USDT ERC20', sub: 'Ethereum', address: EVM, network: 'ERC20 (Ethereum)', tag: 'комиссия выше' },
 ]
 
-// ---------- редкая анимация кнопки ----------
-// Кнопка доната не мигает постоянно: изредка (не чаще раза в несколько дней) и только у тех,
-// кто пользуется терминалом не первый день, сердечко пару раз мягко «вздыхает». Открыли окно
-// доната хоть раз — больше не анимируется.
+// ---------- анимация кнопки ----------
+// Сердечко на кнопке доната время от времени «стучит»: два удара с заливкой и расходящееся кольцо.
+// Первый раз — вскоре после запуска, потом раз в полторы минуты; когда окно доната уже открывали —
+// реже, раз в 15 минут. Анимация идёт только на видимой вкладке.
 
-const DAY = 86_400_000
-/** сколько дней пользуются терминалом, прежде чем кнопка впервые оживёт */
-const FIRST_AFTER_DAYS = 2
-/** не чаще, чем раз в столько дней */
-const EVERY_DAYS = 4
-/** через сколько после запуска, мс — не мешаем в первые секунды работы */
-const DELAY_MS = 45_000
-/** сколько длится анимация, мс */
-const PULSE_MS = 4500
+/** через сколько после запуска первый «стук», мс */
+const FIRST_MS = 20_000
+/** пауза между «стуками», мс */
+const EVERY_MS = 90_000
+/** пауза, когда окно доната уже открывали, мс */
+const EVERY_OPENED_MS = 15 * 60_000
+/** сколько длится «стук», мс (как анимация в стилях: 2 удара по 1.3 с) */
+const PULSE_MS = 2700
 
 interface DonateMemo {
   /** когда терминал открыли впервые (с этой версии), мс */
@@ -58,26 +57,38 @@ save('donate', memo)
 
 export const donate = reactive({ pulse: false })
 
-/** Пора ли оживить кнопку — по дням использования и времени прошлой анимации */
+/** Пауза до следующего «стука» после прошлого */
+export const pulseEvery = (m: Pick<DonateMemo, 'opened'>) => (m.opened ? EVERY_OPENED_MS : EVERY_MS)
+
+/** Пора ли «стукнуть»: с прошлого раза прошла пауза */
 export function shouldPulse(m: DonateMemo, now = Date.now()): boolean {
-  return !m.opened && now - m.first >= FIRST_AFTER_DAYS * DAY && now - m.pulsed >= EVERY_DAYS * DAY
+  return now - m.pulsed >= pulseEvery(m)
+}
+
+function beat() {
+  if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return
+  if (!shouldPulse(memo)) return
+  memo.pulsed = Date.now()
+  save('donate', memo)
+  donate.pulse = true
+  window.setTimeout(() => (donate.pulse = false), PULSE_MS)
 }
 
 let started = false
-/** Запускает отложенную анимацию, если она сейчас уместна (вызывается один раз при старте) */
+/** Запускает анимацию кнопки (вызывается один раз при старте приложения) */
 export function scheduleDonatePulse() {
   if (started || typeof window === 'undefined') return
   started = true
   window.setTimeout(() => {
-    if (!shouldPulse(memo) || document.visibilityState !== 'visible') return
-    memo.pulsed = Date.now()
-    save('donate', memo)
-    donate.pulse = true
-    window.setTimeout(() => (donate.pulse = false), PULSE_MS)
-  }, DELAY_MS)
+    // первый «стук» — независимо от прошлого запуска, если окно ещё не открывали
+    if (!memo.opened) memo.pulsed = 0
+    beat()
+    // дальше проверяем раз в 10 секунд, не пора ли снова
+    window.setInterval(beat, 10_000)
+  }, FIRST_MS)
 }
 
-/** Окно доната открыли — анимация больше не нужна */
+/** Окно доната открыли — дальше сердечко стучит реже */
 export function markDonateOpened() {
   donate.pulse = false
   if (memo.opened) return
