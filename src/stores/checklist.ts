@@ -1,5 +1,6 @@
 import { reactive } from 'vue'
 import { load, persist } from '../lib/storage'
+import { i18n, t, type Lang } from '../lib/i18n'
 
 /**
  * Чеклист сделки: блоки вопросов с вариантами. Отмеченное запоминается по монетам и собирается
@@ -20,30 +21,43 @@ export interface CheckBlock {
 export type Selection = Record<string, string[]>
 
 const uid = () => Math.random().toString(36).slice(2, 9)
+const LANGS: Lang[] = ['ru', 'en']
 
 /** Точки входа: пробойные и от ложного пробоя / отбоя */
-const ENTRY_POINTS = [
-  'ТВХ - первичный пробой',
-  'ТВХ - пробой после поджатия',
-  'ТВХ - ретест уровня после пробоя',
-  'ТВХ - ложный пробой одним баром',
-  'ТВХ - ложный пробой двумя барами',
-  'ТВХ - сложный ложный пробой',
-  'ТВХ - отбой от уровня',
-]
+const ENTRY_POINTS: Record<Lang, string[]> = {
+  ru: [
+    'ТВХ - первичный пробой',
+    'ТВХ - пробой после поджатия',
+    'ТВХ - ретест уровня после пробоя',
+    'ТВХ - ложный пробой одним баром',
+    'ТВХ - ложный пробой двумя барами',
+    'ТВХ - сложный ложный пробой',
+    'ТВХ - отбой от уровня',
+  ],
+  en: [
+    'Entry - initial breakout',
+    'Entry - breakout after a squeeze',
+    'Entry - level retest after a breakout',
+    'Entry - one-bar false breakout',
+    'Entry - two-bar false breakout',
+    'Entry - complex false breakout',
+    'Entry - bounce off the level',
+  ],
+}
 
-export function defaultBlocks(): CheckBlock[] {
-  return [
-    { id: 'style', question: 'Стиль торговли', answers: ['Пробой', 'Отбой/ЛП'], type: 'radio', singleLine: true },
-    {
-      id: 'levels',
+/**
+ * Тексты блоков по умолчанию на каждом языке. Блоки — данные пользователя (он их правит), поэтому
+ * переводятся не «на лету», а один раз: при создании и в localizeDefaultChecklist, пока их не меняли.
+ * Порядок вариантов в обоих языках одинаковый — по нему переводятся сохранённые отметки.
+ */
+const DEFAULT_TEXT: Record<Lang, Record<string, { question: string; answers: string[] }>> = {
+  ru: {
+    style: { question: 'Стиль торговли', answers: ['Пробой', 'Отбой/ЛП'] },
+    levels: {
       question: 'Уровни',
       answers: ['Экстремум', 'Излом', 'Лоу предыдущего дня', 'Хай предыдущего дня', 'Локальный', 'Лимитный', 'Исторический', 'Зеркальный'],
-      type: 'checkbox',
-      singleLine: true,
     },
-    {
-      id: 'breakout',
+    breakout: {
       question: 'Предпосылки к пробою',
       answers: [
         'Ближний ретест',
@@ -64,12 +78,8 @@ export function defaultBlocks(): CheckBlock[] {
         'Выкупной бар',
         'Продажный бар',
       ],
-      type: 'checkbox',
-      singleLine: false,
-      dependsOn: { block: 'style', answer: 'Пробой' },
     },
-    {
-      id: 'bounce',
+    bounce: {
       question: 'Предпосылки к ЛП/Отбою',
       answers: [
         'Дальний ретест',
@@ -86,12 +96,80 @@ export function defaultBlocks(): CheckBlock[] {
         'Хай/лоу внутри дня обновлялись',
         'V-формация',
       ],
-      type: 'checkbox',
-      singleLine: false,
-      dependsOn: { block: 'style', answer: 'Отбой/ЛП' },
     },
-    { id: 'entry', question: 'ТВХ', answers: ENTRY_POINTS.slice(), type: 'checkbox', singleLine: false },
-    { id: 'order', question: 'Ордер', answers: ['3к1', '5к1'], type: 'checkbox', singleLine: true },
+    entry: { question: 'ТВХ', answers: ENTRY_POINTS.ru },
+    order: { question: 'Ордер', answers: ['3к1', '5к1'] },
+  },
+  en: {
+    style: { question: 'Trading style', answers: ['Breakout', 'Bounce/False breakout'] },
+    levels: {
+      question: 'Levels',
+      answers: ['Extreme', 'Trend break', 'Previous day low', 'Previous day high', 'Local', 'Limit order', 'Historical', 'Mirror'],
+    },
+    breakout: {
+      question: 'Breakout signals',
+      answers: [
+        'Near retest',
+        'Approach to the level with small bars',
+        'Close near the level',
+        'Close at the high/low at the level or just past it',
+        'Long accumulation',
+        'No reaction to false breakouts',
+        'Consolidation near the level with fading volatility',
+        'Abnormal bar reached the level with no pullback, consolidation',
+        'Intraday high/low not broken',
+        'Empty space, no nearby levels',
+        'Higher and local trends align',
+        'Plenty of room to the next level',
+        'Market backdrop supports the breakout (stronger or weaker than the market)',
+        'U-pattern',
+        'W-pattern',
+        'Buying bar',
+        'Selling bar',
+      ],
+    },
+    bounce: {
+      question: 'False breakout/Bounce signals',
+      answers: [
+        'Distant retest',
+        'Long move without pullbacks',
+        'Approach with large bars',
+        'Day opens more than 50% ATR away from the level',
+        'Distribution pattern on the higher timeframe',
+        'Choppy zone',
+        'Extreme',
+        'Close far from the level',
+        'Spike against the trend',
+        'Market backdrop against the move',
+        'Fast approach to the level on the lower timeframe',
+        'Intraday high/low already broken',
+        'V-pattern',
+      ],
+    },
+    entry: { question: 'Entry', answers: ENTRY_POINTS.en },
+    order: { question: 'R/R', answers: ['3:1', '5:1'] },
+  },
+}
+
+/** Блоки по умолчанию на языке интерфейса (или на указанном) */
+export function defaultBlocks(lang: Lang = i18n.lang): CheckBlock[] {
+  const tx = DEFAULT_TEXT[lang]
+  const block = (id: string, type: CheckBlock['type'], singleLine: boolean, dependsOn?: CheckBlock['dependsOn']): CheckBlock => ({
+    id,
+    question: tx[id].question,
+    answers: tx[id].answers.slice(),
+    type,
+    singleLine,
+    ...(dependsOn ? { dependsOn } : {}),
+  })
+  const [breakout, bounce] = tx.style.answers
+  return [
+    block('style', 'radio', true),
+    block('levels', 'checkbox', true),
+    block('breakout', 'checkbox', false, { block: 'style', answer: breakout }),
+    block('bounce', 'checkbox', false, { block: 'style', answer: bounce }),
+    block('entry', 'checkbox', false),
+    block('order', 'checkbox', true),
   ]
 }
 
@@ -111,8 +189,9 @@ function sanitize(raw: unknown): CheckBlock[] {
   }
   // раньше в блоке «ТВХ» был один вариант — дополняем его остальными точками входа
   const entry = out.find((b) => b.id === 'entry')
-  if (entry && entry.answers.length === 1 && entry.answers[0] === ENTRY_POINTS[0]) {
-    entry.answers = ENTRY_POINTS.slice()
+  const lang = entry && entry.answers.length === 1 ? LANGS.find((l) => entry.answers[0] === ENTRY_POINTS[l][0]) : undefined
+  if (entry && lang) {
+    entry.answers = ENTRY_POINTS[lang].slice()
     entry.singleLine = false
   }
   return out
@@ -155,7 +234,7 @@ export function toggleAnswer(block: CheckBlock, sel: Selection, answer: string) 
 }
 
 export function addBlock() {
-  checklist.blocks.push({ id: uid(), question: 'Новый блок', answers: [], type: 'checkbox', singleLine: true })
+  checklist.blocks.push({ id: uid(), question: t('Новый блок'), answers: [], type: 'checkbox', singleLine: true })
 }
 
 export function removeBlock(id: string) {
@@ -173,6 +252,37 @@ export function moveBlock(index: number, step: number) {
 
 export function resetBlocks() {
   checklist.blocks.splice(0, checklist.blocks.length, ...defaultBlocks())
+}
+
+/** Блоки в виде, удобном для сравнения (без учёта порядка полей) */
+const shape = (blocks: CheckBlock[]) =>
+  JSON.stringify(blocks.map((b) => [b.id, b.question, b.answers, b.type, b.singleLine, b.dependsOn ? [b.dependsOn.block, b.dependsOn.answer] : null]))
+
+/**
+ * Если блоки чеклиста в точности стандартные (пользователь их не менял) — заменяет их стандартными
+ * на языке интерфейса. Отметки хранятся текстом варианта, поэтому переводятся и они: по номеру
+ * варианта в том же блоке. Вызывается при выборе языка; свои блоки и правки не трогает.
+ */
+export function localizeDefaultChecklist(): void {
+  const to = i18n.lang
+  const now = shape(checklist.blocks)
+  const from = LANGS.find((l) => l !== to && shape(defaultBlocks(l)) === now)
+  if (!from) return
+  const src = defaultBlocks(from)
+  const dst = defaultBlocks(to)
+  for (const sel of Object.values(checklist.selections)) {
+    if (!sel || typeof sel !== 'object') continue
+    for (const b of src) {
+      const chosen = sel[b.id]
+      if (!Array.isArray(chosen)) continue
+      const target = dst.find((x) => x.id === b.id)!
+      sel[b.id] = chosen.map((a) => {
+        const i = b.answers.indexOf(a)
+        return i >= 0 ? target.answers[i] : a
+      })
+    }
+  }
+  checklist.blocks.splice(0, checklist.blocks.length, ...dst)
 }
 
 // ---------- синхронизация между устройствами ----------

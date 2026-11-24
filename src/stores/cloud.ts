@@ -1,6 +1,7 @@
 import { reactive, watch } from 'vue'
 import { load, save } from '../lib/storage'
 import { onWake } from '../lib/wake'
+import { t } from '../lib/i18n'
 import type { Envelope, NostrEvent, SyncKeys } from '../lib/nostr'
 import { app, exportSettings, importSettings, toast } from './app'
 import { lists, exportLists, importLists } from './watchlist'
@@ -404,9 +405,9 @@ export const syncLink = () => new URL('./', location.href).href + '#sync=' + clo
 
 /** Код из ссылки или вставленного текста */
 export function codeFrom(text: string): string {
-  const t = text.trim()
-  const m = /#sync=([A-Za-z0-9_-]{43})/.exec(t)
-  return m ? m[1] : t
+  const s = text.trim()
+  const m = /#sync=([A-Za-z0-9_-]{43})/.exec(s)
+  return m ? m[1] : s
 }
 
 // связь восстанавливается сама, когда вкладка снова на экране или вернулась сеть
@@ -420,7 +421,7 @@ if (typeof document !== 'undefined') {
   })
 }
 
-if (cloud.code) start().catch(() => toast('Не удалось запустить синхронизацию', 'error'))
+if (cloud.code) start().catch(() => toast(t('Не удалось запустить синхронизацию'), 'error'))
 
 // app используется косвенно (exportSettings), но импорт нужен, чтобы хранилище настроек было готово раньше
 void app

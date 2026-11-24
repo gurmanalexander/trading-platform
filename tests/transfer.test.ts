@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { decode, describe as summary, encode, merge } from '../src/lib/transfer'
+import { i18n } from '../src/lib/i18n'
 
 const sample = {
   app: { themePref: 'dark', templates: [{ id: 't1', name: 'Три ТФ' }] },
@@ -69,6 +70,9 @@ describe('перенос данных', () => {
   })
 
   it('сводка перед приёмом', () => {
+    i18n.lang = 'ru'
     expect(summary(sample)).toBe('списков: 2, монет в них: 1, рисунков и уровней: 1, оповещений: 1, шаблонов: 1')
+    i18n.lang = 'en'
+    expect(summary(sample)).toBe('watchlists: 2, symbols in them: 1, drawings and levels: 1, alerts: 1, templates: 1')
   })
 })
