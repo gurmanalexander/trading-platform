@@ -354,6 +354,7 @@ export const app = reactive({
   screenerFilterOpen: false,
   syncOpen: false,
   tutorialOpen: false,
+  donateOpen: false,
   /** код синхронизации, пришедший по ссылке: окно синхронизации откроется с ним */
   syncCode: '',
   colorsOpen: false,
@@ -420,7 +421,7 @@ export const paneCount = computed(() => layoutCount(app.layout))
 export const activeIndex = computed(() => Math.min(app.active, paneCount.value - 1))
 export const activePane = computed(() => app.panes[activeIndex.value])
 export const modalOpen = computed(
-  () => !!(app.search || app.indicatorsOpen || app.indSettings || app.intervalInput || app.hotkeysOpen || app.gotoOpen || app.textEdit || app.tradeTextOpen || app.shareOpen || app.listShareOpen || app.dashboardOpen || app.screenerFilterOpen || app.syncOpen || app.tutorialOpen || app.colorsOpen || app.viewOpen || app.transfer),
+  () => !!(app.search || app.indicatorsOpen || app.indSettings || app.intervalInput || app.hotkeysOpen || app.gotoOpen || app.textEdit || app.tradeTextOpen || app.shareOpen || app.listShareOpen || app.dashboardOpen || app.screenerFilterOpen || app.syncOpen || app.tutorialOpen || app.donateOpen || app.colorsOpen || app.viewOpen || app.transfer),
 )
 
 // ---------- действия ----------

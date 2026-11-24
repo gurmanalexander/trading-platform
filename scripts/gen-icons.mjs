@@ -93,6 +93,7 @@ const LUCIDE = {
   layers: 'layers',
   play: 'circle-play',
   learn: 'graduation-cap',
+  heart: 'heart',
 }
 
 /** нарисованные вручную (24×24, штрих) */
