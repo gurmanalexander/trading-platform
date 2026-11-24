@@ -155,7 +155,7 @@ function close() {
 }
 .tabs button.on {
   color: var(--text);
-  border-bottom-color: var(--accent);
+  border-bottom-color: var(--sel-border);
 }
 .body {
   display: flex;

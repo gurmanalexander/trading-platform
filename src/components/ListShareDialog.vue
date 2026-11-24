@@ -371,9 +371,9 @@ async function copyImage(s: CoinShot) {
   visibility: hidden;
 }
 .auto.on {
-  border-color: var(--accent);
-  color: var(--accent);
-  background: var(--accent-soft);
+  border-color: var(--sel-border);
+  color: var(--sel);
+  background: var(--sel-bg);
 }
 .auto.on .icon {
   visibility: visible;

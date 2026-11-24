@@ -337,8 +337,8 @@ watch(
   flex: 1;
 }
 .sc-row.active {
-  background: var(--accent-soft);
-  box-shadow: inset 2px 0 0 var(--accent);
+  background: var(--sel-bg);
+  box-shadow: inset 2px 0 0 var(--sel-border);
 }
 .kind {
   flex: none;

@@ -73,7 +73,7 @@ function toggle(l: WatchList) {
 }
 .lp-sides .btn.on {
   border-color: currentColor;
-  background: var(--accent-soft);
+  background: var(--sel-bg);
 }
 .lp-dot {
   width: 10px;

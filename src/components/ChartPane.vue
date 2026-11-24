@@ -434,8 +434,8 @@ function toggleScale(id: ScaleMode) {
   color: var(--text);
 }
 .chip.on {
-  color: var(--accent);
-  border-color: var(--accent);
+  color: var(--sel);
+  border-color: var(--sel-border);
 }
 .rt-btn {
   position: absolute;

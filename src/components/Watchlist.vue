@@ -599,8 +599,8 @@ watch(
   background: var(--hover);
 }
 .wl-row.active {
-  background: var(--accent-soft);
-  box-shadow: inset 2px 0 0 var(--accent);
+  background: var(--sel-bg);
+  box-shadow: inset 2px 0 0 var(--sel-border);
 }
 .moving {
   opacity: 0.35;

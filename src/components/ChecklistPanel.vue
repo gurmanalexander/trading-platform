@@ -222,8 +222,8 @@ function restore() {
   background: var(--hover);
 }
 .chip.on {
-  border-color: var(--accent);
-  color: var(--accent);
+  border-color: var(--sel-border);
+  color: var(--sel);
 }
 .cl-body {
   flex: 1;
@@ -265,10 +265,10 @@ function restore() {
   background: var(--hover);
 }
 .answer.on {
-  background: var(--accent-soft);
+  background: var(--sel-bg);
 }
 .answers.line .answer.on {
-  border-color: var(--accent);
+  border-color: var(--sel-border);
 }
 .answer input,
 .check input {
