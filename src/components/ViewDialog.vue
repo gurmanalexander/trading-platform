@@ -40,6 +40,10 @@ function num(e: Event): number {
         <input v-model="app.view.thinBars" type="checkbox" />
         <span>Тонкие бары<small class="muted">при увеличении бары не толстеют — удобнее смотреть хаи и лои</small></span>
       </label>
+      <label class="vd-row check">
+        <input v-model="app.view.priceLine" type="checkbox" />
+        <span>Линия текущей цены<small class="muted">горизонтальная линия от последнего бара; цена и таймер на шкале остаются</small></span>
+      </label>
 
       <div class="vd-title">Размер позиции</div>
       <label class="vd-row">

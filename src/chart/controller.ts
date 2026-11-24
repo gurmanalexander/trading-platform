@@ -771,6 +771,7 @@ export class ChartController {
     const type = this.pane.chartType
     const common = {
       priceFormat: { type: 'price' as const, precision: this.precision, minMove: 1 / 10 ** this.precision },
+      priceLineVisible: app.view.priceLine,
     }
     let s: ISeriesApi<SeriesType>
     if (type === 'line') {
@@ -994,6 +995,7 @@ export class ChartController {
   applyView() {
     this.chart.applyOptions({ layout: { fontSize: app.view.scaleFont } })
     if (this.pane.chartType === 'bars') this.main.applyOptions({ thinBars: app.view.thinBars })
+    this.main.applyOptions({ priceLineVisible: app.view.priceLine })
     this.draw.redraw()
   }
 

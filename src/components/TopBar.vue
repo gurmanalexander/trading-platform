@@ -151,6 +151,10 @@ function fullscreen() {
           <input v-model="app.view.thinBars" type="checkbox" />
           Тонкие бары
         </label>
+        <label class="menu-item check" title="Горизонтальная линия от последнего бара; цена и таймер на шкале остаются">
+          <input v-model="app.view.priceLine" type="checkbox" />
+          Линия текущей цены
+        </label>
       </template>
     </Dropdown>
 
