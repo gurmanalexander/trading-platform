@@ -1,117 +1,308 @@
 <script setup lang="ts">
-import { onMounted } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import qrcode from 'qrcode-generator'
 import Icon from './Icon.vue'
 import Modal from './Modal.vue'
-import { app, toast } from '../stores/app'
-import { BINANCE_PAY, DONATE_TARGETS, markDonateOpened } from '../lib/donate'
+import { app, isPhone } from '../stores/app'
+import { DONATE_METHODS, markDonateOpened, type DonateMethod } from '../lib/donate'
 
-// Поддержать проект: адреса кошельков USDT и Binance Pay — у каждого QR-код и кнопка «Скопировать»
+// Поддержать проект. Сначала выбирают способ, потом видят только его: адрес, одну большую кнопку
+// «Скопировать» и предупреждение про сеть. QR-код — только у выбранного способа: на компьютере рядом
+// с адресом (сканировать телефоном), на телефоне — по кнопке, ведь свой экран телефоном не отсканируешь.
 onMounted(markDonateOpened)
 
-function qr(text: string): string {
-  const q = qrcode(0, 'M')
-  q.addData(text)
-  q.make()
-  return q.createSvgTag({ cellSize: 4, margin: 2, scalable: true })
-}
+const method = ref<DonateMethod>(DONATE_METHODS[0])
+const qrOpen = ref(false)
+const showQr = computed(() => !isPhone.value || qrOpen.value)
 
-const cards = DONATE_TARGETS.map((t) => ({ ...t, svg: qr(t.address) }))
-const paySvg = qr(BINANCE_PAY.link)
+const svgCache = new Map<string, string>()
+const svg = computed(() => {
+  const text = method.value.address
+  let s = svgCache.get(text)
+  if (!s) {
+    const q = qrcode(0, 'M')
+    q.addData(text)
+    q.make()
+    s = q.createSvgTag({ cellSize: 4, margin: 0, scalable: true })
+    svgCache.set(text, s)
+  }
+  return s
+})
 
-async function copy(text: string, what: string) {
+/** Адрес частями: начало и конец выделены — по ним сверяют адрес после вставки в кошелёк */
+const parts = computed(() => {
+  const a = method.value.address
+  return { head: a.slice(0, 6), mid: a.slice(6, -6), tail: a.slice(-6) }
+})
+
+const copied = ref(false)
+let copiedTimer = 0
+watch(method, () => {
+  copied.value = false
+  qrOpen.value = false
+})
+async function copy() {
+  const text = method.value.address
   try {
     await navigator.clipboard.writeText(text)
-    toast(`${what} скопирован`)
+    copied.value = true
+    clearTimeout(copiedTimer)
+    copiedTimer = window.setTimeout(() => (copied.value = false), 2200)
   } catch {
-    prompt('Скопируйте вручную', text)
+    prompt('Скопируйте адрес', text)
   }
 }
+onBeforeUnmount(() => clearTimeout(copiedTimer))
 </script>
 
 <template>
-  <Modal title="Поддержать проект" :width="560" @close="app.donateOpen = false">
-    <div class="dn scroll">
-      <p class="lead">
-        Терминал бесплатный и без рекламы. Если он помогает в торговле — можно поддержать разработку криптовалютой. Спасибо!
-      </p>
-
-      <div class="cards">
-        <section v-for="c in cards" :key="c.id" class="card">
-          <div class="head">
-            <b>{{ c.coin }}</b>
-            <span class="net">{{ c.network }}</span>
-          </div>
-          <div class="qr" v-html="c.svg" />
-          <code class="addr">{{ c.address }}</code>
-          <button class="btn primary sm" @click="copy(c.address, 'Адрес')"><Icon name="copy" :size="15" />Скопировать адрес</button>
-          <p v-if="c.note" class="note muted">{{ c.note }}</p>
-        </section>
-
-        <section class="card">
-          <div class="head">
-            <b>Binance Pay</b>
-            <span class="net">{{ BINANCE_PAY.name }} · без комиссии</span>
-          </div>
-          <div class="qr" v-html="paySvg" />
-          <p class="note muted">Отсканируйте код приложением Binance или откройте ссылку на телефоне с Binance</p>
-          <div class="pay-actions">
-            <a class="btn primary sm" :href="BINANCE_PAY.link" target="_blank" rel="noopener">Открыть в Binance</a>
-            <button class="btn sm" @click="copy(BINANCE_PAY.link, 'Ссылка')"><Icon name="copy" :size="15" />Ссылка</button>
-          </div>
-        </section>
+  <Modal title="Поддержать проект" :width="520" @close="app.donateOpen = false">
+    <div class="dn">
+      <div class="hero">
+        <span class="hero-icon"><Icon name="heart" :size="22" /></span>
+        <div class="hero-text">
+          <b>tvx бесплатный и без рекламы</b>
+          <span>Если терминал помогает вам в торговле — поддержите его развитие. Любая сумма — это новые функции и исправления.</span>
+        </div>
       </div>
 
-      <p class="warn">Отправляйте только <b>USDT</b> и только в указанной сети — перевод в другой сети не дойдёт.</p>
+      <div class="methods" role="radiogroup" aria-label="Способ перевода">
+        <button
+          v-for="m in DONATE_METHODS"
+          :key="m.id"
+          class="method"
+          :class="{ on: m.id === method.id }"
+          role="radio"
+          :aria-checked="m.id === method.id"
+          @click="method = m"
+        >
+          <span class="m-title">{{ m.title }}</span>
+          <span class="m-sub">
+            {{ m.sub }}
+            <span v-if="m.tag" class="m-tag" :class="m.pay ? 'good' : 'meh'">{{ m.tag }}</span>
+          </span>
+        </button>
+      </div>
+
+      <div class="detail" :class="{ 'with-qr': showQr }">
+        <div class="d-main">
+          <template v-if="method.pay">
+            <p class="d-text">Переведите любую сумму через Binance Pay — без комиссии, деньги приходят сразу.</p>
+            <a class="cta" :href="method.address" target="_blank" rel="noopener"><Icon name="external" :size="16" />Открыть Binance Pay</a>
+            <p class="hint">Получатель — <b>{{ method.sub }}</b>.<template v-if="!isPhone"> Или отсканируйте QR-код в приложении Binance.</template></p>
+          </template>
+          <template v-else>
+            <span class="d-label">Адрес USDT · {{ method.network }}</span>
+            <code class="addr"><b>{{ parts.head }}</b>{{ parts.mid }}<b>{{ parts.tail }}</b></code>
+            <button class="cta" :class="{ done: copied }" @click="copy">
+              <Icon :name="copied ? 'check' : 'copy'" :size="16" />{{ copied ? 'Адрес скопирован' : 'Скопировать адрес' }}
+            </button>
+            <p class="warn">
+              <Icon name="info" :size="14" />
+              <span>Только <b>USDT</b> и только в сети <b>{{ method.network }}</b> — в другой сети перевод не дойдёт.</span>
+            </p>
+          </template>
+        </div>
+        <div v-if="showQr" class="d-qr">
+          <div class="qr" v-html="svg" />
+        </div>
+      </div>
+      <button v-if="isPhone" class="qr-toggle" @click="qrOpen = !qrOpen">
+        <Icon name="qr" :size="15" />{{ qrOpen ? 'Скрыть QR-код' : 'Показать QR-код' }}
+      </button>
+
+      <p class="thanks">Спасибо, что пользуетесь tvx</p>
     </div>
   </Modal>
 </template>
 
 <style scoped>
 .dn {
-  padding: 12px 14px 14px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  max-height: calc(100dvh - 90px);
+  gap: 14px;
+  padding: 14px 16px 16px;
+  max-height: calc(100dvh - 80px);
+  overflow-y: auto;
 }
-.lead {
+
+/* вступление: сердечко в мягком круге и пара строк, без давления */
+.hero {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+.hero-icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  color: #f0566b;
+  background: rgba(240, 86, 107, 0.12);
+}
+.hero-text {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  line-height: 1.4;
+}
+.hero-text b {
+  font-size: 14.5px;
+}
+.hero-text span {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+/* выбор способа: четыре плитки, выбранная — в цвете акцента */
+.methods {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.method {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  min-height: 54px;
+  padding: 8px 10px;
+  border: 1.5px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg);
+  text-align: left;
+  transition:
+    border-color 0.15s,
+    background 0.15s;
+}
+.method:hover {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+}
+.method.on {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 9%, var(--bg));
+}
+.m-title {
+  font-weight: 600;
+  font-size: 13.5px;
+}
+.m-sub {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.m-tag {
+  padding: 0 6px;
+  line-height: 17px;
+  border-radius: 6px;
+  font-size: 10.5px;
+  font-weight: 600;
+}
+.m-tag.good {
+  color: var(--up);
+  background: color-mix(in srgb, var(--up) 14%, transparent);
+}
+.m-tag.meh {
+  color: var(--muted);
+  background: var(--hover);
+}
+
+/* выбранный способ: адрес, большая кнопка, предупреждение; QR — справа */
+.detail {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 14px;
+  align-items: center;
+  padding: 14px;
+  border-radius: 12px;
+  background: var(--hover);
+}
+.detail.with-qr {
+  grid-template-columns: 1fr auto;
+}
+.d-main {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+.d-label {
+  font-size: 12px;
+  color: var(--muted);
+}
+.d-text {
   margin: 0;
   line-height: 1.45;
 }
-.cards {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-  gap: 10px;
-}
-.card {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-  padding: 10px;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  background: var(--bg);
-  min-width: 0;
-}
-.head {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  text-align: center;
-  gap: 2px;
-}
-.net {
+.addr {
   font-size: 12px;
-  font-weight: 600;
-  color: var(--accent);
+  line-height: 1.5;
+  word-break: break-all;
+  user-select: all;
 }
-/* QR-код — всегда тёмный на белом: так его читает любая камера, и в тёмной теме тоже */
+.addr b {
+  color: var(--text);
+  font-weight: 700;
+}
+.cta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 40px;
+  padding: 0 16px;
+  border-radius: 9px;
+  background: var(--accent);
+  color: #fff;
+  font-weight: 600;
+  font-size: 14px;
+  text-decoration: none;
+  transition:
+    background 0.15s,
+    transform 0.1s;
+}
+.cta:hover {
+  filter: brightness(1.08);
+}
+.cta:active {
+  transform: scale(0.98);
+}
+.cta.done {
+  background: var(--up);
+}
+.warn {
+  display: flex;
+  gap: 6px;
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--muted);
+}
+.warn :deep(svg) {
+  flex: none;
+  margin-top: 1px;
+  color: var(--warn);
+}
+.hint {
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+/* QR — всегда тёмный на белом: так его читает любая камера, и в тёмной теме тоже */
+.d-qr {
+  display: flex;
+  justify-content: center;
+}
 .qr {
-  width: 140px;
-  padding: 6px;
-  border-radius: 8px;
+  width: 128px;
+  padding: 8px;
+  border-radius: 10px;
   background: #fff;
   line-height: 0;
 }
@@ -119,30 +310,31 @@ async function copy(text: string, what: string) {
   width: 100%;
   height: auto;
 }
-.addr {
-  width: 100%;
-  font-size: 11.5px;
-  word-break: break-all;
-  text-align: center;
-  user-select: all;
-}
-.note {
-  margin: 0;
-  font-size: 11.5px;
-  text-align: center;
-}
-.pay-actions {
-  display: flex;
+.qr-toggle {
+  align-self: center;
+  display: inline-flex;
+  align-items: center;
   gap: 6px;
-  flex-wrap: wrap;
-  justify-content: center;
+  padding: 4px 8px;
+  font-size: 13px;
+  color: var(--accent);
 }
-a.btn {
-  text-decoration: none;
-}
-.warn {
+.thanks {
   margin: 0;
+  text-align: center;
   font-size: 12px;
   color: var(--muted);
+}
+
+@media (max-width: 719px) {
+  .detail.with-qr {
+    grid-template-columns: 1fr;
+  }
+  .qr {
+    width: 180px;
+  }
+  .cta {
+    height: 46px;
+  }
 }
 </style>

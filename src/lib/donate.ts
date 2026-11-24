@@ -1,29 +1,33 @@
 import { reactive } from 'vue'
 import { load, save } from './storage'
 
-/** Куда можно отправить донат. Адреса проверены владельцем; сеть подписана крупно — ошибка сети стоит денег */
-export interface DonateTarget {
+/**
+ * Способ доната. Адреса проверены владельцем. Сеть у адреса — главное: USDT, отправленный
+ * не в той сети, теряется, поэтому каждая сеть — отдельный способ с крупной подписью.
+ */
+export interface DonateMethod {
   id: string
-  coin: string
-  network: string
-  /** адрес кошелька (или ссылка Binance Pay) — из него рисуется QR-код */
+  /** крупно на плитке выбора */
+  title: string
+  /** мелко под названием */
+  sub: string
+  /** адрес кошелька; у Binance Pay — ссылка оплаты. Из него же рисуется QR-код */
   address: string
-  note?: string
+  /** сеть словами — для предупреждения «только в сети …» */
+  network?: string
+  pay?: boolean
+  /** короткая пометка на плитке: «без комиссии», «комиссия выше» */
+  tag?: string
 }
 
-export const DONATE_TARGETS: DonateTarget[] = [
-  { id: 'trc20', coin: 'USDT', network: 'TRC20 · Tron', address: 'TDiQ3qYR3nKasjs7v2Yvf4F9gtKCaApWMb' },
-  {
-    id: 'evm',
-    coin: 'USDT',
-    network: 'BEP20 · BNB Smart Chain или ERC20 · Ethereum',
-    address: '0xdb91a73ce273e760cfed4b7ae39d73d7502419b6',
-    note: 'Один адрес для обеих сетей. В Ethereum комиссия сети заметно выше',
-  },
-]
+const EVM = '0xdb91a73ce273e760cfed4b7ae39d73d7502419b6'
 
-/** Binance Pay: перевод внутри Binance без комиссии — по QR-коду в приложении Binance или по ссылке */
-export const BINANCE_PAY = { name: 'izi4ka', link: 'https://app.binance.com/uni-qr/LxreT8Gt' }
+export const DONATE_METHODS: DonateMethod[] = [
+  { id: 'pay', title: 'Binance Pay', sub: 'izi4ka', address: 'https://app.binance.com/uni-qr/LxreT8Gt', pay: true, tag: 'без комиссии' },
+  { id: 'trc20', title: 'USDT TRC20', sub: 'сеть Tron', address: 'TDiQ3qYR3nKasjs7v2Yvf4F9gtKCaApWMb', network: 'TRC20 (Tron)' },
+  { id: 'bep20', title: 'USDT BEP20', sub: 'BNB Smart Chain', address: EVM, network: 'BEP20 (BNB Smart Chain)' },
+  { id: 'erc20', title: 'USDT ERC20', sub: 'Ethereum', address: EVM, network: 'ERC20 (Ethereum)', tag: 'комиссия выше' },
+]
 
 // ---------- редкая анимация кнопки ----------
 // Кнопка доната не мигает постоянно: изредка (не чаще раза в несколько дней) и только у тех,

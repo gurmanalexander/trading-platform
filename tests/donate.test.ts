@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { DONATE_TARGETS, shouldPulse } from '../src/lib/donate'
+import { DONATE_METHODS, shouldPulse } from '../src/lib/donate'
 
 const DAY = 86_400_000
 
@@ -17,9 +17,10 @@ describe('донат', () => {
   })
 
   it('адреса кошельков — в правильном формате своих сетей', () => {
-    const trc = DONATE_TARGETS.find((t) => t.id === 'trc20')!
-    const evm = DONATE_TARGETS.find((t) => t.id === 'evm')!
-    expect(trc.address).toMatch(/^T[1-9A-HJ-NP-Za-km-z]{33}$/)
-    expect(evm.address).toMatch(/^0x[0-9a-fA-F]{40}$/)
+    const by = (id: string) => DONATE_METHODS.find((t) => t.id === id)!
+    expect(by('trc20').address).toMatch(/^T[1-9A-HJ-NP-Za-km-z]{33}$/)
+    expect(by('bep20').address).toMatch(/^0x[0-9a-fA-F]{40}$/)
+    expect(by('erc20').address).toBe(by('bep20').address)
+    expect(by('pay').address).toMatch(/^https:\/\/app\.binance\.com\//)
   })
 })
