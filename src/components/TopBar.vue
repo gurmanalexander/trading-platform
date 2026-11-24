@@ -36,6 +36,7 @@ import { unreadAlerts } from '../stores/alerts'
 import { cloud } from '../stores/cloud'
 import { chartAt } from '../chart/registry'
 import { donate } from '../lib/donate'
+import { fmtStars, github, loadStars, REPO_URL } from '../lib/github'
 import { copyAll, copyCanvas, snapshotAll } from '../chart/snapshot'
 import { t, i18n, LANGS } from '../lib/i18n'
 
@@ -105,6 +106,8 @@ function fullscreen() {
   if (document.fullscreenElement) document.exitFullscreen()
   else document.documentElement.requestFullscreen().catch(() => {})
 }
+// число звёзд на GitHub — для кнопки рядом с сердечком
+loadStars()
 </script>
 
 <template>
@@ -360,6 +363,18 @@ function fullscreen() {
         </template>
       </template>
     </Dropdown>
+    <a
+      v-if="!isPhone"
+      class="btn gh"
+      :href="REPO_URL"
+      target="_blank"
+      rel="noopener"
+      :title="t('tvx на GitHub — поставьте звёздочку, это помогает проекту')"
+      :aria-label="t('tvx на GitHub — поставьте звёздочку, это помогает проекту')"
+    >
+      <Icon name="github" :size="18" />
+      <span class="gh-star"><Icon name="star" :size="12" />{{ github.stars != null ? fmtStars(github.stars) : t('Звезда') }}</span>
+    </a>
     <button v-if="!isPhone" class="btn donate" :class="{ pulse: donate.pulse }" :title="t('Поддержать проект')" :aria-label="t('Поддержать проект')" @click="app.donateOpen = true">
       <Icon name="heart" />
     </button>
@@ -372,6 +387,31 @@ function fullscreen() {
 </template>
 
 <style scoped>
+/* GitHub: значок и звёзды — как кнопка «Star» на GitHub, но в стиле панели */
+.gh {
+  gap: 6px;
+  padding: 0 8px;
+  text-decoration: none;
+}
+.gh-star {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  height: 22px;
+  padding: 0 7px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+}
+.gh-star :deep(svg) {
+  color: #e3b341;
+  fill: #e3b341;
+}
+.gh:hover .gh-star {
+  border-color: #e3b341;
+}
 /* донат: красное залитое сердечко; время от времени оно «стучит» (см. lib/donate): два крупных удара
    со свечением и два кольца, расходящихся от кнопки */
 .donate {

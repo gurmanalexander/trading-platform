@@ -110,6 +110,8 @@ export class DrawingsLayer {
   private draft: Drawing | null = null
   private measure: Drawing | null = null
   private hoverId: string | null = null
+  /** зажат Shift — магнит временно выключен */
+  private shiftHeld = false
   private hoverCursor = ''
   private pressing = false
   private downAt: XY = { x: 0, y: 0 }
@@ -261,13 +263,15 @@ export class DrawingsLayer {
    * С какого расстояния (px) точка притягивается к ценам свечи: 0 — магнит выключен,
    * слабый — только вблизи цены, сильный — всегда к ближайшей из OHLC.
    */
-  private snapRadius(mode = app.magnet): number {
+  private snapRadius(mode = app.magnet, ruler = false): number {
+    // зажатый Shift временно выключает магнит (у линейки магнит остаётся: Shift+щелчок её и ставит)
+    if (this.shiftHeld && !ruler) return 0
     if (mode === 'strong') return Infinity
     if (mode === 'weak') return this.coarse ? 40 : 28
     return 0
   }
 
-  /** magnet = 0 — для позиций: вход, стоп и цель ставятся точно, без притягивания к свече */
+  /** magnet — радиус притяжения к ценам свечи, px; 0 — точка ставится точно под курсором */
   private toPoint(x: number, y: number, magnet = this.snapRadius()): Pt | null {
     const lg = this.host.chart.timeScale().coordinateToLogical(x)
     let price = this.host.series().coordinateToPrice(y) as number | null
@@ -410,6 +414,14 @@ export class DrawingsLayer {
       const h = this.hit(e.clientX - r.left, e.clientY - r.top, 6)
       if (h?.d.type === 'text') this.editText(h.d)
     })
+    // Shift отслеживаем и по клавиатуре: нажали посреди перетаскивания — магнит выключается сразу
+    const onShift = (e: KeyboardEvent | PointerEvent) => {
+      this.shiftHeld = e.shiftKey
+    }
+    on(window, 'keydown', onShift as (e: Event) => void)
+    on(window, 'keyup', onShift as (e: Event) => void)
+    on(window, 'pointerdown', onShift as (e: Event) => void, { capture: true })
+    on(window, 'blur', () => (this.shiftHeld = false))
     on(window, 'pointermove', (e) => {
       if (!this.drag) return
       const p = rel(e as PointerEvent)
@@ -493,7 +505,7 @@ export class DrawingsLayer {
   private toolDown(x: number, y: number) {
     const tool = app.tool
     if (tool === 'cursor') return
-    const pt = this.toPoint(x, y, isPosition(tool) ? 0 : this.snapRadius())
+    const pt = this.toPoint(x, y, this.snapRadius(app.magnet, tool === 'measure'))
     if (!pt) return
     this.measure = null
     if (this.draft) {
@@ -516,7 +528,7 @@ export class DrawingsLayer {
   }
 
   private toolMove(x: number, y: number, isMouse: boolean) {
-    const pt = this.toPoint(x, y, this.draft && isPosition(this.draft.type) ? 0 : this.snapRadius())
+    const pt = this.toPoint(x, y, this.snapRadius(app.magnet, app.tool === 'measure' || this.draft?.type === 'measure'))
     if (!pt) return
     if (isMouse) this.syncCrosshair(pt)
     const d = this.draft
@@ -620,9 +632,10 @@ export class DrawingsLayer {
     }
     const size = this.host.chart.paneSize(0)
     if (x > size.width || y > size.height) return
-    if (shift) {
-      // Shift+щелчок — линейка: первая точка здесь, вторая — следующим щелчком
-      const pt = this.toPoint(x, y)
+    // Shift на рисунке — тянуть его без магнита; Shift+щелчок по пустому месту — линейка
+    if (shift && !this.hit(x, y, tol)) {
+      // линейка: первая точка здесь, вторая — следующим щелчком
+      const pt = this.toPoint(x, y, this.snapRadius(app.magnet, true))
       if (!pt) return
       this.lockScroll(true)
       window.addEventListener('pointerup', () => this.lockScroll(false), { once: true })
@@ -668,7 +681,8 @@ export class DrawingsLayer {
         selection.value = { pane: this.host.paneIndex, id: clone.id }
       }
     }
-    const magnet = isPosition(g.d.type) ? 0 : this.snapRadius()
+    // позиции тоже притягиваются: вход, стоп, тейк — к ценам свечи под курсором (Shift — без магнита)
+    const magnet = this.snapRadius()
     if (g.d.pin) {
       // закреплённый текст двигается по экрану, а не по времени и цене
       const size = this.host.chart.paneSize(0)

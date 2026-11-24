@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { fmtStars, github, loadStars, REPO_URL } from '../lib/github'
 import Icon from './Icon.vue'
 import Dropdown from './Dropdown.vue'
 import LayoutIcon from './LayoutIcon.vue'
@@ -62,6 +63,7 @@ function saveNew() {
   saveTemplate(name.slice(0, 40), confirm(question))
   toast(t('Шаблон «{name}» сохранён', { name }))
 }
+loadStars()
 </script>
 
 <template>
@@ -76,6 +78,9 @@ function saveNew() {
         <button class="menu-item" :disabled="refreshing" @click="refreshAll(), close()"><Icon name="refresh" :size="16" />{{ t('Обновить данные') }}</button>
         <button class="menu-item" @click="(app.tutorialOpen = true), close()"><Icon name="learn" :size="16" />{{ t('Обучение: видео-обзор') }}</button>
         <button class="menu-item donate" @click="(app.donateOpen = true), close()"><Icon name="heart" :size="16" />{{ t('Поддержать проект') }}</button>
+        <a class="menu-item gh" :href="REPO_URL" target="_blank" rel="noopener" @click="close()">
+          <Icon name="github" :size="16" />{{ t('Звезда на GitHub') }}<span v-if="github.stars != null" class="muted gh-n">★ {{ fmtStars(github.stars) }}</span>
+        </a>
         <button class="menu-item" @click="(app.dashboardOpen = true), close()"><Icon name="dashboard" :size="16" />{{ t('Обзор по спискам') }}</button>
         <button class="menu-item" @click="(app.indicatorsOpen = true), close()"><Icon name="fx" :size="16" />{{ t('Индикаторы') }}</button>
         <button class="menu-item" @click="pasteFromClipboard(), close()"><Icon name="paste" :size="16" />{{ t('Вставить из буфера (сделка, сетапы)') }}</button>
@@ -191,6 +196,13 @@ function saveNew() {
 }
 .menu-item {
   white-space: normal;
+}
+a.menu-item {
+  text-decoration: none;
+  color: inherit;
+}
+.gh-n {
+  margin-left: auto;
 }
 .donate :deep(svg) {
   color: #f23645;

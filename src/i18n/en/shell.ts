@@ -297,4 +297,10 @@ export default {
   'Монеты встают в конец текущего списка с направлениями и уровнями': 'Coins are added to the end of the current watchlist with their directions and levels',
   'Текст сделки': 'Trade text',
   '«ТВХ / SL / TP» раскладываются по выбранной позиции; без выбора строится новая': '"Entry / SL / TP" are applied to the selected position; with none selected, a new one is drawn',
+  // GitHub
+  'tvx на GitHub — поставьте звёздочку, это помогает проекту': 'tvx on GitHub — star it, it helps the project',
+  'Звезда': 'Star',
+  'Звезда на GitHub': 'Star on GitHub',
+  'Не готовы донатить? Поставьте звёздочку на GitHub — это тоже помогает': 'Not ready to donate? Star tvx on GitHub — it helps too',
+  'Рисовать и тянуть рисунок без магнита': 'Draw and drag without the magnet',
 } satisfies Record<string, string>
