@@ -5,6 +5,7 @@ import { app, activePane, showPanel, type MagnetMode, type Tool } from '../store
 import { pasteFromClipboard } from '../chart/setup'
 import { symbolKey } from '../types'
 import { clearDrawings, drawings, redo, selection, undo } from '../stores/drawings'
+import { t } from '../lib/i18n'
 
 // На телефоне панель лежит горизонтальной полосой под графиком: ширина экрана там дороже высоты
 defineProps<{ horizontal?: boolean }>()
@@ -30,14 +31,18 @@ const MAGNETS: { id: MagnetMode; label: string; hint: string }[] = [
   { id: 'weak', label: 'Слабый магнит', hint: 'Притягивает, только если курсор рядом с ценой свечи' },
   { id: 'strong', label: 'Сильный магнит', hint: 'Всегда притягивает к ближайшей цене свечи: открытие, хай, лоу, закрытие' },
 ]
-const magnetTitle = () =>
-  `${MAGNETS.find((m) => m.id === app.magnet)?.label ?? 'Магнит'}${app.crossMagnet ? ' · перекрестие притягивается' : ''} (Alt+Shift+M — перекрестие с магнитом)`
+const magnetTitle = () => {
+  const magnet = t(MAGNETS.find((m) => m.id === app.magnet)?.label ?? 'Магнит')
+  return app.crossMagnet
+    ? t('{magnet} · перекрестие притягивается (Alt+Shift+M — перекрестие с магнитом)', { magnet })
+    : t('{magnet} (Alt+Shift+M — перекрестие с магнитом)', { magnet })
+}
 
 function clearAll() {
   const key = symbolKey(activePane.value.symbol)
   const n = drawings[key]?.length ?? 0
   if (!n) return
-  if (confirm(`Удалить все рисунки (${n}) на ${activePane.value.symbol.symbol}? Отменить можно через Ctrl+Z.`)) {
+  if (confirm(t('Удалить все рисунки ({n}) на {symbol}? Отменить можно через Ctrl+Z.', { n, symbol: activePane.value.symbol.symbol }))) {
     clearDrawings(key)
     selection.value = null
   }
@@ -45,19 +50,19 @@ function clearAll() {
 </script>
 
 <template>
-  <nav class="drawbar scroll" :class="{ horizontal }" aria-label="Инструменты рисования">
-    <template v-for="t in TOOLS" :key="t.id">
-      <span v-if="t.sep" class="sep" />
-      <button class="btn" :class="{ on: app.tool === t.id }" :title="t.label" :aria-label="t.label" @click="app.tool = t.id">
-        <Icon :name="t.id" />
+  <nav class="drawbar scroll" :class="{ horizontal }" :aria-label="t('Инструменты рисования')">
+    <template v-for="tool in TOOLS" :key="tool.id">
+      <span v-if="tool.sep" class="sep" />
+      <button class="btn" :class="{ on: app.tool === tool.id }" :title="t(tool.label)" :aria-label="t(tool.label)" @click="app.tool = tool.id">
+        <Icon :name="tool.id" />
       </button>
     </template>
     <span class="sep" />
-    <button class="btn" title="Чеклист сделки (Alt+K)" @click="showPanel('checklist')"><Icon name="checklist" /></button>
-    <button class="btn" title="Вставить из буфера: сделка (ТВХ / SL / TP) или сетапы — то же, что Ctrl+V" @click="pasteFromClipboard()"><Icon name="paste" /></button>
+    <button class="btn" :title="t('Чеклист сделки (Alt+K)')" @click="showPanel('checklist')"><Icon name="checklist" /></button>
+    <button class="btn" :title="t('Вставить из буфера: сделка (ТВХ / SL / TP) или сетапы — то же, что Ctrl+V')" @click="pasteFromClipboard()"><Icon name="paste" /></button>
     <span class="sep" />
-    <button class="btn" title="Отменить (Ctrl+Z)" @click="undo()"><Icon name="undo" /></button>
-    <button class="btn" title="Вернуть (Ctrl+Y)" @click="redo()"><Icon name="redo" /></button>
+    <button class="btn" :title="t('Отменить (Ctrl+Z)')" @click="undo()"><Icon name="undo" /></button>
+    <button class="btn" :title="t('Вернуть (Ctrl+Y)')" @click="redo()"><Icon name="redo" /></button>
     <Dropdown :side="!horizontal">
       <template #trigger="{ toggle }">
         <button class="btn magnet" :class="{ on: app.magnet !== 'off', strong: app.magnet === 'strong' }" :title="magnetTitle()" @click="toggle">
@@ -66,25 +71,25 @@ function clearAll() {
         </button>
       </template>
       <template #default="{ close }">
-        <button v-for="m in MAGNETS" :key="m.id" class="menu-item" :class="{ on: app.magnet === m.id }" :title="m.hint" @click="(app.magnet = m.id), close()">
-          {{ m.label }}
+        <button v-for="m in MAGNETS" :key="m.id" class="menu-item" :class="{ on: app.magnet === m.id }" :title="t(m.hint)" @click="(app.magnet = m.id), close()">
+          {{ t(m.label) }}
         </button>
         <div class="menu-sep" />
-        <label class="menu-item check" title="Горизонтальная линия перекрестия притягивается к цене свечи под курсором — на шкале видна точная цена уровня">
+        <label class="menu-item check" :title="t('Горизонтальная линия перекрестия притягивается к цене свечи под курсором — на шкале видна точная цена уровня')">
           <input v-model="app.crossMagnet" type="checkbox" />
-          Перекрестие с магнитом <span class="muted">Alt+Shift+M</span>
+          {{ t('Перекрестие с магнитом') }} <span class="muted">Alt+Shift+M</span>
         </label>
       </template>
     </Dropdown>
     <button
       class="btn"
       :class="{ on: app.drawingsHidden }"
-      :title="app.drawingsHidden ? 'Показать рисунки (Ctrl+Alt+H)' : 'Скрыть рисунки (Ctrl+Alt+H)'"
+      :title="app.drawingsHidden ? t('Показать рисунки (Ctrl+Alt+H)') : t('Скрыть рисунки (Ctrl+Alt+H)')"
       @click="app.drawingsHidden = !app.drawingsHidden"
     >
       <Icon :name="app.drawingsHidden ? 'eyeOff' : 'eye'" />
     </button>
-    <button class="btn" title="Удалить все рисунки" @click="clearAll"><Icon name="trash" /></button>
+    <button class="btn" :title="t('Удалить все рисунки')" @click="clearAll"><Icon name="trash" /></button>
   </nav>
 </template>
 

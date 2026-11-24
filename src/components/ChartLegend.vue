@@ -7,6 +7,7 @@ import { adapters } from '../exchanges'
 import { getTf } from '../lib/timeframes'
 import { fmtCompact, fmtDuration, fmtPct, fmtPrice } from '../lib/format'
 import { indicatorDef, indicatorTitle } from '../lib/indicators'
+import { t } from '../lib/i18n'
 import { nowSec } from '../lib/now'
 import { dayStats, dayProgress } from '../stores/atr'
 import { dailyRisk, spentTone } from '../lib/atr'
@@ -63,7 +64,8 @@ const rows = computed(() =>
       inst,
       // подпись индикатора из отдельной панели ставим в начало этой панели
       top: paneIdx ? (props.paneTops[paneIdx] ?? 0) : -1,
-      title: indicatorTitle(inst),
+      // короткое имя индикатора переводим, числа параметров остаются как есть
+      title: indicatorTitle(inst).replace(def.short, t(def.short)),
       hasParams: def.params.length > 0 || def.plots.some((x) => x.kind === 'line'),
       values: inst.visible
         ? def.plots.map((plot, i) => ({
@@ -96,8 +98,8 @@ function pickSymbol() {
 <template>
   <div class="legend" :class="{ compact }">
     <div class="legend-main">
-      <button class="legend-symbol" title="Сменить инструмент" @click="pickSymbol">
-        <span class="dot" :class="status" :title="status === 'open' ? 'Данные в реальном времени' : 'Нет соединения'" />
+      <button class="legend-symbol" :title="t('Сменить инструмент')" @click="pickSymbol">
+        <span class="dot" :class="status" :title="status === 'open' ? t('Данные в реальном времени') : t('Нет соединения')" />
         <b>{{ pane.symbol.symbol }}</b>
         <span class="muted">· {{ tf.label }} · {{ EXCHANGE_NAMES[pane.symbol.exchange] }} {{ MARKET_NAMES[pane.symbol.market] }}</span>
       </button>
@@ -110,19 +112,19 @@ function pickSymbol() {
         <span><i v-if="!tiny">C</i>{{ fmtPrice(legend.c, precision) }}</span>
         <span :class="legend.chg >= 0 ? 'up' : 'down'">{{ fmtPct(legend.chgPct) }}</span>
       </span>
-      <span v-if="countdown && !tiny" class="muted countdown" title="До закрытия свечи">{{ countdown }}</span>
+      <span v-if="countdown && !tiny" class="muted countdown" :title="t('До закрытия свечи')">{{ countdown }}</span>
     </div>
     <div
       v-if="day"
       class="legend-atr"
-      title="ATR — средний диапазон пяти предыдущих дневных свечей. Исчерпан за сегодня: от открытия дня / по размаху дня. Стоп — 10% ATR. Подробнее — в таблице ATR на младших интервалах."
+      :title="t('ATR — средний диапазон пяти предыдущих дневных свечей. Исчерпан за сегодня: от открытия дня / по размаху дня. Стоп — 10% ATR. Подробнее — в таблице ATR на младших интервалах.')"
     >
       <span><i>ATR</i>{{ day.atr }}<i v-if="!compact"> ({{ day.pct }}%)</i></span>
-      <span><i v-if="!compact">пройдено</i><b :class="day.fromOpenTone">{{ day.fromOpen }}%</b> / <b :class="day.traveledTone">{{ day.traveled }}%</b></span>
-      <span v-if="!tiny"><i>стоп</i>{{ day.stop }}</span>
+      <span><i v-if="!compact">{{ t('пройдено') }}</i><b :class="day.fromOpenTone">{{ day.fromOpen }}%</b> / <b :class="day.traveledTone">{{ day.traveled }}%</b></span>
+      <span v-if="!tiny"><i>{{ t('стоп') }}</i>{{ day.stop }}</span>
     </div>
     <div v-if="mainRows.length" class="legend-rows">
-      <button v-if="mainRows.length > 1" class="collapse muted" :title="collapsed ? 'Показать индикаторы' : 'Свернуть индикаторы'" @click="collapsed = !collapsed">
+      <button v-if="mainRows.length > 1" class="collapse muted" :title="collapsed ? t('Показать индикаторы') : t('Свернуть индикаторы')" @click="collapsed = !collapsed">
         <Icon name="chevron" :size="14" :style="{ transform: collapsed ? 'rotate(-90deg)' : '' }" />
         <span v-if="collapsed">{{ mainRows.length }}</span>
       </button>
@@ -139,13 +141,13 @@ function pickSymbol() {
         <span class="row-title">{{ r.title }}</span>
         <span v-for="(v, i) in r.values" :key="i" class="row-val" :style="{ color: v.color || undefined }">{{ v.text }}</span>
         <span class="row-actions" @click.stop>
-          <button class="btn sm" :title="r.inst.visible ? 'Скрыть' : 'Показать'" @click="r.inst.visible = !r.inst.visible">
+          <button class="btn sm" :title="r.inst.visible ? t('Скрыть') : t('Показать')" @click="r.inst.visible = !r.inst.visible">
             <Icon :name="r.inst.visible ? 'eye' : 'eyeOff'" :size="15" />
           </button>
-          <button v-if="r.hasParams" class="btn sm" title="Настройки" @click="app.indSettings = { pane: index, id: r.inst.id }">
+          <button v-if="r.hasParams" class="btn sm" :title="t('Настройки')" @click="app.indSettings = { pane: index, id: r.inst.id }">
             <Icon name="sliders" :size="15" />
           </button>
-          <button class="btn sm" title="Удалить" @click="remove(r.inst.id)"><Icon name="x" :size="15" /></button>
+          <button class="btn sm" :title="t('Удалить')" @click="remove(r.inst.id)"><Icon name="x" :size="15" /></button>
         </span>
       </div>
     </template>

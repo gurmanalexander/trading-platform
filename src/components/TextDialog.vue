@@ -3,6 +3,7 @@ import { nextTick, onMounted, ref } from 'vue'
 import Modal from './Modal.vue'
 import { app } from '../stores/app'
 import { chartAt } from '../chart/registry'
+import { t } from '../lib/i18n'
 
 // Ввод и правка текста на графике
 const edit = app.textEdit!
@@ -24,12 +25,12 @@ function apply() {
 </script>
 
 <template>
-  <Modal :title="edit.id ? 'Текст' : 'Новый текст'" :width="420" @close="close">
+  <Modal :title="edit.id ? t('Текст') : t('Новый текст')" :width="420" @close="close">
     <form class="td" @submit.prevent="apply">
-      <textarea ref="area" v-model="text" class="field" rows="6" placeholder="Текст на графике" @keydown.ctrl.enter="apply" @keydown.meta.enter="apply" />
+      <textarea ref="area" v-model="text" class="field" rows="6" :placeholder="t('Текст на графике')" @keydown.ctrl.enter="apply" @keydown.meta.enter="apply" />
       <div class="td-actions">
-        <span class="muted hint">Ctrl+Enter — сохранить. Пустой текст удаляет надпись.</span>
-        <button class="btn primary" type="submit">{{ edit.id ? 'Сохранить' : 'Добавить' }}</button>
+        <span class="muted hint">{{ t('Ctrl+Enter — сохранить. Пустой текст удаляет надпись.') }}</span>
+        <button class="btn primary" type="submit">{{ edit.id ? t('Сохранить') : t('Добавить') }}</button>
       </div>
     </form>
   </Modal>

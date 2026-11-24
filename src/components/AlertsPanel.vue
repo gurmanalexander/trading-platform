@@ -22,6 +22,7 @@ import {
   type PriceAlert,
 } from '../stores/alerts'
 import { fmtPrice, precisionOf } from '../lib/format'
+import { locale, t } from '../lib/i18n'
 
 const symbol = computed(() => activePane.value.symbol)
 const key = computed(() => symbolKey(symbol.value))
@@ -79,62 +80,62 @@ function open(a: PriceAlert) {
   setSymbol(a.ref)
 }
 function removeAll() {
-  if (confirm(`Удалить все оповещения (${alerts.length})?`)) clearAllAlerts()
+  if (confirm(t('Удалить все оповещения ({n})?', { n: alerts.length }))) clearAllAlerts()
 }
 
 const fmt = (a: (typeof alerts)[number]) => fmtPrice(a.price, precisionOf(symbolKey(a.ref), a.price))
-const time = (ms: number) => new Date(ms).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
+const time = (ms: number) => new Date(ms).toLocaleString(locale(), { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
 </script>
 
 <template>
   <div class="al">
     <form class="al-form" @submit.prevent="create">
-      <label class="muted" for="alert-price">Оповестить, когда {{ symbol.symbol }} достигнет</label>
+      <label class="muted" for="alert-price">{{ t('Оповестить, когда {symbol} достигнет', { symbol: symbol.symbol }) }}</label>
       <div class="al-inputs">
-        <input id="alert-price" ref="input" v-model="price" class="field" inputmode="decimal" autocomplete="off" placeholder="Цена" @input="touched = true" />
-        <button class="btn primary" type="submit" :disabled="!valid">Создать</button>
+        <input id="alert-price" ref="input" v-model="price" class="field" inputmode="decimal" autocomplete="off" :placeholder="t('Цена')" @input="touched = true" />
+        <button class="btn primary" type="submit" :disabled="!valid">{{ t('Создать') }}</button>
       </div>
       <p v-if="notifySupported && permission === 'default'" class="hint">
-        <button type="button" class="link" @click="allow">Разрешить уведомления</button>, чтобы получать их, когда вкладка в фоне.
+        <button type="button" class="link" @click="allow">{{ t('Разрешить уведомления') }}</button>{{ t(', чтобы получать их, когда вкладка в фоне.') }}
       </p>
-      <p v-else-if="permission === 'denied'" class="hint muted">Уведомления браузера выключены — сигнал придёт только в открытом приложении.</p>
+      <p v-else-if="permission === 'denied'" class="hint muted">{{ t('Уведомления браузера выключены — сигнал придёт только в открытом приложении.') }}</p>
     </form>
 
     <div v-if="alerts.length" class="al-bar">
-      <span class="muted">ждут {{ waitingAlerts }} · сработали {{ doneAlerts }}</span>
+      <span class="muted">{{ t('ждут {waiting} · сработали {done}', { waiting: waitingAlerts, done: doneAlerts }) }}</span>
       <span class="grow" />
-      <button v-if="unreadAlerts" class="btn sm" title="Отметить все сработавшие прочитанными" @click="markAllRead"><Icon name="checkAll" :size="16" />Прочитать все</button>
+      <button v-if="unreadAlerts" class="btn sm" :title="t('Отметить все сработавшие прочитанными')" @click="markAllRead"><Icon name="checkAll" :size="16" />{{ t('Прочитать все') }}</button>
       <Dropdown align="right">
         <template #trigger="{ toggle }">
-          <button class="btn sm" title="Действия со всеми оповещениями" @click="toggle"><Icon name="more" :size="16" /></button>
+          <button class="btn sm" :title="t('Действия со всеми оповещениями')" @click="toggle"><Icon name="more" :size="16" /></button>
         </template>
         <template #default="{ close }">
-          <button class="menu-item" :disabled="!unreadAlerts" @click="markAllRead(), close()"><Icon name="checkAll" :size="16" />Прочитать все</button>
-          <button class="menu-item" :disabled="!doneAlerts" @click="rearmDone(lastOf), close()"><Icon name="bell" :size="16" />Включить сработавшие снова</button>
-          <button class="menu-item" :disabled="!doneAlerts" @click="clearDone(), close()"><Icon name="trash" :size="16" />Удалить сработавшие</button>
+          <button class="menu-item" :disabled="!unreadAlerts" @click="markAllRead(), close()"><Icon name="checkAll" :size="16" />{{ t('Прочитать все') }}</button>
+          <button class="menu-item" :disabled="!doneAlerts" @click="rearmDone(lastOf), close()"><Icon name="bell" :size="16" />{{ t('Включить сработавшие снова') }}</button>
+          <button class="menu-item" :disabled="!doneAlerts" @click="clearDone(), close()"><Icon name="trash" :size="16" />{{ t('Удалить сработавшие') }}</button>
           <div class="menu-sep" />
-          <button class="menu-item" @click="removeAll(), close()"><Icon name="trash" :size="16" />Удалить все</button>
+          <button class="menu-item" @click="removeAll(), close()"><Icon name="trash" :size="16" />{{ t('Удалить все') }}</button>
         </template>
       </Dropdown>
     </div>
 
     <div class="al-list scroll">
       <div v-for="a in sorted" :key="a.id" class="al-row" :class="{ done: !a.active, unread: !a.active && !a.read }">
-        <button class="al-main" :title="'Открыть ' + a.ref.symbol" @click="open(a)">
+        <button class="al-main" :title="t('Открыть {symbol}', { symbol: a.ref.symbol })" @click="open(a)">
           <span>
-            <i v-if="!a.active && !a.read" class="new" title="Не прочитано" />
+            <i v-if="!a.active && !a.read" class="new" :title="t('Не прочитано')" />
             <b>{{ a.ref.symbol }}</b>
             <span class="tag" :class="a.ref.exchange">{{ EXCHANGE_NAMES[a.ref.exchange] }} · {{ MARKET_NAMES[a.ref.market] }}</span>
           </span>
           <span :class="a.dir === 'up' ? 'up' : 'down'">{{ a.dir === 'up' ? '≥' : '≤' }} {{ fmt(a) }}</span>
-          <span class="muted status">{{ a.active ? 'Ждёт' : 'Сработало ' + (a.triggeredAt ? time(a.triggeredAt) : '') }}</span>
+          <span class="muted status">{{ a.active ? t('Ждёт') : t('Сработало {time}', { time: a.triggeredAt ? time(a.triggeredAt) : '' }) }}</span>
         </button>
-        <button v-if="!a.active && !a.read" class="btn sm" title="Отметить прочитанным" @click="a.read = true"><Icon name="check" :size="16" /></button>
-        <button v-if="!a.active" class="btn sm" title="Включить снова" @click="rearmAlert(a, lastOf(a))"><Icon name="bell" :size="16" /></button>
-        <button class="btn sm" title="Удалить" @click="removeAlert(a.id)"><Icon name="trash" :size="16" /></button>
+        <button v-if="!a.active && !a.read" class="btn sm" :title="t('Отметить прочитанным')" @click="a.read = true"><Icon name="check" :size="16" /></button>
+        <button v-if="!a.active" class="btn sm" :title="t('Включить снова')" @click="rearmAlert(a, lastOf(a))"><Icon name="bell" :size="16" /></button>
+        <button class="btn sm" :title="t('Удалить')" @click="removeAlert(a.id)"><Icon name="trash" :size="16" /></button>
       </div>
       <p v-if="!alerts.length" class="empty muted">
-        Оповещений нет. Задайте цену выше или вызовите меню правой кнопкой мыши на графике. Линию оповещения на графике можно тянуть мышью.
+        {{ t('Оповещений нет. Задайте цену выше или вызовите меню правой кнопкой мыши на графике. Линию оповещения на графике можно тянуть мышью.') }}
       </p>
     </div>
   </div>

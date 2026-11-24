@@ -3,6 +3,7 @@ import { computed, reactive } from 'vue'
 import Modal from './Modal.vue'
 import { app } from '../stores/app'
 import { indicatorDef } from '../lib/indicators'
+import { t } from '../lib/i18n'
 
 const target = app.indSettings!
 const inst = computed(() => app.panes[target.pane].indicators.find((i) => i.id === target.id))
@@ -36,27 +37,27 @@ function reset() {
 </script>
 
 <template>
-  <Modal :title="def?.name ?? 'Индикатор'" :width="340" @close="close">
+  <Modal :title="def ? t(def.name) : t('Индикатор')" :width="340" @close="close">
     <form v-if="def" class="is" @submit.prevent="apply">
       <template v-for="p in def.params" :key="p.key">
         <label v-if="p.bool" class="is-row check">
-          <span>{{ p.label }}</span>
+          <span>{{ t(p.label) }}</span>
           <input :checked="params[p.key] === 1" type="checkbox" @change="params[p.key] = ($event.target as HTMLInputElement).checked ? 1 : 0" />
         </label>
         <label v-else class="is-row">
-          <span>{{ p.label }}</span>
+          <span>{{ t(p.label) }}</span>
           <input v-model.number="params[p.key]" class="field" type="number" inputmode="decimal" :min="p.min" :max="p.max" :step="p.step ?? 1" />
         </label>
       </template>
       <template v-for="(plot, i) in def.plots" :key="i">
         <label v-if="plot.kind === 'line'" class="is-row">
-          <span>Цвет: {{ plot.label }}</span>
+          <span>{{ t('Цвет: {name}', { name: t(plot.label) }) }}</span>
           <input v-model="colors[i]" class="color" type="color" />
         </label>
       </template>
       <div class="is-actions">
-        <button type="button" class="btn" @click="reset">По умолчанию</button>
-        <button type="submit" class="btn primary">Применить</button>
+        <button type="button" class="btn" @click="reset">{{ t('По умолчанию') }}</button>
+        <button type="submit" class="btn primary">{{ t('Применить') }}</button>
       </div>
     </form>
   </Modal>
