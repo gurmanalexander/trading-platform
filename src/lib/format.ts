@@ -1,3 +1,5 @@
+import { t } from './i18n'
+
 /** Кол-во значимых знаков после запятой в строке цены ("73701.51000000" -> 2) */
 export function decimalsOf(s: string): number {
   const dot = s.indexOf('.')
@@ -95,7 +97,7 @@ export function fmtDuration(sec: number): string {
   const m = Math.floor((sec % 3600) / 60)
   const s = sec % 60
   const pad = (n: number) => (n < 10 ? '0' + n : '' + n)
-  if (d > 0) return `${d}д ${h}ч`
+  if (d > 0) return t('{d}д {h}ч', { d, h })
   if (h > 0) return `${h}:${pad(m)}:${pad(s)}`
   return `${pad(m)}:${pad(s)}`
 }
@@ -106,7 +108,7 @@ export function fmtSpan(sec: number): string {
   const d = Math.floor(sec / 86400)
   const h = Math.floor((sec % 86400) / 3600)
   const m = Math.floor((sec % 3600) / 60)
-  if (d > 0) return h ? `${d}д ${h}ч` : `${d}д`
-  if (h > 0) return m ? `${h}ч ${m}м` : `${h}ч`
-  return `${m}м`
+  if (d > 0) return h ? t('{d}д {h}ч', { d, h }) : t('{d}д', { d })
+  if (h > 0) return m ? t('{h}ч {m}м', { h, m }) : t('{h}ч', { h })
+  return t('{m}м', { m })
 }

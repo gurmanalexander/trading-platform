@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { autoPrecision, decimalsOf, fmtCompact, fmtDuration, fmtPct, fmtSpan, observePrecision, precisionOf } from '../src/lib/format'
 import { heikinAshi, lowerBound } from '../src/chart/bars'
+import { i18n } from '../src/lib/i18n'
+import { fmtUsd } from '../src/chart/position'
 
 describe('точность цены', () => {
   it('считает значимые знаки, отбрасывая хвостовые нули', () => {
@@ -42,11 +44,24 @@ describe('форматирование', () => {
   })
 
   it('длительности', () => {
+    i18n.lang = 'ru'
     expect(fmtDuration(65)).toBe('01:05')
     expect(fmtDuration(3725)).toBe('1:02:05')
     expect(fmtDuration(90000)).toBe('1д 1ч')
     expect(fmtSpan(5400)).toBe('1ч 30м')
     expect(fmtSpan(-86400 * 2)).toBe('2д')
+  })
+
+  it('длительности и суммы по-английски', () => {
+    i18n.lang = 'en'
+    expect(fmtDuration(90000)).toBe('1d 1h')
+    expect(fmtSpan(5400)).toBe('1h 30m')
+    expect(fmtSpan(-86400 * 2)).toBe('2d')
+    expect(fmtSpan(45 * 60)).toBe('45m')
+    expect(fmtUsd(1250)).toBe('$1,250')
+    expect(fmtUsd(12.5)).toBe('$12.5')
+    i18n.lang = 'ru'
+    expect(fmtUsd(12.5)).toBe('12.5 $')
   })
 })
 

@@ -4,6 +4,7 @@ import qrcode from 'qrcode-generator'
 import Modal from './Modal.vue'
 import { app, toast } from '../stores/app'
 import { collect, decode, describe, encode, merge, writeAll, type Snapshot } from '../lib/transfer'
+import { t } from '../lib/i18n'
 
 // Перенос всего, что хранит приложение, на другое устройство — без сервера: ссылкой, QR-кодом или файлом.
 const incomingCode = app.transfer?.code ?? ''
@@ -39,9 +40,9 @@ onMounted(async () => {
 async function copyLink() {
   try {
     await navigator.clipboard.writeText(link.value)
-    toast('Ссылка скопирована — откройте её на другом устройстве')
+    toast(t('Ссылка скопирована — откройте её на другом устройстве'))
   } catch {
-    prompt('Ссылка для другого устройства', link.value)
+    prompt(t('Ссылка для другого устройства'), link.value)
   }
 }
 const canShare = !!navigator.share
@@ -71,7 +72,7 @@ async function preview(code: string) {
   try {
     incoming.value = await decode(code)
   } catch {
-    error.value = 'Не получилось прочитать: это не ссылка и не файл переноса tvx'
+    error.value = t('Не получилось прочитать: это не ссылка и не файл переноса tvx')
   }
 }
 async function onFile(e: Event) {
@@ -94,47 +95,46 @@ function close() {
 </script>
 
 <template>
-  <Modal title="Перенос на другое устройство" :width="460" @close="close">
+  <Modal :title="t('Перенос на другое устройство')" :width="460" @close="close">
     <div class="tabs" role="tablist">
-      <button role="tab" :class="{ on: tab === 'send' }" @click="tab = 'send'">Отправить отсюда</button>
-      <button role="tab" :class="{ on: tab === 'receive' }" @click="tab = 'receive'">Принять сюда</button>
+      <button role="tab" :class="{ on: tab === 'send' }" @click="tab = 'send'">{{ t('Отправить отсюда') }}</button>
+      <button role="tab" :class="{ on: tab === 'receive' }" @click="tab = 'receive'">{{ t('Принять сюда') }}</button>
     </div>
 
     <div v-if="tab === 'send'" class="body scroll">
       <p>
-        Переносится всё: списки с монетами и направлениями, уровни и остальные рисунки, оповещения, шаблоны, чеклист, цвета и настройки.
-        Откройте ссылку на втором устройстве — оно предложит принять данные.
+        {{ t('Переносится всё: списки с монетами и направлениями, уровни и остальные рисунки, оповещения, шаблоны, чеклист, цвета и настройки. Откройте ссылку на втором устройстве — оно предложит принять данные.') }}
       </p>
       <!-- eslint-disable-next-line vue/no-v-html -->
       <div v-if="qr" class="qr" v-html="qr" />
-      <p v-else-if="link" class="muted">Данных слишком много для QR-кода ({{ Math.round(size / 1024) }} КБ) — отправьте себе ссылку или файл.</p>
+      <p v-else-if="link" class="muted">{{ t('Данных слишком много для QR-кода ({kb} КБ) — отправьте себе ссылку или файл.', { kb: Math.round(size / 1024) }) }}</p>
       <div class="actions">
-        <button class="btn primary" :disabled="!link" @click="copyLink">Скопировать ссылку</button>
-        <button v-if="canShare" class="btn" :disabled="!link" @click="shareLink">Поделиться…</button>
-        <button class="btn" @click="downloadFile">Скачать файлом</button>
+        <button class="btn primary" :disabled="!link" @click="copyLink">{{ t('Скопировать ссылку') }}</button>
+        <button v-if="canShare" class="btn" :disabled="!link" @click="shareLink">{{ t('Поделиться…') }}</button>
+        <button class="btn" @click="downloadFile">{{ t('Скачать файлом') }}</button>
       </div>
       <p class="muted note">
-        Сервера у приложения нет, поэтому данные не обновляются сами: это перенос по запросу. Чтобы синхронизироваться снова, повторите его в нужную
-        сторону — на принимающем устройстве можно выбрать «Объединить», и то, что добавлено только там, сохранится.
+        {{ t('Сервера у приложения нет, поэтому данные не обновляются сами: это перенос по запросу. Чтобы синхронизироваться снова, повторите его в нужную сторону — на принимающем устройстве можно выбрать «Объединить», и то, что добавлено только там, сохранится.') }}
       </p>
     </div>
 
     <div v-else class="body scroll">
       <template v-if="!incomingCode">
-        <p>Вставьте ссылку переноса с другого устройства или выберите сохранённый файл.</p>
-        <textarea v-model="pasted" class="field" rows="3" placeholder="Ссылка или код переноса" @input="preview(pasted)" />
-        <label class="btn file">Выбрать файл<input type="file" accept="application/json,.json" @change="onFile" /></label>
+        <p>{{ t('Вставьте ссылку переноса с другого устройства или выберите сохранённый файл.') }}</p>
+        <textarea v-model="pasted" class="field" rows="3" :placeholder="t('Ссылка или код переноса')" @input="preview(pasted)" />
+        <label class="btn file">{{ t('Выбрать файл') }}<input type="file" accept="application/json,.json" @change="onFile" /></label>
       </template>
       <p v-if="error" class="down">{{ error }}</p>
       <template v-if="incoming">
-        <p><b>Пришло:</b> {{ summary }}.</p>
+        <p><b>{{ t('Пришло:') }}</b> {{ summary }}.</p>
         <div class="actions">
-          <button class="btn primary" @click="accept(false)">Объединить</button>
-          <button class="btn" @click="accept(true)">Заменить всё</button>
+          <button class="btn primary" @click="accept(false)">{{ t('Объединить') }}</button>
+          <button class="btn" @click="accept(true)">{{ t('Заменить всё') }}</button>
         </div>
         <p class="muted note">
-          «Объединить» — пришедшее добавится к тому, что уже есть здесь; при совпадении списка, рисунка или оповещения берётся пришедший вариант.
-          «Заменить всё» — это устройство станет точной копией другого, здешние данные будут стёрты. После выбора страница перезагрузится.
+          {{ t('«Объединить» — пришедшее добавится к тому, что уже есть здесь; при совпадении списка, рисунка или оповещения берётся пришедший вариант.') }}
+          {{ t('«Заменить всё» — это устройство станет точной копией другого, здешние данные будут стёрты. После выбора страница перезагрузится.') }}
+
         </p>
       </template>
     </div>
@@ -155,7 +155,7 @@ function close() {
 }
 .tabs button.on {
   color: var(--text);
-  border-bottom-color: var(--accent);
+  border-bottom-color: var(--sel-border);
 }
 .body {
   display: flex;

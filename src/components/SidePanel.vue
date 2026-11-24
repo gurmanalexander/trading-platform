@@ -5,6 +5,7 @@ import AlertsPanel from './AlertsPanel.vue'
 import ChecklistPanel from './ChecklistPanel.vue'
 import { app, type PanelId } from '../stores/app'
 import { unreadAlerts } from '../stores/alerts'
+import { t } from '../lib/i18n'
 
 defineProps<{ tab: PanelId; tabs: boolean }>()
 
@@ -19,9 +20,9 @@ const TABS: { id: PanelId; label: string }[] = [
 <template>
   <aside class="side">
     <div v-if="tabs" class="side-tabs" role="tablist">
-      <button v-for="t in TABS" :key="t.id" role="tab" :aria-selected="tab === t.id" :class="{ on: tab === t.id }" @click="app.panel = t.id">
-        {{ t.label }}
-        <i v-if="t.id === 'alerts' && unreadAlerts" class="badge" title="Непрочитанные оповещения">{{ unreadAlerts }}</i>
+      <button v-for="it in TABS" :key="it.id" role="tab" :aria-selected="tab === it.id" :class="{ on: tab === it.id }" @click="app.panel = it.id">
+        {{ t(it.label) }}
+        <i v-if="it.id === 'alerts' && unreadAlerts" class="badge" :title="t('Непрочитанные оповещения')">{{ unreadAlerts }}</i>
       </button>
     </div>
     <div class="side-body">
@@ -73,7 +74,7 @@ const TABS: { id: PanelId; label: string }[] = [
 }
 .side-tabs button.on {
   color: var(--text);
-  border-bottom-color: var(--accent);
+  border-bottom-color: var(--sel-border);
 }
 .side-body {
   flex: 1;

@@ -48,6 +48,12 @@ describe('сетап одной строкой', () => {
     expect(parseSetup(formatSetup({ exchange: 'bybit', market: 'spot', symbol: 'SOLUSDT' }))).toEqual({ exchange: 'bybit', market: 'spot', symbol: 'SOLUSDT' })
   })
 
+  it('сетап на английском', () => {
+    expect(parseSetup('Bybit futures #SOL Short 150.5')).toEqual({ exchange: 'bybit', market: 'futures', symbol: 'SOLUSDT', side: 'short', level: 150.5 })
+    expect(parseSetup('binance spot BTCUSDT buy 73500')).toEqual({ exchange: 'binance', market: 'spot', symbol: 'BTCUSDT', side: 'long', level: 73500 })
+    expect(parseSetup('#ETH perpetual sell')).toEqual({ market: 'futures', symbol: 'ETHUSDT', side: 'short' })
+  })
+
   it('место даты на экране зависит от интервала', () => {
     expect(focusFraction(86400)).toBeGreaterThan(2 / 3) // дневка — правая треть
     expect(focusFraction(3600)).toBe(0.5) // час — середина

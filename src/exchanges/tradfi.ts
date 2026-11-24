@@ -7,6 +7,7 @@ import type { ExchangeId, MarketId } from '../types'
  */
 export type AssetKind = 'stock' | 'etf' | 'commodity' | 'forex' | 'preipo'
 
+// подписи видов — русские строки, переводятся при показе: t(ASSET_KIND_NAMES[kind])
 export const ASSET_KIND_NAMES: Record<AssetKind, string> = {
   stock: 'акция',
   etf: 'фонд',

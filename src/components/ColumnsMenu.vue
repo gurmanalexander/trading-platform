@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import Icon from './Icon.vue'
 import Dropdown from './Dropdown.vue'
+import { t } from '../lib/i18n'
 
 // Выбор столбцов таблицы: порядок фиксирован, отмечаются нужные. Название инструмента показывается всегда.
+// label и hint — русские строки, переводятся при показе.
 const props = defineProps<{ options: { id: string; label: string; hint?: string }[]; modelValue: string[] }>()
 const emit = defineEmits<{ 'update:modelValue': [value: string[]] }>()
 
@@ -16,13 +18,13 @@ function toggle(id: string) {
 <template>
   <Dropdown align="right">
     <template #trigger="{ toggle: open }">
-      <button class="btn sm" title="Столбцы" @click="open"><Icon name="columns" :size="16" /></button>
+      <button class="btn sm" :title="t('Столбцы')" @click="open"><Icon name="columns" :size="16" /></button>
     </template>
-    <div class="menu-title">Столбцы</div>
-    <label class="menu-item check off"><input type="checkbox" checked disabled />Тикер</label>
-    <label v-for="o in options" :key="o.id" class="menu-item check" :title="o.hint">
+    <div class="menu-title">{{ t('Столбцы') }}</div>
+    <label class="menu-item check off"><input type="checkbox" checked disabled />{{ t('Тикер') }}</label>
+    <label v-for="o in options" :key="o.id" class="menu-item check" :title="o.hint ? t(o.hint) : undefined">
       <input type="checkbox" :checked="modelValue.includes(o.id)" @change="toggle(o.id)" />
-      {{ o.label }}
+      {{ t(o.label) }}
     </label>
   </Dropdown>
 </template>

@@ -3,6 +3,7 @@ import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import Modal from './Modal.vue'
 import { app, openSearch, setTf } from '../stores/app'
 import { parseTf } from '../lib/timeframes'
+import { t } from '../lib/i18n'
 
 // Интервал с клавиатуры: окно открывается первой набранной цифрой
 const input = ref<HTMLInputElement>()
@@ -41,12 +42,12 @@ function apply() {
 </script>
 
 <template>
-  <Modal title="Интервал" :width="300" @close="close">
+  <Modal :title="t('Интервал')" :width="300" @close="close">
     <form class="iv" @submit.prevent="apply">
       <input ref="input" v-model="text" class="field" autocomplete="off" spellcheck="false" placeholder="5, 15, 1h, 4h, D, W" />
-      <p :class="parsed ? '' : 'muted'">{{ parsed ? 'Интервал: ' + parsed.label : 'Такого интервала нет' }}</p>
-      <p class="muted hint">Число — минуты, h — часы, D — день, W — неделя, M — месяц</p>
-      <button class="btn primary" type="submit" :disabled="!parsed">Применить</button>
+      <p :class="parsed ? '' : 'muted'">{{ parsed ? t('Интервал: {tf}', { tf: parsed.label }) : t('Такого интервала нет') }}</p>
+      <p class="muted hint">{{ t('Число — минуты, h — часы, D — день, W — неделя, M — месяц') }}</p>
+      <button class="btn primary" type="submit" :disabled="!parsed">{{ t('Применить') }}</button>
     </form>
   </Modal>
 </template>

@@ -5,6 +5,7 @@ import Icon from './Icon.vue'
 import Modal from './Modal.vue'
 import { app, isPhone } from '../stores/app'
 import { DONATE_METHODS, markDonateOpened, type DonateMethod } from '../lib/donate'
+import { t } from '../lib/i18n'
 
 // Поддержать проект. Сначала выбирают способ, потом видят только его: адрес, одну большую кнопку
 // «Скопировать» и предупреждение про сеть. QR-код — только у выбранного способа: на компьютере рядом
@@ -49,24 +50,38 @@ async function copy() {
     clearTimeout(copiedTimer)
     copiedTimer = window.setTimeout(() => (copied.value = false), 2200)
   } catch {
-    prompt('Скопируйте адрес', text)
+    prompt(t('Скопируйте адрес'), text)
   }
 }
+
+/** Переведённая фраза кусками: подстановки {name} выделяются жирным */
+function rich(key: string, vars: Record<string, string>): { text: string; bold: boolean }[] {
+  return t(key)
+    .split(/(\{\w+\})/)
+    .filter(Boolean)
+    .map((p) => {
+      const name = /^\{(\w+)\}$/.exec(p)?.[1]
+      return name && name in vars ? { text: vars[name], bold: true } : { text: p, bold: false }
+    })
+}
+const network = computed(() => t(method.value.network ?? ''))
+const recipient = computed(() => rich('Получатель — {name}.', { name: t(method.value.sub) }))
+const warning = computed(() => rich('Только {coin} и только в сети {network} — в другой сети перевод не дойдёт.', { coin: 'USDT', network: network.value }))
 onBeforeUnmount(() => clearTimeout(copiedTimer))
 </script>
 
 <template>
-  <Modal title="Поддержать проект" :width="520" @close="app.donateOpen = false">
+  <Modal :title="t('Поддержать проект')" :width="520" @close="app.donateOpen = false">
     <div class="dn">
       <div class="hero">
         <span class="hero-icon"><Icon name="heart" :size="22" /></span>
         <div class="hero-text">
-          <b>tvx бесплатный и без рекламы</b>
-          <span>Если терминал помогает вам в торговле — поддержите его развитие. Любая сумма — это новые функции и исправления.</span>
+          <b>{{ t('tvx бесплатный и без рекламы') }}</b>
+          <span>{{ t('Если терминал помогает вам в торговле — поддержите его развитие. Любая сумма — это новые функции и исправления.') }}</span>
         </div>
       </div>
 
-      <div class="methods" role="radiogroup" aria-label="Способ перевода">
+      <div class="methods" role="radiogroup" :aria-label="t('Способ перевода')">
         <button
           v-for="m in DONATE_METHODS"
           :key="m.id"
@@ -78,8 +93,8 @@ onBeforeUnmount(() => clearTimeout(copiedTimer))
         >
           <span class="m-title">{{ m.title }}</span>
           <span class="m-sub">
-            {{ m.sub }}
-            <span v-if="m.tag" class="m-tag" :class="m.pay ? 'good' : 'meh'">{{ m.tag }}</span>
+            {{ t(m.sub) }}
+            <span v-if="m.tag" class="m-tag" :class="m.pay ? 'good' : 'meh'">{{ t(m.tag) }}</span>
           </span>
         </button>
       </div>
@@ -87,19 +102,22 @@ onBeforeUnmount(() => clearTimeout(copiedTimer))
       <div class="detail" :class="{ 'with-qr': showQr }">
         <div class="d-main">
           <template v-if="method.pay">
-            <p class="d-text">Переведите любую сумму через Binance Pay — без комиссии, деньги приходят сразу.</p>
-            <a class="cta" :href="method.address" target="_blank" rel="noopener"><Icon name="external" :size="16" />Открыть Binance Pay</a>
-            <p class="hint">Получатель — <b>{{ method.sub }}</b>.<template v-if="!isPhone"> Или отсканируйте QR-код в приложении Binance.</template></p>
+            <p class="d-text">{{ t('Переведите любую сумму через Binance Pay — без комиссии, деньги приходят сразу.') }}</p>
+            <a class="cta" :href="method.address" target="_blank" rel="noopener"><Icon name="external" :size="16" />{{ t('Открыть Binance Pay') }}</a>
+            <p class="hint">
+              <template v-for="(p, i) in recipient" :key="i"><b v-if="p.bold">{{ p.text }}</b><template v-else>{{ p.text }}</template></template>
+              <template v-if="!isPhone"> {{ t('Или отсканируйте QR-код в приложении Binance.') }}</template>
+            </p>
           </template>
           <template v-else>
-            <span class="d-label">Адрес USDT · {{ method.network }}</span>
+            <span class="d-label">{{ t('Адрес USDT · {network}', { network }) }}</span>
             <code class="addr"><b>{{ parts.head }}</b>{{ parts.mid }}<b>{{ parts.tail }}</b></code>
             <button class="cta" :class="{ done: copied }" @click="copy">
-              <Icon :name="copied ? 'check' : 'copy'" :size="16" />{{ copied ? 'Адрес скопирован' : 'Скопировать адрес' }}
+              <Icon :name="copied ? 'check' : 'copy'" :size="16" />{{ copied ? t('Адрес скопирован') : t('Скопировать адрес') }}
             </button>
             <p class="warn">
               <Icon name="info" :size="14" />
-              <span>Только <b>USDT</b> и только в сети <b>{{ method.network }}</b> — в другой сети перевод не дойдёт.</span>
+              <span><template v-for="(p, i) in warning" :key="i"><b v-if="p.bold">{{ p.text }}</b><template v-else>{{ p.text }}</template></template></span>
             </p>
           </template>
         </div>
@@ -108,10 +126,10 @@ onBeforeUnmount(() => clearTimeout(copiedTimer))
         </div>
       </div>
       <button v-if="isPhone" class="qr-toggle" @click="qrOpen = !qrOpen">
-        <Icon name="qr" :size="15" />{{ qrOpen ? 'Скрыть QR-код' : 'Показать QR-код' }}
+        <Icon name="qr" :size="15" />{{ qrOpen ? t('Скрыть QR-код') : t('Показать QR-код') }}
       </button>
 
-      <p class="thanks">Спасибо, что пользуетесь tvx</p>
+      <p class="thanks">{{ t('Спасибо, что пользуетесь tvx') }}</p>
     </div>
   </Modal>
 </template>
@@ -179,11 +197,11 @@ onBeforeUnmount(() => clearTimeout(copiedTimer))
     background 0.15s;
 }
 .method:hover {
-  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+  border-color: color-mix(in srgb, var(--sel-border) 60%, var(--border));
 }
 .method.on {
-  border-color: var(--accent);
-  background: color-mix(in srgb, var(--accent) 9%, var(--bg));
+  border-color: var(--sel-border);
+  background: var(--sel-bg);
 }
 .m-title {
   font-weight: 600;

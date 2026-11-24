@@ -4,27 +4,28 @@ import PhoneMenu from './PhoneMenu.vue'
 import { app, MOBILE_TABS as TABS } from '../stores/app'
 import { unreadAlerts } from '../stores/alerts'
 import { donate } from '../lib/donate'
+import { t } from '../lib/i18n'
 </script>
 
 <template>
-  <nav class="bnav" aria-label="Разделы">
-    <button v-for="t in TABS" :key="t.id" :class="{ on: app.mobileTab === t.id }" @click="app.mobileTab = t.id">
+  <nav class="bnav" :aria-label="t('Разделы')">
+    <button v-for="tab in TABS" :key="tab.id" :class="{ on: app.mobileTab === tab.id }" @click="app.mobileTab = tab.id">
       <span class="ico">
-        <Icon :name="t.icon" :size="20" />
-        <i v-if="t.id === 'alerts' && unreadAlerts" class="badge">{{ unreadAlerts }}</i>
+        <Icon :name="tab.icon" :size="20" />
+        <i v-if="tab.id === 'alerts' && unreadAlerts" class="badge">{{ unreadAlerts }}</i>
       </span>
-      <span>{{ t.label }}</span>
+      <span>{{ t(tab.label) }}</span>
     </button>
     <!-- настройки и действия нужны в любом разделе, а не только на графике -->
     <PhoneMenu>
       <template #trigger="{ toggle, open }">
-        <button :class="{ on: open }" title="Ещё: настройки и действия" @click="toggle">
+        <button :class="{ on: open }" :title="t('Ещё: настройки и действия')" @click="toggle">
           <span class="ico">
             <Icon name="more" :size="20" />
             <!-- изредка (см. lib/donate) у «Ещё» на пару секунд появляется сердечко: там пункт «Поддержать проект» -->
             <i v-if="donate.pulse" class="heart"><Icon name="heart" :size="11" /></i>
           </span>
-          <span>Ещё</span>
+          <span>{{ t('Ещё') }}</span>
         </button>
       </template>
     </PhoneMenu>
@@ -57,7 +58,7 @@ import { donate } from '../lib/donate'
   color: var(--muted);
 }
 .bnav button.on {
-  color: var(--accent);
+  color: var(--sel);
 }
 .ico {
   position: relative;
@@ -67,11 +68,12 @@ import { donate } from '../lib/donate'
   top: -6px;
   left: 15px;
   display: grid;
-  color: #f0566b;
+  color: #f23645;
   animation: heartbeat 1.3s ease-in-out 2;
 }
 .heart :deep(svg) {
-  fill: #f0566b;
+  fill: currentColor;
+  filter: drop-shadow(0 0 3px rgba(242, 54, 69, 0.7));
 }
 @keyframes heartbeat {
   0%,

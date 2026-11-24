@@ -8,6 +8,7 @@ import { app, toast } from '../stores/app'
 import { makePack, shareOptions, shareUrl } from '../chart/share'
 import { shareText } from '../lib/share'
 import { fmtPct, fmtPrice } from '../lib/format'
+import { locale, t } from '../lib/i18n'
 
 // «Поделиться»: что отправить с текущего графика — направление, дату, ближайшие уровни и последние позиции.
 // Результат — ссылка, QR-код или текст для мессенджера.
@@ -32,7 +33,9 @@ const pack = computed(() =>
 const link = computed(() => shareUrl(pack.value))
 const text = computed(() => shareText(pack.value, o.precision))
 const dist = (level: number) => (o.last ? fmtPct(((level - o.last) / o.last) * 100) : '')
-const dateText = o.date ? `${String(o.date.d).padStart(2, '0')}.${String(o.date.m).padStart(2, '0')}.${o.date.y}` : ''
+const dateText = computed(() =>
+  o.date ? new Date(Date.UTC(o.date.y, o.date.m - 1, o.date.d)).toLocaleDateString(locale(), { timeZone: 'UTC', day: '2-digit', month: '2-digit', year: 'numeric' }) : '',
+)
 
 const qr = ref('')
 watch(
@@ -55,7 +58,7 @@ async function copy(value: string, done: string) {
     await navigator.clipboard.writeText(value)
     toast(done)
   } catch {
-    prompt('Скопируйте вручную', value)
+    prompt(t('Скопируйте вручную'), value)
   }
 }
 const canShare = !!navigator.share
@@ -66,49 +69,50 @@ const close = () => (app.shareOpen = false)
 </script>
 
 <template>
-  <Modal :title="'Поделиться · ' + o.ref.symbol" :width="620" @close="close">
+  <Modal :title="t('Поделиться · {symbol}', { symbol: o.ref.symbol })" :width="620" @close="close">
     <div class="sh">
       <div class="sh-pick">
-        <p class="muted coin">{{ EXCHANGE_NAMES[o.ref.exchange] }} · {{ MARKET_NAMES[o.ref.market] }} · цена {{ f(o.last) }}</p>
+        <p class="muted coin">{{ EXCHANGE_NAMES[o.ref.exchange] }} · {{ MARKET_NAMES[o.ref.market] }} · {{ t('цена {price}', { price: f(o.last) }) }}</p>
 
         <label v-if="o.side" class="opt">
           <input v-model="pick.side" type="checkbox" />
-          <span>Направление</span>
-          <b :class="o.side === 'long' ? 'up' : 'down'">{{ o.side === 'long' ? '▲ лонг' : '▼ шорт' }}</b>
+          <span>{{ t('Направление') }}</span>
+          <b :class="o.side === 'long' ? 'up' : 'down'">{{ o.side === 'long' ? t('▲ лонг') : t('▼ шорт') }}</b>
         </label>
-        <label v-if="o.date" class="opt" title="График отмотан назад: получатель увидит эту же дату">
+        <label v-if="o.date" class="opt" :title="t('График отмотан назад: получатель увидит эту же дату')">
           <input v-model="pick.date" type="checkbox" />
-          <span>Дата графика</span>
+          <span>{{ t('Дата графика') }}</span>
           <b>{{ dateText }}</b>
         </label>
 
-        <h3>Уровни <span class="muted">— ближайшие к цене</span></h3>
+        <h3>{{ t('Уровни') }} <span class="muted">{{ t('— ближайшие к цене') }}</span></h3>
         <label v-for="(l, i) in o.levels" :key="l" class="opt">
           <input v-model="pick.levels[i]" type="checkbox" />
           <span class="num">{{ f(l) }}</span>
           <b class="muted">{{ dist(l) }}</b>
         </label>
-        <p v-if="!o.levels.length" class="muted empty">На графике нет горизонтальных уровней.</p>
+        <p v-if="!o.levels.length" class="muted empty">{{ t('На графике нет горизонтальных уровней.') }}</p>
 
-        <h3>Позиции <span class="muted">— последние</span></h3>
+        <h3>{{ t('Позиции') }} <span class="muted">{{ t('— последние') }}</span></h3>
         <label v-for="(x, i) in o.positions" :key="x.t + ':' + x.entry" class="opt pos">
           <input v-model="pick.positions[i]" type="checkbox" />
           <span>
-            <b :class="x.side === 'long' ? 'up' : 'down'">{{ x.side === 'long' ? 'Лонг' : 'Шорт' }}</b>
+            <b :class="x.side === 'long' ? 'up' : 'down'">{{ x.side === 'long' ? t('Лонг') : t('Шорт') }}</b>
             {{ f(x.entry) }}
-            <i class="muted">стоп {{ f(x.stop) }} · тейк {{ f(x.target) }}</i>
+            <i class="muted">{{ t('стоп {stop} · тейк {target}', { stop: f(x.stop), target: f(x.target) }) }}</i>
           </span>
         </label>
-        <p v-if="!o.positions.length" class="muted empty">Позиций на графике нет.</p>
+        <p v-if="!o.positions.length" class="muted empty">{{ t('Позиций на графике нет.') }}</p>
       </div>
 
       <div class="sh-out">
         <div v-if="qr" class="qr" v-html="qr" />
         <input class="field link" readonly :value="link" @focus="($event.target as HTMLInputElement).select()" />
         <div class="actions">
-          <button class="btn primary" @click="copy(link, 'Ссылка скопирована')"><Icon name="link" :size="16" />Ссылку</button>
-          <button class="btn" title="Строки сетапа и позиции текстом — их можно вставить в tvx или отправить в чат" @click="copy(text, 'Текст скопирован')"><Icon name="copy" :size="16" />Текстом</button>
-          <button v-if="canShare" class="btn" title="Системное окно «Поделиться»" @click="system"><Icon name="share" :size="16" /></button>
+          <button class="btn primary" @click="copy(link, t('Ссылка скопирована'))"><Icon name="link" :size="16" />{{ t('Ссылку') }}</button>
+          <button class="btn" :title="t('Строки сетапа и позиции текстом — их можно вставить в tvx или отправить в чат')" @click="copy(text, t('Текст скопирован'))"><Icon name="copy" :size="16" />{{ t('Текстом') }}</button>
+          <button v-if="canShare" class="btn" :title="t('Системное окно «Поделиться»')"
+ @click="system"><Icon name="share" :size="16" /></button>
         </div>
         <pre class="text">{{ text }}</pre>
       </div>

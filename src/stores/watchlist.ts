@@ -1,6 +1,7 @@
 import { computed, reactive } from 'vue'
 import { sameSymbol, symbolKey, type SymbolRef } from '../types'
 import { load, persist } from '../lib/storage'
+import { i18n, type Lang } from '../lib/i18n'
 import { latestPosition } from '../chart/position'
 import { drawings } from './drawings'
 
@@ -35,16 +36,26 @@ export const LIST_COLORS = ['#e8a838', '#1fb28a', '#4c8dff', '#a78bfa', '#f0566b
 const uid = () => Math.random().toString(36).slice(2, 10)
 const fut = (symbol: string): WatchItem => ({ exchange: 'binance', market: 'futures', symbol })
 
+/**
+ * Названия списков по умолчанию на обоих языках, в том же порядке. Это данные пользователя:
+ * их не переводят при показе, а задают на языке интерфейса при первом запуске.
+ */
+const DEFAULT_LIST_NAMES: Record<Lang, string[]> = {
+  ru: ['Поводыри', 'Сделки', 'Ордера', 'Не взяли', 'Закрытые', 'Наблюдаю', 'Остальные'],
+  en: ['Leaders', 'Trades', 'Orders', 'Missed', 'Closed', 'Watching', 'Other'],
+}
+
 function defaults(): { all: WatchList[]; activeId: string } {
   const mk = (name: string, color: string, items: WatchItem[] = []): WatchList => ({ id: uid(), name, color, collapsed: false, items, share: true })
+  const n = DEFAULT_LIST_NAMES[i18n.lang]
   const all = [
-    mk('Поводыри', '#e8a838', [fut('BTCUSDT'), fut('ETHUSDT')]),
-    mk('Сделки', '#1fb28a'),
-    mk('Ордера', '#4c8dff'),
-    mk('Не взяли', '#a78bfa'),
-    mk('Закрытые', '#7d8799'),
-    mk('Наблюдаю', '#3fa7a3'),
-    mk('Остальные', '#d86bb0'),
+    mk(n[0], '#e8a838', [fut('BTCUSDT'), fut('ETHUSDT')]),
+    mk(n[1], '#1fb28a'),
+    mk(n[2], '#4c8dff'),
+    mk(n[3], '#a78bfa'),
+    mk(n[4], '#7d8799'),
+    mk(n[5], '#3fa7a3'),
+    mk(n[6], '#d86bb0'),
   ]
   // новые инструменты (Alt+W, звёздочка) по умолчанию попадают в «Наблюдаю»
   return { all, activeId: all[5].id }
@@ -80,6 +91,21 @@ function parse(saved: SavedLists) {
  */
 export const lists = reactive(parse(load<SavedLists>('lists', null)))
 persist('lists', lists, () => lists)
+
+/**
+ * Переименовывает списки по умолчанию на текущий язык (ru ↔ en) — только если они всё ещё
+ * в точности стандартные: те же названия в том же порядке, без добавленных и удалённых списков.
+ * Вызывается при выборе языка в онбординге.
+ */
+export function localizeDefaultLists(): void {
+  const names = lists.all.map((l) => l.name)
+  const same = (set: string[]) => set.length === names.length && set.every((n, i) => n === names[i])
+  if (!Object.values(DEFAULT_LIST_NAMES).some(same)) return
+  const next = DEFAULT_LIST_NAMES[i18n.lang]
+  lists.all.forEach((l, i) => {
+    if (l.name !== next[i]) l.name = next[i]
+  })
+}
 
 export const activeList = computed(() => lists.all.find((l) => l.id === lists.activeId) ?? lists.all[0])
 

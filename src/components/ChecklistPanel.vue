@@ -7,6 +7,7 @@ import { app, activeIndex, activePane, isPhone, setSymbol, toast } from '../stor
 import { checklist, blockVisible, buildText, toggleAnswer, addBlock, removeBlock, moveBlock, resetBlocks, type CheckBlock } from '../stores/checklist'
 import { drawings } from '../stores/drawings'
 import { chartAt } from '../chart/registry'
+import { t } from '../lib/i18n'
 
 // Чеклист сделки — отдельный раздел: заполняется рядом с графиком, помнит отмеченное по каждой монете,
 // текст можно скопировать или держать заметкой на графике. Шестерёнка — настройка своих блоков.
@@ -54,9 +55,9 @@ function place() {
 async function copy() {
   try {
     await navigator.clipboard.writeText(text.value)
-    toast('Текст чеклиста скопирован')
+    toast(t('Текст чеклиста скопирован'))
   } catch {
-    toast('Браузер не дал записать в буфер обмена', 'error')
+    toast(t('Браузер не дал записать в буфер обмена'), 'error')
   }
 }
 
@@ -87,7 +88,7 @@ function setParent(b: CheckBlock, id: string) {
 }
 const parentAnswers = (b: CheckBlock) => checklist.blocks.find((x) => x.id === b.dependsOn?.block)?.answers ?? []
 function restore() {
-  if (confirm('Вернуть список блоков по умолчанию? Свои блоки будут удалены.')) resetBlocks()
+  if (confirm(t('Вернуть список блоков по умолчанию? Свои блоки будут удалены.'))) resetBlocks()
 }
 </script>
 
@@ -97,11 +98,11 @@ function restore() {
       <template v-if="mode === 'fill'">
         <SideMark :item="symbol" />
         <b class="sym">{{ symbol.symbol }}</b>
-        <span class="muted">{{ checked ? 'отмечено ' + checked : 'ничего не отмечено' }}</span>
+        <span class="muted">{{ checked ? t('отмечено {n}', { n: checked }) : t('ничего не отмечено') }}</span>
       </template>
-      <b v-else class="sym">Настройка блоков</b>
+      <b v-else class="sym">{{ t('Настройка блоков') }}</b>
       <span class="grow" />
-      <button class="btn sm" :class="{ on: mode === 'setup' }" :title="mode === 'setup' ? 'Вернуться к чеклисту' : 'Настроить блоки и варианты'" @click="mode = mode === 'setup' ? 'fill' : 'setup'">
+      <button class="btn sm" :class="{ on: mode === 'setup' }" :title="mode === 'setup' ? t('Вернуться к чеклисту') : t('Настроить блоки и варианты')" @click="mode = mode === 'setup' ? 'fill' : 'setup'">
         <Icon :name="mode === 'setup' ? 'check' : 'gear'" :size="16" />
       </button>
     </header>
@@ -117,22 +118,22 @@ function restore() {
             </label>
           </div>
         </section>
-        <p v-if="!checklist.blocks.length" class="muted">Блоков нет. Добавьте их в настройке (шестерёнка).</p>
+        <p v-if="!checklist.blocks.length" class="muted">{{ t('Блоков нет. Добавьте их в настройке (шестерёнка).') }}</p>
         <pre v-if="text" class="preview">{{ text }}</pre>
         <div v-if="filled.length" class="filled">
-          <span class="muted">Заполнены:</span>
+          <span class="muted">{{ t('Заполнены:') }}</span>
           <button v-for="f in filled" :key="symbolKey(f)" class="chip" :class="{ on: symbolKey(f) === key }" @click="open(f)">{{ f.symbol.replace(/USDT$/, '') }}</button>
         </div>
       </div>
       <footer class="foot">
-        <label class="check" title="Отмеченное сразу появляется заметкой на графике этой монеты и обновляется при каждом изменении">
-          <input type="checkbox" :checked="checklist.auto" @change="setAuto(($event.target as HTMLInputElement).checked)" />на графике
+        <label class="check" :title="t('Отмеченное сразу появляется заметкой на графике этой монеты и обновляется при каждом изменении')">
+          <input type="checkbox" :checked="checklist.auto" @change="setAuto(($event.target as HTMLInputElement).checked)" />{{ t('на графике') }}
         </label>
-        <button v-if="!checklist.auto && text" class="btn sm" @click="place">{{ onChart ? 'Обновить' : 'На график' }}</button>
-        <button v-if="!checklist.auto && onChart" class="btn sm" title="Убрать заметку с графика, отметки останутся" @click="syncNote('')">Убрать</button>
+        <button v-if="!checklist.auto && text" class="btn sm" @click="place">{{ onChart ? t('Обновить') : t('На график') }}</button>
+        <button v-if="!checklist.auto && onChart" class="btn sm" :title="t('Убрать заметку с графика, отметки останутся')" @click="syncNote('')">{{ t('Убрать') }}</button>
         <span class="grow" />
-        <button class="btn sm" :disabled="!text" title="Скопировать текст чеклиста" @click="copy"><Icon name="copy" :size="15" /></button>
-        <button class="btn sm" :disabled="!checked && !onChart" title="Снять все отметки у этой монеты и убрать заметку с графика" @click="reset">Сбросить</button>
+        <button class="btn sm" :disabled="!text" :title="t('Скопировать текст чеклиста')" @click="copy"><Icon name="copy" :size="15" /></button>
+        <button class="btn sm" :disabled="!checked && !onChart" :title="t('Снять все отметки у этой монеты и убрать заметку с графика')" @click="reset">{{ t('Сбросить') }}</button>
       </footer>
     </template>
 
@@ -140,27 +141,27 @@ function restore() {
       <div class="cl-body scroll">
         <section v-for="(b, i) in checklist.blocks" :key="b.id" class="edit">
           <div class="edit-head">
-            <input v-model="b.question" class="field" placeholder="Вопрос" />
-            <button class="btn sm" title="Выше" :disabled="i === 0" @click="moveBlock(i, -1)"><Icon name="up" :size="15" /></button>
-            <button class="btn sm" title="Ниже" :disabled="i === checklist.blocks.length - 1" @click="moveBlock(i, 1)"><Icon name="down" :size="15" /></button>
-            <button class="btn sm" title="Удалить блок" @click="removeBlock(b.id)"><Icon name="trash" :size="15" /></button>
+            <input v-model="b.question" class="field" :placeholder="t('Вопрос')" />
+            <button class="btn sm" :title="t('Выше')" :disabled="i === 0" @click="moveBlock(i, -1)"><Icon name="up" :size="15" /></button>
+            <button class="btn sm" :title="t('Ниже')" :disabled="i === checklist.blocks.length - 1" @click="moveBlock(i, 1)"><Icon name="down" :size="15" /></button>
+            <button class="btn sm" :title="t('Удалить блок')" @click="removeBlock(b.id)"><Icon name="trash" :size="15" /></button>
           </div>
           <div class="edit-opts">
             <select v-model="b.type" class="field">
-              <option value="checkbox">Несколько вариантов</option>
-              <option value="radio">Один вариант</option>
+              <option value="checkbox">{{ t('Несколько вариантов') }}</option>
+              <option value="radio">{{ t('Один вариант') }}</option>
             </select>
-            <label class="check"><input v-model="b.singleLine" type="checkbox" />в одну строку</label>
+            <label class="check"><input v-model="b.singleLine" type="checkbox" />{{ t('в одну строку') }}</label>
           </div>
-          <textarea class="field" rows="4" placeholder="Варианты — по одному в строке" :value="answersText(b)" @change="setAnswers(b, ($event.target as HTMLTextAreaElement).value)" />
+          <textarea class="field" rows="4" :placeholder="t('Варианты — по одному в строке')" :value="answersText(b)" @change="setAnswers(b, ($event.target as HTMLTextAreaElement).value)" />
           <div class="edit-opts">
-            <span class="muted">Показывать, если</span>
+            <span class="muted">{{ t('Показывать, если') }}</span>
             <select class="field" :value="b.dependsOn?.block ?? ''" @change="setParent(b, ($event.target as HTMLSelectElement).value)">
-              <option value="">всегда</option>
-              <option v-for="p in parents(b)" :key="p.id" :value="p.id">в «{{ p.question }}»</option>
+              <option value="">{{ t('всегда') }}</option>
+              <option v-for="p in parents(b)" :key="p.id" :value="p.id">{{ t('в «{q}»', { q: p.question }) }}</option>
             </select>
             <template v-if="b.dependsOn">
-              <span class="muted">выбрано</span>
+              <span class="muted">{{ t('выбрано') }}</span>
               <select v-model="b.dependsOn.answer" class="field">
                 <option v-for="a in parentAnswers(b)" :key="a" :value="a">{{ a }}</option>
               </select>
@@ -169,10 +170,11 @@ function restore() {
         </section>
       </div>
       <footer class="foot">
-        <button class="btn sm" @click="restore">По умолчанию</button>
+        <button class="btn sm" @click="restore">{{ t('По умолчанию') }}</button>
         <span class="grow" />
-        <button class="btn sm" @click="addBlock"><Icon name="plus" :size="15" />Блок</button>
-        <button class="btn sm primary" @click="mode = 'fill'">Готово</button>
+        <button class="btn sm" @click="addBlock"><Icon name="plus" :size="15" />{{ t('Блок') }}</button>
+        <button class="btn sm primary" @click="mode = 'fill'">{{ t('Готово') }}</button>
+
       </footer>
     </template>
   </div>
@@ -220,8 +222,8 @@ function restore() {
   background: var(--hover);
 }
 .chip.on {
-  border-color: var(--accent);
-  color: var(--accent);
+  border-color: var(--sel-border);
+  color: var(--sel);
 }
 .cl-body {
   flex: 1;
@@ -263,10 +265,10 @@ function restore() {
   background: var(--hover);
 }
 .answer.on {
-  background: var(--accent-soft);
+  background: var(--sel-bg);
 }
 .answers.line .answer.on {
-  border-color: var(--accent);
+  border-color: var(--sel-border);
 }
 .answer input,
 .check input {

@@ -37,6 +37,7 @@ import { cloud } from '../stores/cloud'
 import { chartAt } from '../chart/registry'
 import { donate } from '../lib/donate'
 import { copyAll, copyCanvas, snapshotAll } from '../chart/snapshot'
+import { t, i18n, LANGS } from '../lib/i18n'
 
 const pane = activePane
 const favorites = computed(() => TIMEFRAMES.filter((t) => app.favTfs.includes(t.id)))
@@ -79,18 +80,25 @@ function changeCells(i: number, step: number) {
 // ---------- шаблоны ----------
 
 function saveNew() {
-  const name = prompt('Название шаблона', template.value ? template.value.name + ' 2' : 'Мой шаблон')?.trim()
+  const name = prompt(t('Название шаблона'), template.value ? template.value.name + ' 2' : t('Мой шаблон'))?.trim()
   if (!name) return
-  const withSymbols = confirm('Запомнить в шаблоне инструменты окон?\n\nОК — шаблон откроет те же инструменты.\nОтмена — шаблон применится к текущему инструменту.')
+  const withSymbols = confirm(
+    [
+      t('Запомнить в шаблоне инструменты окон?'),
+      '',
+      t('ОК — шаблон откроет те же инструменты.'),
+      t('Отмена — шаблон применится к текущему инструменту.'),
+    ].join('\n'),
+  )
   saveTemplate(name.slice(0, 40), withSymbols)
-  toast(`Шаблон «${name}» сохранён`)
+  toast(t('Шаблон «{name}» сохранён', { name }))
 }
 function overwrite(id: string, name: string) {
   updateTemplate(id)
-  toast(`Шаблон «${name}» обновлён`)
+  toast(t('Шаблон «{name}» обновлён', { name }))
 }
 function remove(id: string, name: string) {
-  if (confirm(`Удалить шаблон «${name}»?`)) deleteTemplate(id)
+  if (confirm(t('Удалить шаблон «{name}»?', { name }))) deleteTemplate(id)
 }
 
 function fullscreen() {
@@ -101,7 +109,7 @@ function fullscreen() {
 
 <template>
   <header class="topbar">
-    <button class="btn symbol" title="Поиск инструмента" @click="openSearch()">
+    <button class="btn symbol" :title="t('Поиск инструмента')" @click="openSearch()">
       <Icon name="search" :size="16" />
       <b>{{ pane.symbol.symbol }}</b>
       <span class="tag" :class="pane.symbol.exchange">{{ EXCHANGE_NAMES[pane.symbol.exchange] }} · {{ MARKET_NAMES[pane.symbol.market] }}</span>
@@ -110,62 +118,62 @@ function fullscreen() {
     <span class="sep" />
 
     <template v-if="inlineTfs">
-      <button v-for="t in favorites" :key="t.id" class="btn tf" :class="{ on: pane.tf === t.id }" @click="setTf(t.id)">
-        {{ t.label }}
+      <button v-for="f in favorites" :key="f.id" class="btn tf" :class="{ on: pane.tf === f.id }" @click="setTf(f.id)">
+        {{ f.label }}
       </button>
     </template>
     <TfDropdown :label="tfInMenu" />
 
     <!-- телефон: вкладки окон раскладки; подпись — интервал окна -->
-    <div v-if="isPhone && paneCount > 1" class="pane-tabs" role="tablist" aria-label="Окна раскладки">
+    <div v-if="isPhone && paneCount > 1" class="pane-tabs" role="tablist" :aria-label="t('Окна раскладки')">
       <button
         v-for="i in paneCount"
         :key="i"
         role="tab"
         :class="{ on: activeIndex === i - 1 }"
-        :title="`Окно ${i}: ${app.panes[i - 1].symbol.symbol}`"
+        :title="t('Окно {n}: {symbol}', { n: i, symbol: app.panes[i - 1].symbol.symbol })"
         @click="app.active = i - 1"
       >
         {{ getTf(app.panes[i - 1].tf).label }}
       </button>
-      <button class="all" :class="{ on: app.phoneStack }" title="Показывать все окна сразу" @click="app.phoneStack = !app.phoneStack"><Icon name="windows" :size="16" /></button>
+      <button class="all" :class="{ on: app.phoneStack }" :title="t('Показывать все окна сразу')" @click="app.phoneStack = !app.phoneStack"><Icon name="windows" :size="16" /></button>
     </div>
 
     <span v-if="!isPhone" class="sep" />
 
     <Dropdown v-if="!isPhone">
       <template #trigger="{ toggle }">
-        <button class="btn" title="Вид графика" @click="toggle"><Icon :name="chartType.icon" /></button>
+        <button class="btn" :title="t('Вид графика')" @click="toggle"><Icon :name="chartType.icon" /></button>
       </template>
       <template #default="{ close }">
         <button
-          v-for="t in CHART_TYPES"
-          :key="t.id"
+          v-for="ct in CHART_TYPES"
+          :key="ct.id"
           class="menu-item"
-          :class="{ on: pane.chartType === t.id }"
-          @click="(pane.chartType = t.id), close()"
+          :class="{ on: pane.chartType === ct.id }"
+          @click="(pane.chartType = ct.id), close()"
         >
-          <Icon :name="t.icon" :size="16" />{{ t.label }}
+          <Icon :name="ct.icon" :size="16" />{{ t(ct.label) }}
         </button>
         <div class="menu-sep" />
-        <label class="menu-item check" title="При увеличении бары не толстеют, как «Тонкие бары» в TradingView">
+        <label class="menu-item check" :title="t('При увеличении бары не толстеют, как «Тонкие бары» в TradingView')">
           <input v-model="app.view.thinBars" type="checkbox" />
-          Тонкие бары
+          {{ t('Тонкие бары') }}
         </label>
-        <label class="menu-item check" title="Горизонтальная линия от последнего бара; цена и таймер на шкале остаются">
+        <label class="menu-item check" :title="t('Горизонтальная линия от последнего бара; цена и таймер на шкале остаются')">
           <input v-model="app.view.priceLine" type="checkbox" />
-          Линия текущей цены
+          {{ t('Линия текущей цены') }}
         </label>
       </template>
     </Dropdown>
 
-    <button v-if="!isPhone" class="btn" title="Индикаторы (/)" @click="app.indicatorsOpen = true">
-      <Icon name="fx" /><span class="wide">Индикаторы</span>
+    <button v-if="!isPhone" class="btn" :title="t('Индикаторы (/)')" @click="app.indicatorsOpen = true">
+      <Icon name="fx" /><span class="wide">{{ t('Индикаторы') }}</span>
     </button>
-    <button v-if="!isPhone" class="btn bell" :title="unreadAlerts ? `Оповещения: непрочитанных ${unreadAlerts}` : 'Оповещения (Alt+A)'" @click="showPanel('alerts')">
+    <button v-if="!isPhone" class="btn bell" :title="unreadAlerts ? t('Оповещения: непрочитанных {n}', { n: unreadAlerts }) : t('Оповещения (Alt+A)')" @click="showPanel('alerts')">
       <Icon :name="unreadAlerts ? 'bellRing' : 'bell'" /><i v-if="unreadAlerts" class="count">{{ unreadAlerts }}</i>
     </button>
-    <button v-if="isPhone" class="btn" :class="{ on: app.drawBarOpen }" title="Рисование" @click="app.drawBarOpen = !app.drawBarOpen">
+    <button v-if="isPhone" class="btn" :class="{ on: app.drawBarOpen }" :title="t('Рисование')" @click="app.drawBarOpen = !app.drawBarOpen">
       <Icon name="pencil" />
     </button>
     <span class="grow" />
@@ -173,60 +181,60 @@ function fullscreen() {
     <!-- шаблоны: избранные — кнопками (первая буква названия), остальное — в меню -->
     <template v-if="!isPhone">
       <button
-        v-for="t in favTemplates"
-        :key="t.id"
+        v-for="tp in favTemplates"
+        :key="tp.id"
         class="btn tpl-fav"
-        :class="{ on: t.id === app.templateId }"
-        :title="'Шаблон «' + t.name + '»'"
-        @click="applyTemplate(t.id)"
+        :class="{ on: tp.id === app.templateId }"
+        :title="t('Шаблон «{name}»', { name: tp.name })"
+        @click="applyTemplate(tp.id)"
       >
-        {{ initial(t.name) }}
+        {{ initial(tp.name) }}
       </button>
       <Dropdown align="right">
         <template #trigger="{ toggle }">
-          <button class="btn" title="Шаблоны: раскладка и настройки всех окон" @click="toggle">
+          <button class="btn" :title="t('Шаблоны: раскладка и настройки всех окон')" @click="toggle">
             <Icon name="template" /><Icon name="chevron" :size="13" class="caret" />
           </button>
         </template>
         <template #default="{ close }">
-          <div class="menu-title">Шаблоны</div>
-          <div v-for="t in app.templates" :key="t.id" class="tpl-row">
+          <div class="menu-title">{{ t('Шаблоны') }}</div>
+          <div v-for="tp in app.templates" :key="tp.id" class="tpl-row">
             <button
               class="btn sm star"
-              :class="{ on: t.fav !== false }"
-              :title="t.fav !== false ? 'Убрать кнопку шаблона с верхней панели' : 'Показывать кнопкой на верхней панели'"
-              @click="t.fav = t.fav === false"
+              :class="{ on: tp.fav !== false }"
+              :title="tp.fav !== false ? t('Убрать кнопку шаблона с верхней панели') : t('Показывать кнопкой на верхней панели')"
+              @click="tp.fav = tp.fav === false"
             >
               <Icon name="star" :size="16" />
             </button>
-            <button class="menu-item" :class="{ on: t.id === app.templateId }" :title="t.withSymbols ? 'С инструментами' : 'Для текущего инструмента'" @click="applyTemplate(t.id), close()">
-              {{ t.name }}
+            <button class="menu-item" :class="{ on: tp.id === app.templateId }" :title="tp.withSymbols ? t('С инструментами') : t('Для текущего инструмента')" @click="applyTemplate(tp.id), close()">
+              {{ tp.name }}
             </button>
             <button
               class="btn sm"
-              :class="{ on: app.tabTemplates.screener === t.id }"
-              title="Включать этот шаблон при открытии вкладки «Отбор»"
-              @click="bindTemplate('screener', t.id)"
+              :class="{ on: app.tabTemplates.screener === tp.id }"
+              :title="t('Включать этот шаблон при открытии вкладки «Отбор»')"
+              @click="bindTemplate('screener', tp.id)"
             >
               <Icon name="filter" :size="16" />
             </button>
             <button
               class="btn sm"
-              :class="{ on: app.tabTemplates.watchlist === t.id }"
-              title="Включать этот шаблон при открытии вкладки «Список»"
-              @click="bindTemplate('watchlist', t.id)"
+              :class="{ on: app.tabTemplates.watchlist === tp.id }"
+              :title="t('Включать этот шаблон при открытии вкладки «Список»')"
+              @click="bindTemplate('watchlist', tp.id)"
             >
               <Icon name="list" :size="16" />
             </button>
-            <button class="btn sm" title="Перезаписать текущим состоянием" @click="overwrite(t.id, t.name)"><Icon name="save" :size="16" /></button>
-            <button class="btn sm" title="Удалить" @click="remove(t.id, t.name)"><Icon name="trash" :size="16" /></button>
+            <button class="btn sm" :title="t('Перезаписать текущим состоянием')" @click="overwrite(tp.id, tp.name)"><Icon name="save" :size="16" /></button>
+            <button class="btn sm" :title="t('Удалить')" @click="remove(tp.id, tp.name)"><Icon name="trash" :size="16" /></button>
           </div>
           <p class="menu-note muted">
-            Шаблон запоминает раскладку, интервалы, вид графиков, индикаторы и синхронизацию окон.
-            <template v-if="app.templates.length">Звёздочка ставит кнопку шаблона на верхнюю панель; воронка и список привязывают его к вкладке.</template>
+            {{ t('Шаблон запоминает раскладку, интервалы, вид графиков, индикаторы и синхронизацию окон.') }}
+            <template v-if="app.templates.length">{{ t('Звёздочка ставит кнопку шаблона на верхнюю панель; воронка и список привязывают его к вкладке.') }}</template>
           </p>
           <div class="menu-sep" />
-          <button class="menu-item" @click="saveNew(), close()"><Icon name="plus" :size="16" />Сохранить как новый…</button>
+          <button class="menu-item" @click="saveNew(), close()"><Icon name="plus" :size="16" />{{ t('Сохранить как новый…') }}</button>
         </template>
       </Dropdown>
       <span class="sep" />
@@ -235,35 +243,35 @@ function fullscreen() {
     <!-- раскладка окон и их синхронизация -->
     <Dropdown v-if="!isPhone" align="right">
       <template #trigger="{ toggle }">
-        <button class="btn" title="Раскладка и синхронизация окон" @click="toggle"><LayoutIcon :def="app.layout" /><Icon name="chevron" :size="13" class="caret" /></button>
+        <button class="btn" :title="t('Раскладка и синхронизация окон')" @click="toggle"><LayoutIcon :def="app.layout" /><Icon name="chevron" :size="13" class="caret" /></button>
       </template>
       <template #default="{ close }">
-        <div class="menu-title">Раскладка</div>
+        <div class="menu-title">{{ t('Раскладка') }}</div>
         <div class="layouts">
           <button
             v-for="(def, i) in LAYOUT_PRESETS"
             :key="i"
             class="btn"
             :class="{ on: sameLayout(def, app.layout) }"
-            :title="`Окон: ${def.groups.reduce((a, b) => a + b, 0)}`"
+            :title="t('Окон: {n}', { n: def.groups.reduce((a, b) => a + b, 0) })"
             @click="setLayout(def), close()"
           >
             <LayoutIcon :def="def" />
           </button>
         </div>
         <div class="menu-sep" />
-        <div class="menu-title">Своя раскладка</div>
+        <div class="menu-title">{{ t('Своя раскладка') }}</div>
         <div class="custom">
           <div class="custom-row">
-            <button class="btn sm" :class="{ on: custom.dir === 'rows' }" @click="custom.dir = 'rows'">Ряды</button>
-            <button class="btn sm" :class="{ on: custom.dir === 'cols' }" @click="custom.dir = 'cols'">Колонки</button>
+            <button class="btn sm" :class="{ on: custom.dir === 'rows' }" @click="custom.dir = 'rows'">{{ t('Ряды') }}</button>
+            <button class="btn sm" :class="{ on: custom.dir === 'cols' }" @click="custom.dir = 'cols'">{{ t('Колонки') }}</button>
             <span class="grow" />
-            <button class="btn sm" title="Убрать" @click="changeGroups(-1)">−</button>
+            <button class="btn sm" :title="t('Убрать')" @click="changeGroups(-1)">−</button>
             <span class="num">{{ custom.groups.length }}</span>
-            <button class="btn sm" title="Добавить" @click="changeGroups(1)">+</button>
+            <button class="btn sm" :title="t('Добавить')" @click="changeGroups(1)">+</button>
           </div>
           <div v-for="(n, i) in custom.groups" :key="i" class="custom-row">
-            <span class="muted">{{ custom.dir === 'rows' ? 'Ряд' : 'Колонка' }} {{ i + 1 }}: окон</span>
+            <span class="muted">{{ custom.dir === 'rows' ? t('Ряд {n}: окон', { n: i + 1 }) : t('Колонка {n}: окон', { n: i + 1 }) }}</span>
             <span class="grow" />
             <button class="btn sm" @click="changeCells(i, -1)">−</button>
             <span class="num">{{ n }}</span>
@@ -271,17 +279,17 @@ function fullscreen() {
           </div>
           <div class="custom-row">
             <LayoutIcon :def="custom" />
-            <span class="muted">окон: {{ customTotal }} из {{ MAX_PANES }}</span>
+            <span class="muted">{{ t('окон: {n} из {max}', { n: customTotal, max: MAX_PANES }) }}</span>
             <span class="grow" />
-            <button class="btn primary sm" @click="setLayout(custom), close()">Применить</button>
+            <button class="btn primary sm" @click="setLayout(custom), close()">{{ t('Применить') }}</button>
           </div>
         </div>
         <div class="menu-sep" />
-        <div class="menu-title">Синхронизация окон</div>
+        <div class="menu-title">{{ t('Синхронизация окон') }}</div>
         <div class="sync">
-          <label v-for="o in SYNC" :key="o.id" class="menu-item check" :title="o.hint">
+          <label v-for="o in SYNC" :key="o.id" class="menu-item check" :title="t(o.hint)">
             <input v-model="app.sync[o.id]" type="checkbox" />
-            {{ o.label }}
+            {{ t(o.label) }}
           </label>
         </div>
       </template>
@@ -289,141 +297,151 @@ function fullscreen() {
 
     <!-- снимок: нажатие сразу сохраняет все окна одной картинкой, стрелка — другие варианты -->
     <div v-if="!isPhone" class="split-btn">
-      <button class="btn" title="Снимок всех окон одной картинкой (Alt+Shift+S)" @click="snapshotAll()"><Icon name="camera" /></button>
+      <button class="btn" :title="t('Снимок всех окон одной картинкой (Alt+Shift+S)')" @click="snapshotAll()"><Icon name="camera" /></button>
       <Dropdown align="right">
         <template #trigger="{ toggle }">
-          <button class="btn caret-btn" title="Другие варианты снимка" @click="toggle"><Icon name="chevron" :size="13" /></button>
+          <button class="btn caret-btn" :title="t('Другие варианты снимка')" @click="toggle"><Icon name="chevron" :size="13" /></button>
         </template>
         <template #default="{ close }">
-          <button class="menu-item" @click="snapshotAll(), close()"><Icon name="windows" :size="16" />Все окна одной картинкой <span class="muted">Alt+Shift+S</span></button>
-          <button class="menu-item" @click="chartAt(activeIndex)?.screenshot(), close()"><Icon name="rect" :size="16" />Только активное окно <span class="muted">Alt+S</span></button>
-          <div class="menu-title">В буфер обмена</div>
-          <button class="menu-item" @click="copyAll(), close()"><Icon name="windows" :size="16" />Все окна одной картинкой <span class="muted">Alt+Shift+C</span></button>
-          <button class="menu-item" @click="copyCanvas(chartAt(activeIndex)?.capture() ?? null), close()"><Icon name="rect" :size="16" />Только активное окно</button>
+          <button class="menu-item" @click="snapshotAll(), close()"><Icon name="windows" :size="16" />{{ t('Все окна одной картинкой') }} <span class="muted">Alt+Shift+S</span></button>
+          <button class="menu-item" @click="chartAt(activeIndex)?.screenshot(), close()"><Icon name="rect" :size="16" />{{ t('Только активное окно') }} <span class="muted">Alt+S</span></button>
+          <div class="menu-title">{{ t('В буфер обмена') }}</div>
+          <button class="menu-item" @click="copyAll(), close()"><Icon name="windows" :size="16" />{{ t('Все окна одной картинкой') }} <span class="muted">Alt+Shift+C</span></button>
+          <button class="menu-item" @click="copyCanvas(chartAt(activeIndex)?.capture() ?? null), close()"><Icon name="rect" :size="16" />{{ t('Только активное окно') }}</button>
         </template>
       </Dropdown>
     </div>
-    <button v-if="!isPhone" class="btn" title="Копировать снимок всех окон в буфер обмена (Alt+Shift+C)" @click="copyAll()"><Icon name="copy" /></button>
-    <button v-if="!isPhone" class="btn" title="Поделиться: уровни, позиции, ссылка и QR-код" @click="app.shareOpen = true"><Icon name="share" /></button>
-    <button v-if="!isPhone" class="btn" title="Обзор по монетам списков (Alt+D)" @click="app.dashboardOpen = true"><Icon name="dashboard" /></button>
+    <button v-if="!isPhone" class="btn" :title="t('Копировать снимок всех окон в буфер обмена (Alt+Shift+C)')" @click="copyAll()"><Icon name="copy" /></button>
+    <button v-if="!isPhone" class="btn" :title="t('Поделиться: уровни, позиции, ссылка и QR-код')" @click="app.shareOpen = true"><Icon name="share" /></button>
+    <button v-if="!isPhone" class="btn" :title="t('Обзор по монетам списков (Alt+D)')" @click="app.dashboardOpen = true"><Icon name="dashboard" /></button>
 
     <button
       v-if="!isPhone && cloud.code"
       class="btn"
       :class="cloud.online ? 'sync-on' : 'sync-off'"
-      :title="cloud.online ? 'Синхронизация устройств: на связи' : 'Синхронизация устройств: нет связи'"
+      :title="cloud.online ? t('Синхронизация устройств: на связи') : t('Синхронизация устройств: нет связи')"
       @click="app.syncOpen = true"
     >
       <Icon :name="cloud.online ? 'cloud' : 'cloudOff'" />
     </button>
     <Dropdown v-if="!isPhone" align="right">
       <template #trigger="{ toggle }">
-        <button class="btn" title="Настройки" @click="toggle"><Icon name="gear" /></button>
+        <button class="btn" :title="t('Настройки')" @click="toggle"><Icon name="gear" /></button>
       </template>
       <template #default="{ close }">
-        <div class="menu-title">Тема</div>
-        <button v-for="t in THEMES" :key="t.id" class="menu-item" :class="{ on: app.themePref === t.id }" @click="app.themePref = t.id">
-          <Icon :name="t.icon" :size="16" />{{ t.label }}
+        <div class="menu-title">{{ t('Тема') }}</div>
+        <button v-for="th in THEMES" :key="th.id" class="menu-item" :class="{ on: app.themePref === th.id }" @click="app.themePref = th.id">
+          <Icon :name="th.icon" :size="16" />{{ t(th.label) }}
         </button>
-        <button class="menu-item" @click="(app.colorsOpen = true), close()"><Icon name="pencil" :size="16" />Свои цвета…</button>
-        <button class="menu-item" @click="(app.viewOpen = true), close()"><Icon name="text" :size="16" />Шрифты, таймер, размер позиции…</button>
+        <button class="menu-item" @click="(app.colorsOpen = true), close()"><Icon name="pencil" :size="16" />{{ t('Свои цвета…') }}</button>
+        <button class="menu-item" @click="(app.viewOpen = true), close()"><Icon name="text" :size="16" />{{ t('Шрифты, таймер, размер позиции…') }}</button>
         <div class="menu-sep" />
-        <button class="menu-item" @click="(app.syncOpen = true), close()"><Icon name="cloud" :size="16" />Синхронизация устройств…</button>
-        <button class="menu-item" @click="(app.transfer = { code: '' }), close()"><Icon name="phone" :size="16" />Разовый перенос (QR, ссылка, файл)…</button>
+        <div class="menu-title">Язык / Language</div>
+        <button v-for="l in LANGS" :key="l.id" class="menu-item" :class="{ on: i18n.lang === l.id }" @click="i18n.lang = l.id">{{ l.label }}</button>
         <div class="menu-sep" />
-        <div class="menu-title">Монета из вставки или ссылки</div>
+        <button class="menu-item" @click="(app.syncOpen = true), close()"><Icon name="cloud" :size="16" />{{ t('Синхронизация устройств…') }}</button>
+        <button class="menu-item" @click="(app.transfer = { code: '' }), close()"><Icon name="phone" :size="16" />{{ t('Разовый перенос (QR, ссылка, файл)…') }}</button>
+        <div class="menu-sep" />
+        <div class="menu-title">{{ t('Монета из вставки или ссылки') }}</div>
         <div class="defaults">
-          <select v-model="app.defaults.exchange" class="field" title="Биржа по умолчанию">
+          <select v-model="app.defaults.exchange" class="field" :title="t('Биржа по умолчанию')">
             <option value="binance">Binance</option>
             <option value="bybit">Bybit</option>
           </select>
-          <select v-model="app.defaults.market" class="field" title="Рынок по умолчанию">
-            <option value="futures">Фьючерсы</option>
-            <option value="spot">Спот</option>
+          <select v-model="app.defaults.market" class="field" :title="t('Рынок по умолчанию')">
+            <option value="futures">{{ MARKET_NAMES.futures }}</option>
+            <option value="spot">{{ MARKET_NAMES.spot }}</option>
           </select>
         </div>
-        <p class="menu-note muted">На этой бирже и рынке открывается монета, если в строке или ссылке они не указаны.</p>
+        <p class="menu-note muted">{{ t('На этой бирже и рынке открывается монета, если в строке или ссылке они не указаны.') }}</p>
         <template v-if="canFullscreen">
           <div class="menu-sep" />
-          <button class="menu-item" @click="fullscreen(), close()"><Icon name="maximize" :size="16" />Во весь экран <span class="muted">Shift+F</span></button>
+          <button class="menu-item" @click="fullscreen(), close()"><Icon name="maximize" :size="16" />{{ t('Во весь экран') }} <span class="muted">Shift+F</span></button>
         </template>
       </template>
     </Dropdown>
-    <button v-if="!isPhone" class="btn donate" :class="{ pulse: donate.pulse }" title="Поддержать проект" aria-label="Поддержать проект" @click="app.donateOpen = true">
+    <button v-if="!isPhone" class="btn donate" :class="{ pulse: donate.pulse }" :title="t('Поддержать проект')" :aria-label="t('Поддержать проект')" @click="app.donateOpen = true">
       <Icon name="heart" />
     </button>
-    <button v-if="!isPhone" class="btn" title="Обучение: видео-обзор терминала" @click="app.tutorialOpen = true"><Icon name="learn" /></button>
-    <button v-if="!isPhone" class="btn" title="Горячие клавиши (?)" @click="app.hotkeysOpen = true"><Icon name="keyboard" /></button>
-    <button v-if="!isPhone" class="btn" :class="{ on: app.panelOpen }" title="Боковая панель" @click="togglePanel(app.panel)">
+    <button v-if="!isPhone" class="btn" :title="t('Обучение: видео-обзор терминала')" @click="app.tutorialOpen = true"><Icon name="learn" /></button>
+    <button v-if="!isPhone" class="btn" :title="t('Горячие клавиши (?)')" @click="app.hotkeysOpen = true"><Icon name="keyboard" /></button>
+    <button v-if="!isPhone" class="btn" :class="{ on: app.panelOpen }" :title="t('Боковая панель')" @click="togglePanel(app.panel)">
       <Icon name="panel" />
     </button>
   </header>
 </template>
 
 <style scoped>
-/* донат: обычная приглушённая кнопка; время от времени сердечко «стучит» (см. lib/donate):
-   два удара — «тук-тук» — с заливкой цветом и мягкое кольцо, расходящееся от кнопки */
+/* донат: красное залитое сердечко; время от времени оно «стучит» (см. lib/donate): два крупных удара
+   со свечением и два кольца, расходящихся от кнопки */
 .donate {
   position: relative;
+  color: #f23645;
+}
+.donate :deep(svg) {
+  fill: currentColor;
+  transition: transform 0.15s;
 }
 .donate:hover {
-  color: #f0566b;
+  color: #ff4d5e;
 }
+.donate:hover :deep(svg) {
+  transform: scale(1.12);
+}
+.donate::before,
 .donate::after {
   content: '';
   position: absolute;
-  inset: 3px;
+  inset: 4px;
   border-radius: 50%;
-  border: 2px solid #f0566b;
+  border: 2px solid #f23645;
   opacity: 0;
   pointer-events: none;
-}
-.donate.pulse {
-  color: #f0566b;
 }
 .donate.pulse :deep(svg) {
   animation: heartbeat 1.3s ease-in-out 2;
 }
-.donate.pulse::after {
+.donate.pulse::before {
   animation: heart-ring 1.3s ease-out 2;
 }
+.donate.pulse::after {
+  animation: heart-ring 1.3s ease-out 0.25s 2;
+}
 @keyframes heartbeat {
-  0% {
+  0%,
+  100% {
     transform: scale(1);
-    fill: rgba(240, 86, 107, 0);
+    filter: drop-shadow(0 0 0 rgba(242, 54, 69, 0));
   }
   14% {
-    transform: scale(1.3);
-    fill: rgba(240, 86, 107, 1);
+    transform: scale(1.4);
+    filter: drop-shadow(0 0 6px rgba(242, 54, 69, 0.9));
   }
   28% {
-    transform: scale(1.02);
+    transform: scale(1.05);
   }
   42% {
-    transform: scale(1.2);
-    fill: rgba(240, 86, 107, 1);
+    transform: scale(1.28);
+    filter: drop-shadow(0 0 5px rgba(242, 54, 69, 0.8));
   }
   70% {
     transform: scale(1);
-    fill: rgba(240, 86, 107, 0.6);
-  }
-  100% {
-    transform: scale(1);
-    fill: rgba(240, 86, 107, 0);
+    filter: drop-shadow(0 0 2px rgba(242, 54, 69, 0.3));
   }
 }
 @keyframes heart-ring {
   0% {
-    transform: scale(0.6);
-    opacity: 0.7;
+    transform: scale(0.5);
+    opacity: 0.85;
   }
   100% {
-    transform: scale(1.5);
+    transform: scale(1.7);
     opacity: 0;
   }
 }
 @media (prefers-reduced-motion: reduce) {
   .donate.pulse :deep(svg),
+  .donate.pulse::before,
   .donate.pulse::after {
     animation: none;
   }
@@ -475,8 +493,8 @@ function fullscreen() {
   place-items: center;
 }
 .pane-tabs button.on {
-  color: var(--accent);
-  background: var(--accent-soft);
+  color: var(--sel);
+  background: var(--sel-bg);
 }
 .sep {
   width: 1px;
@@ -535,7 +553,7 @@ function fullscreen() {
   font-size: 13px;
 }
 .tpl-fav.on {
-  border-color: var(--accent);
+  border-color: var(--sel-border);
 }
 .caret {
   margin-left: -4px;

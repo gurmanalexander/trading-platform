@@ -3,9 +3,10 @@ import { computed, onBeforeUnmount, onMounted, onUpdated, reactive, ref } from '
 import Icon from './Icon.vue'
 import { DRAW_COLORS, defaultVisibility, type Dash, type Visibility } from '../stores/drawings'
 import { hasLineStyle, hasText, isPosition, TEXT_SIZES, type DrawingsLayer } from '../chart/drawings'
-import { fmtQty, fmtUsd, positionSize, riskReward } from '../chart/position'
+import { applyRR, fmtQty, fmtUsd, positionSize, riskReward } from '../chart/position'
 import { app, isPhone, toast } from '../stores/app'
 import { pasteFromClipboard } from '../chart/setup'
+import { t } from '../lib/i18n'
 
 // Панель выбранного рисунка: у линий — цвет, толщина, вид и подпись; у позиции — вход, стоп и цель числами
 // host — область графика, на котором выбран рисунок; paneW/paneH — её размер (меняется — пересчитываем место)
@@ -119,11 +120,13 @@ const VIS: { id: Visibility; label: string }[] = [
 
 const vis = computed(() => (d.value ? (d.value.vis ?? defaultVisibility(d.value.type)) : 'all'))
 const fmt = (v: number) => String(+v.toFixed(props.precision))
-const rr = computed(() => (d.value && position.value ? riskReward(d.value).toFixed(2) : ''))
+/** R/R позиции: целым или с одним-двумя знаками, без хвостовых нулей */
+const rr = computed(() => (d.value && position.value ? String(+riskReward(d.value).toFixed(2)) : ''))
+const step = () => 1 / 10 ** props.precision
 /** объём по депозиту и риску из настроек; пусто, пока депозит не задан */
 const posSize = computed(() => {
   const s = d.value && position.value ? positionSize(d.value, app.risk.deposit, app.risk.pct) : null
-  return s ? `Объём ${fmtQty(s.qty)} · ${fmtUsd(s.notional)} · риск ${fmtUsd(s.risk)}` : ''
+  return s ? t('Объём {qty} · {notional} · риск {risk}', { qty: fmtQty(s.qty), notional: fmtUsd(s.notional), risk: fmtUsd(s.risk) }) : ''
 })
 
 /** Поле цены позиции: 0 — вход, 2 — стоп, 1 — цель (номер точки рисунка) */
@@ -134,10 +137,33 @@ function setPrice(index: 0 | 1 | 2, e: Event) {
   const v = parseFloat(input.value.replace(',', '.'))
   const next = cur.pts.map((p) => p.p)
   next[index] = v
+  // привязка R/R: вписали стоп или вход — цель встаёт на прежний R/R; вписали цель — подтягивается стоп
+  const ratio = riskReward(cur)
+  if (app.rrLock && ratio > 0 && v > 0) {
+    const r = applyRR(next[0], next[2], next[1], cur.type as 'long' | 'short', ratio, index === 1 ? 'target' : 'stop', step())
+    next[1] = r.target
+    next[2] = r.stop
+  }
   if (!(v > 0) || !props.layer.setPosition(next[0], next[2], next[1])) {
     input.value = fmt(cur.pts[index].p)
-    toast('Стоп и цель должны быть по разные стороны от входа', 'error')
+    toast(t('Стоп и цель должны быть по разные стороны от входа'), 'error')
   }
+}
+
+/** Вписали R/R: цель встаёт на столько рисков от входа; число запоминается для новых позиций */
+function setRR(e: Event) {
+  const cur = d.value
+  const input = e.target as HTMLInputElement
+  if (!cur) return
+  const v = parseFloat(input.value.replace(',', '.'))
+  if (!(v > 0 && v <= 100)) {
+    input.value = rr.value
+    return
+  }
+  app.posRR = v
+  const r = applyRR(cur.pts[0].p, cur.pts[2].p, cur.pts[1].p, cur.type as 'long' | 'short', v, 'stop', step())
+  props.layer.setPosition(cur.pts[0].p, r.stop, r.target)
+  input.value = rr.value
 }
 
 /** Enter завершает ввод и возвращает клавиатуру графику (стрелки снова двигают позицию) */
@@ -147,20 +173,20 @@ function blur(e: Event) {
 
 function editText() {
   const cur = d.value?.text ?? ''
-  const next = prompt('Подпись к линии (пусто — убрать)', cur)
+  const next = prompt(t('Подпись к линии (пусто — убрать)'), cur)
   if (next !== null) props.layer.setStyle({ text: next.trim().slice(0, 60) })
 }
 function makeDefault() {
   props.layer.saveAsDefault()
-  toast('Стиль сохранён: новые рисунки этого инструмента будут такими же')
+  toast(t('Стиль сохранён: новые рисунки этого инструмента будут такими же'))
 }
 async function copyTrade() {
   const text = props.layer.copyText()
   try {
     await navigator.clipboard.writeText(text)
-    toast('Позиция скопирована текстом')
+    toast(t('Позиция скопирована текстом'))
   } catch {
-    prompt('Скопируйте вручную', text)
+    prompt(t('Скопируйте вручную'), text)
   }
 }
 function duplicate() {
@@ -173,8 +199,8 @@ function duplicate() {
   <div v-if="d && pos" ref="bar" class="dbar" :class="{ moving }" :style="pos" @pointerdown.stop @keydown.stop>
     <button
       class="grip"
-      :title="app.drawBarAt ? 'Потяните, чтобы передвинуть панель. Двойное нажатие — вернуть на место по умолчанию' : 'Потяните, чтобы передвинуть панель'"
-      aria-label="Передвинуть панель"
+      :title="app.drawBarAt ? t('Потяните, чтобы передвинуть панель. Двойное нажатие — вернуть на место по умолчанию') : t('Потяните, чтобы передвинуть панель')"
+      :aria-label="t('Передвинуть панель')"
       @pointerdown="startMove"
       @dblclick="resetPlace"
     >
@@ -187,27 +213,42 @@ function duplicate() {
         class="swatch"
         :class="{ on: c === d.color }"
         :style="{ background: c }"
-        :aria-label="'Цвет ' + c"
+        :aria-label="t('Цвет {color}', { color: c })"
         @click="layer.setStyle({ color: c })"
       />
-      <label class="swatch custom" title="Свой цвет">
+      <label class="swatch custom" :title="t('Свой цвет')">
         <input type="color" :value="d.color" @change="layer.setStyle({ color: ($event.target as HTMLInputElement).value })" />
       </label>
     </div>
 
     <div v-if="position" class="row prices">
-      <label title="Цена входа">
-        <span>Вход</span>
+      <label :title="t('Цена входа')">
+        <span>{{ t('Вход') }}</span>
         <input class="field" inputmode="decimal" :value="fmt(d.pts[0].p)" @change="setPrice(0, $event)" @keydown.enter="blur" />
       </label>
-      <label title="Стоп-лосс">
-        <span class="down">Стоп</span>
+      <label :title="t('Стоп-лосс')">
+        <span class="down">{{ t('Стоп') }}</span>
         <input class="field" inputmode="decimal" :value="fmt(d.pts[2].p)" @change="setPrice(2, $event)" @keydown.enter="blur" />
       </label>
-      <label title="Тейк-профит">
-        <span class="up">Тейк</span>
+      <label :title="t('Тейк-профит')">
+        <span class="up">{{ t('Тейк') }}</span>
         <input class="field" inputmode="decimal" :value="fmt(d.pts[1].p)" @change="setPrice(1, $event)" @keydown.enter="blur" />
       </label>
+      <div class="rr">
+        <label :title="t('Соотношение прибыли к риску: цель — на столько стопов от входа. Новые позиции получают это же значение')">
+          <span>R/R</span>
+          <input class="field" inputmode="decimal" :value="rr" @change="setRR" @keydown.enter="blur" />
+        </label>
+        <button
+          class="btn sm lock"
+          :class="{ on: app.rrLock }"
+          :title="app.rrLock ? t('Привязка R/R включена: тянешь стоп — тейк следует за ним, и наоборот. Нажмите, чтобы двигать их отдельно') : t('Привязка R/R выключена: стоп и тейк двигаются отдельно. Нажмите, чтобы связать их')"
+          :aria-pressed="app.rrLock"
+          @click="app.rrLock = !app.rrLock"
+        >
+          <Icon :name="app.rrLock ? 'lock' : 'unlock'" :size="14" />
+        </button>
+      </div>
     </div>
 
     <div class="row">
@@ -217,7 +258,7 @@ function duplicate() {
           :key="w"
           class="btn sm"
           :class="{ on: (d.width ?? 1) === w }"
-          :title="'Толщина ' + w"
+          :title="t('Толщина {n}', { n: w })"
           @click="layer.setStyle({ width: w })"
         >
           <svg width="18" height="14" viewBox="0 0 18 14" aria-hidden="true"><path d="M2 7h14" stroke="currentColor" :stroke-width="w" /></svg>
@@ -228,7 +269,7 @@ function duplicate() {
           :key="s.id"
           class="btn sm"
           :class="{ on: (d.dash ?? 'solid') === s.id }"
-          :title="s.label"
+          :title="t(s.label)"
           @click="layer.setStyle({ dash: s.id })"
         >
           <svg width="18" height="14" viewBox="0 0 18 14" aria-hidden="true">
@@ -236,38 +277,37 @@ function duplicate() {
           </svg>
         </button>
         <span class="sep" />
-        <button v-if="hasText(d.type)" class="btn sm" :class="{ on: !!d.text }" title="Подпись" @click="editText"><Icon name="text" :size="15" /></button>
-        <button class="btn sm" title="Сделать стилем по умолчанию для этого инструмента" @click="makeDefault"><Icon name="pin" :size="15" /></button>
+        <button v-if="hasText(d.type)" class="btn sm" :class="{ on: !!d.text }" :title="t('Подпись')" @click="editText"><Icon name="text" :size="15" /></button>
+        <button class="btn sm" :title="t('Сделать стилем по умолчанию для этого инструмента')" @click="makeDefault"><Icon name="pin" :size="15" /></button>
       </template>
       <template v-if="isText">
-        <button class="btn sm" title="Изменить текст (двойной щелчок)" @click="layer.editText(d)"><Icon name="pencil" :size="15" /></button>
-        <select class="field vis" title="Размер шрифта" :value="d.size ?? 12" @change="layer.setTextStyle({ size: Number(($event.target as HTMLSelectElement).value) })">
+        <button class="btn sm" :title="t('Изменить текст (двойной щелчок)')" @click="layer.editText(d)"><Icon name="pencil" :size="15" /></button>
+        <select class="field vis" :title="t('Размер шрифта')" :value="d.size ?? 12" @change="layer.setTextStyle({ size: Number(($event.target as HTMLSelectElement).value) })">
           <option v-for="n in TEXT_SIZES" :key="n" :value="n">{{ n }} px</option>
         </select>
-        <button class="btn sm" :class="{ on: !!d.bg }" title="Подложка под текстом" @click="layer.setTextStyle({ bg: !d.bg })"><Icon name="rect" :size="15" /></button>
-        <button class="btn sm" :class="{ on: !!d.pin }" title="Закрепить на экране: текст не уезжает при прокрутке и виден в том же месте на всех интервалах" @click="layer.togglePin()">
+        <button class="btn sm" :class="{ on: !!d.bg }" :title="t('Подложка под текстом')" @click="layer.setTextStyle({ bg: !d.bg })"><Icon name="rect" :size="15" /></button>
+        <button class="btn sm" :class="{ on: !!d.pin }" :title="t('Закрепить на экране: текст не уезжает при прокрутке и виден в том же месте на всех интервалах')" @click="layer.togglePin()">
           <Icon name="pin" :size="15" />
         </button>
         <span class="sep" />
       </template>
       <template v-if="position">
-        <b class="kind" :class="d.type === 'long' ? 'up' : 'down'">{{ d.type === 'long' ? 'Лонг' : 'Шорт' }}</b>
-        <span class="muted">R/R {{ rr }}</span>
-        <span v-if="posSize" class="muted" title="По депозиту и риску на сделку из настроек «Шрифты, таймер, размер позиции»">{{ posSize }}</span>
-        <button v-else class="btn sm muted" title="Задать депозит и риск на сделку — появится объём позиции" @click="app.viewOpen = true">объём?</button>
+        <b class="kind" :class="d.type === 'long' ? 'up' : 'down'">{{ d.type === 'long' ? t('Лонг') : t('Шорт') }}</b>
+        <span v-if="posSize" class="muted" :title="t('По депозиту и риску на сделку из настроек «Шрифты, таймер, размер позиции»')">{{ posSize }}</span>
+        <button v-else class="btn sm muted" :title="t('Задать депозит и риск на сделку — появится объём позиции')" @click="app.viewOpen = true">{{ t('объём?') }}</button>
         <span class="grow" />
       </template>
-      <select class="field vis" title="На каких интервалах показывать" :value="vis" @change="layer.setVisibility(($event.target as HTMLSelectElement).value as Visibility)">
-        <option v-for="v in VIS" :key="v.id" :value="v.id">{{ v.label }}</option>
+      <select class="field vis" :title="t('На каких интервалах показывать')" :value="vis" @change="layer.setVisibility(($event.target as HTMLSelectElement).value as Visibility)">
+        <option v-for="v in VIS" :key="v.id" :value="v.id">{{ t(v.label) }}</option>
       </select>
       <template v-if="position">
-        <button class="btn sm" title="Вставить текст сделки из буфера: ТВХ / SL / TP разложатся по этой позиции" @click="pasteFromClipboard()"><Icon name="paste" :size="16" /></button>
-        <button class="btn sm" title="Скопировать позицию текстом: вход, стоп, тейк" @click="copyTrade"><Icon name="share" :size="16" /></button>
+        <button class="btn sm" :title="t('Вставить текст сделки из буфера: ТВХ / SL / TP разложатся по этой позиции')" @click="pasteFromClipboard()"><Icon name="paste" :size="16" /></button>
+        <button class="btn sm" :title="t('Скопировать позицию текстом: вход, стоп, тейк')" @click="copyTrade"><Icon name="share" :size="16" /></button>
       </template>
-      <button class="btn sm" title="Дублировать (или тяните с Ctrl)" @click="duplicate"><Icon name="copy" :size="15" /></button>
-      <button class="btn sm" title="Удалить (Delete)" @click="layer.removeSelected()"><Icon name="trash" :size="15" /></button>
+      <button class="btn sm" :title="t('Дублировать (или тяните с Ctrl)')" @click="duplicate"><Icon name="copy" :size="15" /></button>
+      <button class="btn sm" :title="t('Удалить (Delete)')" @click="layer.removeSelected()"><Icon name="trash" :size="15" /></button>
     </div>
-    <p v-if="position && !isPhone" class="hint muted">Ctrl+V — вставить текст сделки (ТВХ / SL / TP), Ctrl+C — скопировать его</p>
+    <p v-if="position && !isPhone" class="hint muted">{{ t('Ctrl+V — вставить текст сделки (ТВХ / SL / TP), Ctrl+C — скопировать его') }}</p>
   </div>
   </Teleport>
 </template>
@@ -326,6 +366,18 @@ function duplicate() {
   flex-direction: column;
   gap: 2px;
   font-size: 11px;
+  color: var(--muted);
+}
+.rr {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+}
+.prices .rr .field {
+  width: 52px;
+}
+.lock {
+  height: 26px;
   color: var(--muted);
 }
 .prices .field {

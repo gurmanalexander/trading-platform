@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import Modal from './Modal.vue'
 import { app } from '../stores/app'
+import { t } from '../lib/i18n'
 import { settings, state, total, universe, resetSettings } from '../stores/screener'
 
 // Условия отбора — в отдельном окне: биржа и рынок, пороги по обороту и изменению цены, сортировка.
@@ -9,75 +10,75 @@ const VOLUMES = [10, 30, 50, 100, 300]
 </script>
 
 <template>
-  <Modal title="Условия отбора" :width="420" @close="close">
+  <Modal :title="t('Условия отбора')" :width="420" @close="close">
     <form class="sf" @submit.prevent="close">
       <div class="pair">
         <label>
-          <span>Биржа</span>
+          <span>{{ t('Биржа') }}</span>
           <select v-model="settings.exchange" class="field">
             <option value="binance">Binance</option>
             <option value="bybit">Bybit</option>
           </select>
         </label>
         <label>
-          <span>Рынок</span>
+          <span>{{ t('Рынок') }}</span>
           <select v-model="settings.market" class="field">
-            <option value="futures">Фьючерсы</option>
-            <option value="spot">Спот</option>
+            <option value="futures">{{ t('Фьючерсы') }}</option>
+            <option value="spot">{{ t('Спот') }}</option>
           </select>
         </label>
       </div>
       <label>
-        <span>Объём за 24 часа — от, млн $</span>
+        <span>{{ t('Объём за 24 часа — от, млн $') }}</span>
         <input v-model.number="settings.minVolume" class="field" type="number" min="0" step="5" inputmode="decimal" />
       </label>
       <div class="chips">
         <button v-for="v in VOLUMES" :key="v" type="button" class="chip" :class="{ on: settings.minVolume === v }" @click="settings.minVolume = v">{{ v }}</button>
-        <button type="button" class="chip" :class="{ on: settings.minVolume === 0 }" @click="settings.minVolume = 0">любой</button>
+        <button type="button" class="chip" :class="{ on: settings.minVolume === 0 }" @click="settings.minVolume = 0">{{ t('любой') }}</button>
       </div>
       <label>
-        <span>Изменение за 24 часа — от, % (в любую сторону)</span>
+        <span>{{ t('Изменение за 24 часа — от, % (в любую сторону)') }}</span>
         <input v-model.number="settings.minChange" class="field" type="number" min="0" step="1" inputmode="decimal" />
       </label>
       <label>
-        <span>Что показывать</span>
+        <span>{{ t('Что показывать') }}</span>
         <select v-model="settings.assets" class="field">
-          <option value="crypto">Только криптовалюты</option>
-          <option value="tradfi">Только акции и TradFi (сырьё, валюты, до IPO)</option>
-          <option value="all">Всё вместе</option>
+          <option value="crypto">{{ t('Только криптовалюты') }}</option>
+          <option value="tradfi">{{ t('Только акции и TradFi (сырьё, валюты, до IPO)') }}</option>
+          <option value="all">{{ t('Всё вместе') }}</option>
         </select>
       </label>
       <p v-if="settings.exchange === 'binance' && settings.market === 'spot'" class="muted hint">
-        На споте Binance биржа не помечает токенизированные акции (bStocks) в открытых данных — здесь они идут как криптовалюты.
+        {{ t('На споте Binance биржа не помечает токенизированные акции (bStocks) в открытых данных — здесь они идут как криптовалюты.') }}
       </p>
-      <p v-else-if="state.kindsError" class="muted hint">Не удалось получить с биржи список акций — сейчас все инструменты считаются криптовалютами.</p>
+      <p v-else-if="state.kindsError" class="muted hint">{{ t('Не удалось получить с биржи список акций — сейчас все инструменты считаются криптовалютами.') }}</p>
       <label>
-        <span>Валюта котировки</span>
+        <span>{{ t('Валюта котировки') }}</span>
         <select v-model="settings.quote" class="field">
-          <option value="USDT">Только USDT</option>
-          <option value="all">Любая</option>
+          <option value="USDT">{{ t('Только USDT') }}</option>
+          <option value="all">{{ t('Любая') }}</option>
         </select>
       </label>
       <label>
-        <span>Сортировка</span>
+        <span>{{ t('Сортировка') }}</span>
         <span class="pair">
           <select v-model="settings.sort" class="field">
-            <option value="volume">Объём</option>
-            <option value="change">Изменение за 24ч</option>
-            <option value="price">Цена</option>
-            <option value="symbol">Название</option>
+            <option value="volume">{{ t('Объём') }}</option>
+            <option value="change">{{ t('Изменение за 24ч') }}</option>
+            <option value="price">{{ t('Цена') }}</option>
+            <option value="symbol">{{ t('Название') }}</option>
           </select>
           <select v-model="settings.dir" class="field">
-            <option value="desc">По убыванию</option>
-            <option value="asc">По возрастанию</option>
+            <option value="desc">{{ t('По убыванию') }}</option>
+            <option value="asc">{{ t('По возрастанию') }}</option>
           </select>
         </span>
       </label>
       <footer>
-        <span class="muted">Подходит {{ total.length }} из {{ universe }}</span>
+        <span class="muted">{{ t('Подходит {n} из {total}', { n: total.length, total: universe }) }}</span>
         <span class="grow" />
-        <button type="button" class="btn" @click="resetSettings">Сбросить</button>
-        <button class="btn primary" type="submit">Готово</button>
+        <button type="button" class="btn" @click="resetSettings">{{ t('Сбросить') }}</button>
+        <button class="btn primary" type="submit">{{ t('Готово') }}</button>
       </footer>
     </form>
   </Modal>
@@ -126,9 +127,9 @@ label {
   background: var(--hover);
 }
 .chip.on {
-  border-color: var(--accent);
-  color: var(--accent);
-  background: var(--accent-soft);
+  border-color: var(--sel-border);
+  color: var(--sel);
+  background: var(--sel-bg);
 }
 footer {
   display: flex;

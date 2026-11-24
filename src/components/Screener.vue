@@ -11,6 +11,7 @@ import Dropdown from './Dropdown.vue'
 import ColumnsMenu from './ColumnsMenu.vue'
 import { fmtPct, fmtPriceShort, fmtVolume } from '../lib/format'
 import { ASSET_KIND_NAMES } from '../exchanges/tradfi'
+import { locale, t } from '../lib/i18n'
 
 const stop = startAutoRefresh()
 onBeforeUnmount(stop)
@@ -136,6 +137,7 @@ function unbindMenu() {
 onBeforeUnmount(unbindMenu)
 
 // Столбцы: название — всегда, остальные выбираются. Ширины — общие для заголовка и строк.
+// Подписи — русские строки, переводятся при показе.
 const HEAD: Record<ScreenerCol, string> = { price: 'Цена', change: '24ч', volume: 'Объём' }
 const WIDTH: Record<ScreenerCol, string> = { price: 'minmax(62px, auto)', change: '58px', volume: '54px' }
 const cols = computed(() => SCREENER_COLS.filter((c) => settings.cols.includes(c.id)))
@@ -154,35 +156,35 @@ watch(
 <template>
   <div class="sc">
     <div class="sc-top">
-      <button class="btn sm filter" title="Условия отбора: биржа, рынок, объём, изменение цены" @click="app.screenerFilterOpen = true">
+      <button class="btn sm filter" :title="t('Условия отбора: биржа, рынок, объём, изменение цены')" @click="app.screenerFilterOpen = true">
         <Icon name="funnel" :size="16" />
-        <span>{{ EXCHANGE_NAMES[settings.exchange] }} · {{ MARKET_NAMES[settings.market] }} · от {{ settings.minVolume }} млн ${{ settings.assets === 'tradfi' ? ' · акции' : '' }}</span>
-        <i v-if="filterCount" class="badge" title="Условий изменено">{{ filterCount }}</i>
+        <span>{{ EXCHANGE_NAMES[settings.exchange] }} · {{ MARKET_NAMES[settings.market] }} · {{ t('от {n} млн $', { n: settings.minVolume }) }}{{ settings.assets === 'tradfi' ? ' · ' + t('акции') : '' }}</span>
+        <i v-if="filterCount" class="badge" :title="t('Условий изменено')">{{ filterCount }}</i>
       </button>
-      <span class="muted count" :title="`Подходит ${total.length} из ${universe}` + (state.updatedAt ? ' · обновлено ' + new Date(state.updatedAt).toLocaleTimeString('ru-RU') : '')">{{ total.length }}</span>
+      <span class="muted count" :title="state.updatedAt ? t('Подходит {n} из {total} · обновлено {time}', { n: total.length, total: universe, time: new Date(state.updatedAt).toLocaleTimeString(locale()) }) : t('Подходит {n} из {total}', { n: total.length, total: universe })">{{ total.length }}</span>
       <ColumnsMenu :model-value="settings.cols" :options="SCREENER_COLS" @update:model-value="settings.cols = $event as ScreenerCol[]" />
-      <button class="btn sm" title="Обновить" :disabled="state.loading" @click="refresh()"><Icon name="refresh" :size="16" /></button>
+      <button class="btn sm" :title="t('Обновить отбор')" :disabled="state.loading" @click="refresh()"><Icon name="refresh" :size="16" /></button>
     </div>
 
     <div v-if="chosen.length" class="sc-sel">
-      <b>Выбрано: {{ chosen.length }}</b>
+      <b>{{ t('Выбрано: {n}', { n: chosen.length }) }}</b>
       <span class="grow" />
       <Dropdown align="right">
         <template #trigger="{ toggle }">
-          <button class="btn sm" title="Добавить выбранные в список, поставить направление" @click="toggle"><Icon name="flag" :size="14" />В список</button>
+          <button class="btn sm" :title="t('Добавить выбранные в список, поставить направление')" @click="toggle"><Icon name="flag" :size="14" />{{ t('В список') }}</button>
         </template>
         <ListMenu :items="chosen" />
       </Dropdown>
-      <button class="btn sm" title="Снять выбор" @click="clearPicked"><Icon name="close" :size="14" /></button>
+      <button class="btn sm" :title="t('Снять выбор')" @click="clearPicked"><Icon name="close" :size="14" /></button>
     </div>
 
     <div class="sc-head" :style="grid">
       <button class="muted first" :class="{ on: head('symbol') }" @click="sortBy('symbol')">
-        Тикер
+        {{ t('Тикер') }}
         <Icon v-if="head('symbol')" :name="settings.dir === 'asc' ? 'sortUp' : 'sortDown'" :size="12" />
       </button>
-      <button v-for="c in cols" :key="c.id" class="muted num" :class="{ on: head(c.sort) }" :title="c.label" @click="sortBy(c.sort)">
-        {{ HEAD[c.id] }}
+      <button v-for="c in cols" :key="c.id" class="muted num" :class="{ on: head(c.sort) }" :title="t(c.label)" @click="sortBy(c.sort)">
+        {{ t(HEAD[c.id]) }}
         <Icon v-if="head(c.sort)" :name="settings.dir === 'asc' ? 'sortUp' : 'sortDown'" :size="12" />
       </button>
       <span />
@@ -197,7 +199,7 @@ watch(
         :style="grid"
         role="button"
         tabindex="0"
-        title="Ctrl+щелчок — выбрать несколько, Shift+щелчок — выбрать подряд, правая кнопка — в список"
+        :title="t('Ctrl+щелчок — выбрать несколько, Shift+щелчок — выбрать подряд, правая кнопка — в список')"
         @click="onRowClick($event, r)"
         @keydown.enter="setSymbol(r)"
         @pointerdown="onDown($event, r)"
@@ -206,9 +208,9 @@ watch(
         @pointercancel="onUp"
         @contextmenu.prevent="onContext($event, r)"
       >
-        <span class="name"><SideMark :item="r" /><b>{{ r.symbol }}</b><i v-if="r.kind && settings.assets === 'all'" class="kind">{{ ASSET_KIND_NAMES[r.kind] }}</i></span>
+        <span class="name"><SideMark :item="r" /><b>{{ r.symbol }}</b><i v-if="r.kind && settings.assets === 'all'" class="kind">{{ t(ASSET_KIND_NAMES[r.kind]) }}</i></span>
         <template v-for="c in cols" :key="c.id">
-          <span v-if="c.id === 'price'" class="num" :class="tone(r.changePct)" :title="'За сутки ' + fmtPct(r.changePct)">{{ fmtPriceShort(r.last) }}</span>
+          <span v-if="c.id === 'price'" class="num" :class="tone(r.changePct)" :title="t('За сутки {pct}', { pct: fmtPct(r.changePct) })">{{ fmtPriceShort(r.last) }}</span>
           <span v-else-if="c.id === 'change'" class="num" :class="tone(r.changePct)">{{ fmtPct(r.changePct) }}</span>
           <span v-else class="num muted">{{ fmtVolume(r.usdVolume) }}</span>
         </template>
@@ -216,8 +218,8 @@ watch(
       </div>
       <p v-if="state.error" class="note muted">{{ state.error }}</p>
       <div v-else-if="state.loading && !view.length" class="note"><div class="spinner" /></div>
-      <p v-else-if="!view.length" class="note muted">Под условия ничего не подходит. Смягчите фильтры.</p>
-      <p v-else-if="total.length > MAX_ROWS" class="note muted">Показаны первые {{ MAX_ROWS }} из {{ total.length }}.</p>
+      <p v-else-if="!view.length" class="note muted">{{ t('Под условия ничего не подходит. Смягчите фильтры.') }}</p>
+      <p v-else-if="total.length > MAX_ROWS" class="note muted">{{ t('Показаны первые {n} из {total}.', { n: MAX_ROWS, total: total.length }) }}</p>
     </div>
 
     <Teleport to="body">
@@ -316,10 +318,10 @@ watch(
   background: var(--hover);
 }
 .sc-row.picked {
-  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  background: var(--sel-bg);
 }
 .sc-row.picked:hover {
-  background: color-mix(in srgb, var(--accent) 22%, transparent);
+  background: color-mix(in srgb, var(--sel) 16%, transparent);
 }
 .sc-sel {
   display: flex;
@@ -335,8 +337,8 @@ watch(
   flex: 1;
 }
 .sc-row.active {
-  background: var(--accent-soft);
-  box-shadow: inset 2px 0 0 var(--accent);
+  background: var(--sel-bg);
+  box-shadow: inset 2px 0 0 var(--sel-border);
 }
 .kind {
   flex: none;

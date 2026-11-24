@@ -17,7 +17,7 @@ export interface Setup {
 const QUOTES = ['USDT', 'USDC', 'FDUSD', 'PERP', 'USD', 'BTC', 'ETH']
 const SIDES: Record<string, 'long' | 'short'> = { long: 'long', лонг: 'long', buy: 'long', short: 'short', шорт: 'short', sell: 'short' }
 const EXCHANGES: Record<string, ExchangeId> = { binance: 'binance', бинанс: 'binance', bybit: 'bybit', байбит: 'bybit' }
-const MARKETS: Record<string, MarketId> = { spot: 'spot', спот: 'spot', futures: 'futures', фьючерсы: 'futures', фьюч: 'futures', фьючи: 'futures', perp: 'futures' }
+const MARKETS: Record<string, MarketId> = { spot: 'spot', спот: 'spot', futures: 'futures', фьючерсы: 'futures', фьюч: 'futures', фьючи: 'futures', perp: 'futures', perpetual: 'futures' }
 
 function parseDate(tok: string): Setup['date'] | null {
   let m = /^(\d{1,2})[./-](\d{1,2})[./-](\d{2}|\d{4})$/.exec(tok)

@@ -5,13 +5,14 @@ import { tickers } from '../stores/tickers'
 import { atr5, dayStats, useAtr5 } from '../stores/atr'
 import { MIN_DAY_VOLUME, atrBounds, atrSpent, dailyRisk, fiveMinRisk, spentTone } from '../lib/atr'
 import { fmtPrice, fmtVolume } from '../lib/format'
+import { t } from '../lib/i18n'
 
 // Таблица индикатора «Trader Assistant»: дневной ATR, насколько он исчерпан, расчётные стоп, тейк и люфт,
 // границы дня по ATR. Формулы и значения по умолчанию — из индикатора (см. lib/atr.ts).
 const props = defineProps<{ symbol: SymbolRef; precision: number }>()
 useAtr5(() => props.symbol)
 
-const t = computed(() => {
+const v = computed(() => {
   const key = symbolKey(props.symbol)
   const s = dayStats[key]
   const tk = tickers[key]
@@ -46,62 +47,62 @@ const t = computed(() => {
 </script>
 
 <template>
-  <table v-if="t" class="atr-table">
+  <table v-if="v" class="atr-table">
     <thead>
       <tr>
         <th />
-        <th title="По дневному ATR: стоп — 10% ATR, тейк — 4 стопа, люфт — 10% стопа">день</th>
-        <th title="По пятиминутному графику: стоп — два ATR(30), тейк — 4 стопа, люфт — 10% стопа">5 мин</th>
+        <th :title="t('По дневному ATR: стоп — 10% ATR, тейк — 4 стопа, люфт — 10% стопа')">{{ t('день') }}</th>
+        <th :title="t('По пятиминутному графику: стоп — два ATR(30), тейк — 4 стопа, люфт — 10% стопа')">{{ t('5 мин') }}</th>
       </tr>
     </thead>
     <tbody>
       <tr>
-        <td>Стоп</td>
-        <td>{{ t.stop }}</td>
-        <td>{{ t.stop5 }}</td>
+        <td>{{ t('Стоп') }}</td>
+        <td>{{ v.stop }}</td>
+        <td>{{ v.stop5 }}</td>
       </tr>
       <tr>
-        <td>Тейк</td>
-        <td>{{ t.take }}</td>
-        <td>{{ t.take5 }}</td>
+        <td>{{ t('Тейк') }}</td>
+        <td>{{ v.take }}</td>
+        <td>{{ v.take5 }}</td>
       </tr>
       <tr>
-        <td>Люфт</td>
-        <td>{{ t.slip }}</td>
-        <td>{{ t.slip5 }}</td>
+        <td>{{ t('Люфт') }}</td>
+        <td>{{ v.slip }}</td>
+        <td>{{ v.slip5 }}</td>
       </tr>
     </tbody>
     <thead>
       <tr>
         <th />
-        <th title="От цены открытия дня">от open</th>
-        <th title="От уже показанных минимума и максимума дня">от хай/лоу</th>
+        <th :title="t('От цены открытия дня')">{{ t('от open') }}</th>
+        <th :title="t('От уже показанных минимума и максимума дня')">{{ t('от хай/лоу') }}</th>
       </tr>
     </thead>
     <tbody>
-      <tr class="bound" title="Куда цена может дойти вверх, если пройдёт весь ATR">
-        <td>Max по ATR</td>
-        <td>{{ t.maxOpen }}</td>
-        <td>{{ t.maxLow }}</td>
+      <tr class="bound" :title="t('Куда цена может дойти вверх, если пройдёт весь ATR')">
+        <td>{{ t('Max по ATR') }}</td>
+        <td>{{ v.maxOpen }}</td>
+        <td>{{ v.maxLow }}</td>
       </tr>
-      <tr class="bound" title="Куда цена может дойти вниз, если пройдёт весь ATR">
-        <td>Min по ATR</td>
-        <td>{{ t.minOpen }}</td>
-        <td>{{ t.minHigh }}</td>
+      <tr class="bound" :title="t('Куда цена может дойти вниз, если пройдёт весь ATR')">
+        <td>{{ t('Min по ATR') }}</td>
+        <td>{{ v.minOpen }}</td>
+        <td>{{ v.minHigh }}</td>
       </tr>
-      <tr class="main" title="Насколько исчерпан дневной ATR: от открытия дня до текущей цены и по размаху дня. Меньше 30% — запас хода, больше 70% — ход на исходе">
-        <td>ATR исчерпан</td>
-        <td :class="t.fromOpenTone">{{ t.fromOpen }}%</td>
-        <td :class="t.traveledTone">{{ t.traveled }}%</td>
+      <tr class="main" :title="t('Насколько исчерпан дневной ATR: от открытия дня до текущей цены и по размаху дня. Меньше 30% — запас хода, больше 70% — ход на исходе')">
+        <td>{{ t('ATR исчерпан') }}</td>
+        <td :class="v.fromOpenTone">{{ v.fromOpen }}%</td>
+        <td :class="v.traveledTone">{{ v.traveled }}%</td>
       </tr>
-      <tr class="main" title="Дневной ATR — средний диапазон пяти предыдущих дневных свечей">
+      <tr class="main" :title="t('Дневной ATR — средний диапазон пяти предыдущих дневных свечей')">
         <td>ATR</td>
-        <td>{{ t.atr }}</td>
-        <td class="muted">{{ t.atrPct }}%</td>
+        <td>{{ v.atr }}</td>
+        <td class="muted">{{ v.atrPct }}%</td>
       </tr>
-      <tr :class="{ down: t.lowVolume }" title="Оборот за 24 часа. Красный — меньше 30 млн $">
-        <td>Объём за день</td>
-        <td>{{ t.volume }}</td>
+      <tr :class="{ down: v.lowVolume }" :title="t('Оборот за 24 часа. Красный — меньше 30 млн $')">
+        <td>{{ t('Объём за день') }}</td>
+        <td>{{ v.volume }}</td>
         <td />
       </tr>
     </tbody>

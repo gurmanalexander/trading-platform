@@ -94,6 +94,8 @@ const LUCIDE = {
   play: 'circle-play',
   learn: 'graduation-cap',
   heart: 'heart',
+  lock: 'lock',
+  unlock: 'lock-open',
 }
 
 /** нарисованные вручную (24×24, штрих) */

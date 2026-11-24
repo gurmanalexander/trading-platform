@@ -4,6 +4,7 @@ import Dropdown from './Dropdown.vue'
 import ListMenu from './ListMenu.vue'
 import type { SymbolRef } from '../types'
 import { listsOf } from '../stores/watchlist'
+import { t } from '../lib/i18n'
 
 // Флажок в строке отбора и поиска: показывает, в каких списках монета, и открывает выбор
 // списков. Там же ставится направление — чтобы за одно открытие сделать и то, и другое.
@@ -14,10 +15,10 @@ const member = computed(() => listsOf(props.item))
 const targets = computed(() => (props.group && props.group.length > 1 ? props.group : [props.item]))
 const title = computed(() =>
   targets.value.length > 1
-    ? `Добавить выбранные (${targets.value.length}) в список`
+    ? t('Добавить выбранные ({n}) в список', { n: targets.value.length })
     : member.value.length
-      ? 'В списках: ' + member.value.map((l) => l.name).join(', ')
-      : 'Добавить в список',
+      ? t('В списках: {names}', { names: member.value.map((l) => l.name).join(', ') })
+      : t('Добавить в список'),
 )
 </script>
 

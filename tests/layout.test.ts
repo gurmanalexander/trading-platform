@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { parseTf } from '../src/lib/timeframes'
+import { TIMEFRAMES, getTf, parseTf } from '../src/lib/timeframes'
+import { i18n } from '../src/lib/i18n'
 import { movePositionHandle, riskReward } from '../src/chart/position'
 import type { Drawing } from '../src/stores/drawings'
 
@@ -28,6 +29,16 @@ describe('интервал с клавиатуры', () => {
     expect(id('M')).toBe('1M')
     expect(id('1M')).toBe('1M')
     expect(id('мес')).toBe('1M')
+  })
+
+  it('подпись интервала — на языке интерфейса и понимается при вводе', () => {
+    i18n.lang = 'en'
+    expect(['1m', '5m', '1h', '4h', '1d', '1w', '1M'].map((i) => getTf(i).label)).toEqual(['1m', '5m', '1h', '4h', '1D', '1W', '1M'])
+    for (const tf of TIMEFRAMES) expect(id(tf.label)).toBe(tf.id)
+    i18n.lang = 'ru'
+    expect(getTf('1d').label).toBe('1Д')
+    expect(getTf('1M').label).toBe('1Мес')
+    for (const tf of TIMEFRAMES) expect(id(tf.label)).toBe(tf.id)
   })
 
   it('несуществующие интервалы отклоняются', () => {

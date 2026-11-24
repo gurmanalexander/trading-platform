@@ -18,6 +18,7 @@ import { useDayStats } from '../stores/atr'
 import { fmtPrice } from '../lib/format'
 import { getTf } from '../lib/timeframes'
 import { fmtOffset, TIMEZONES, tzMenuLabel, tzOffsetSec } from '../lib/timezone'
+import { i18n, t } from '../lib/i18n'
 
 const props = defineProps<{ index: number }>()
 const pane = app.panes[props.index]
@@ -79,11 +80,19 @@ watch(
 )
 watch(() => pane.chartType, () => ctrl.value?.setChartType())
 watch(() => app.view.tz, () => ctrl.value?.applyTz())
+// смена языка: подписи шкалы времени и рисунков на canvas перерисовываются
+watch(
+  () => i18n.lang,
+  () => {
+    ctrl.value?.applyLocale()
+    ctrl.value?.draw.redraw()
+  },
+)
 // подпись пояса в углу под ценовой шкалой, как в TradingView
 const tzLabel = computed(() => fmtOffset(tzOffsetSec(app.view.tz)))
 const tzTitle = computed(() => {
   const o = TIMEZONES.find((z) => z.id === app.view.tz)
-  return `Часовой пояс графиков: ${o ? tzMenuLabel(o) : app.view.tz}`
+  return t('Часовой пояс графиков: {tz}', { tz: o ? tzMenuLabel(o) : app.view.tz })
 })
 watch(() => [pane.scale, pane.invert], () => ctrl.value?.applyScale())
 watch(() => pane.indicators, () => ctrl.value?.syncIndicators(), { deep: true })
@@ -143,8 +152,8 @@ function measurePane() {
 
 function onKey(e: KeyboardEvent) {
   if (!selected.value) return
-  const t = e.target as HTMLElement
-  if (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA') return
+  const el = e.target as HTMLElement
+  if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') return
   if (e.key === 'Delete' || e.key === 'Backspace') {
     e.preventDefault()
     ctrl.value?.draw.removeSelected()
@@ -201,7 +210,7 @@ function onAlertMove(e: PointerEvent) {
   moveAlert(alertDrag, +price.toFixed(precision.value), tickers[key.value]?.last ?? price)
 }
 function onAlertUp() {
-  if (alertDrag) toast(`Оповещение перенесено: ${pane.symbol.symbol} ${fmtPrice(alertDrag.price, precision.value)}`)
+  if (alertDrag) toast(t('Оповещение перенесено: {symbol} {price}', { symbol: pane.symbol.symbol, price: fmtPrice(alertDrag.price, precision.value) }))
   alertDrag = null
   window.removeEventListener('pointermove', onAlertMove)
   window.removeEventListener('pointerup', onAlertUp)
@@ -231,7 +240,7 @@ function closeMenu(e: Event) {
 function menuAlert() {
   const last = tickers[key.value]?.last ?? ctrl.value?.legend.value?.c ?? menu.price
   addAlert(pane.symbol, +menu.price.toFixed(precision.value), last)
-  toast(`Оповещение: ${pane.symbol.symbol} ${fmtPrice(menu.price, precision.value)}`)
+  toast(t('Оповещение: {symbol} {price}', { symbol: pane.symbol.symbol, price: fmtPrice(menu.price, precision.value) }))
   menu.open = false
 }
 function menuLine() {
@@ -285,22 +294,22 @@ function toggleScale(id: ScaleMode) {
 
     <AtrTable v-if="ctrl && showAtr" class="pane-atr" :symbol="pane.symbol" :precision="precision" />
     <div v-if="ctrl" class="pane-tools">
-      <button class="chip" title="Сбросить масштаб (Alt+R)" @click="ctrl.resetView()">авто</button>
-      <button v-for="s in SCALES" :key="s.id" class="chip" :class="{ on: pane.scale === s.id }" :title="s.title" @click="toggleScale(s.id)">
-        {{ s.label }}
+      <button class="chip" :title="t('Сбросить масштаб (Alt+R)')" @click="ctrl.resetView()">{{ t('авто') }}</button>
+      <button v-for="s in SCALES" :key="s.id" class="chip" :class="{ on: pane.scale === s.id }" :title="t(s.title)" @click="toggleScale(s.id)">
+        {{ t(s.label) }}
       </button>
-      <button v-if="atrCapable" class="chip" :class="{ on: app.atrTable }" title="Таблица ATR: стоп, тейк, люфт, границы дня" @click="app.atrTable = !app.atrTable">ATR</button>
-      <button v-if="isPhone && !app.zen" class="chip" title="Только график: убрать панели, на весь экран" @click="setZen(true)"><Icon name="maximize" :size="13" /></button>
+      <button v-if="atrCapable" class="chip" :class="{ on: app.atrTable }" :title="t('Таблица ATR: стоп, тейк, люфт, границы дня')" @click="app.atrTable = !app.atrTable">ATR</button>
+      <button v-if="isPhone && !app.zen" class="chip" :title="t('Только график: убрать панели, на весь экран')" @click="setZen(true)"><Icon name="maximize" :size="13" /></button>
       <!-- телефон набок или «только график»: полосы с монетами под графиком нет — листаем отсюда -->
       <template v-if="isPhone && (phoneWide || app.zen) && isActive && stepInfo.count > 1">
-        <button class="chip step" :title="'Предыдущая монета списка: ' + stepInfo.prev?.symbol" @click="stepSymbol(-1)"><Icon name="prev" :size="15" /></button>
-        <button class="chip step" :title="'Следующая монета списка: ' + stepInfo.next?.symbol" @click="stepSymbol(1)"><Icon name="next" :size="15" /></button>
+        <button class="chip step" :title="t('Предыдущая монета списка: {symbol}', { symbol: stepInfo.prev?.symbol ?? '' })" @click="stepSymbol(-1)"><Icon name="prev" :size="15" /></button>
+        <button class="chip step" :title="t('Следующая монета списка: {symbol}', { symbol: stepInfo.next?.symbol ?? '' })" @click="stepSymbol(1)"><Icon name="next" :size="15" /></button>
       </template>
       <button
         v-if="paneCount > 1 && !isPhone"
         class="chip"
         :class="{ on: app.maximized }"
-        :title="app.maximized ? 'Вернуть раскладку (Alt+Enter)' : 'Развернуть график (Alt+Enter)'"
+        :title="app.maximized ? t('Вернуть раскладку (Alt+Enter)') : t('Развернуть график (Alt+Enter)')"
         @click="app.maximized = !app.maximized"
       >
         <Icon name="expand" :size="12" />
@@ -312,32 +321,32 @@ function toggleScale(id: ScaleMode) {
         <button class="tz-btn" :title="tzTitle" @click="toggle">{{ tzLabel }}</button>
       </template>
       <template #default="{ close }">
-        <div class="menu-title">Часовой пояс</div>
+        <div class="menu-title">{{ t('Часовой пояс') }}</div>
         <button v-for="z in TIMEZONES" :key="z.id" class="menu-item" :class="{ on: app.view.tz === z.id }" @click="(app.view.tz = z.id), close()">
-          {{ z.id === 'local' ? `${z.name} (${fmtOffset(tzOffsetSec(z.id))})` : tzMenuLabel(z) }}
+          {{ tzMenuLabel(z) }}
         </button>
       </template>
     </Dropdown>
 
-    <button v-if="ctrl?.ui.scrolledBack" class="rt-btn" title="К текущей цене" @click="ctrl.goRealtime()">
+    <button v-if="ctrl?.ui.scrolledBack" class="rt-btn" :title="t('К текущей цене')" @click="ctrl.goRealtime()">
       <Icon name="skip" :size="16" />
     </button>
 
     <DrawingBar v-if="ctrl && selected" :layer="ctrl.draw" :host="host" :pane-w="paneWidth" :pane-h="paneHeight" :precision="precision" />
 
     <div v-if="menu.open" class="menu ctx-menu" :style="{ left: Math.max(4, menu.x) + 'px', top: Math.max(4, menu.y) + 'px' }">
-      <button class="menu-item" @click="menuAlert"><Icon name="bell" :size="16" />Оповещение на {{ fmtPrice(menu.price, precision) }}</button>
-      <button class="menu-item" @click="menuLine"><Icon name="hline" :size="16" />Линия на {{ fmtPrice(menu.price, precision) }}</button>
+      <button class="menu-item" @click="menuAlert"><Icon name="bell" :size="16" />{{ t('Оповещение на {price}', { price: fmtPrice(menu.price, precision) }) }}</button>
+      <button class="menu-item" @click="menuLine"><Icon name="hline" :size="16" />{{ t('Линия на {price}', { price: fmtPrice(menu.price, precision) }) }}</button>
       <div class="menu-sep" />
-      <button class="menu-item" @click="menuReset"><Icon name="maximize" :size="16" />Сбросить масштаб</button>
-      <button class="menu-item" @click="menuClear"><Icon name="trash" :size="16" />Удалить все рисунки</button>
+      <button class="menu-item" @click="menuReset"><Icon name="maximize" :size="16" />{{ t('Сбросить масштаб') }}</button>
+      <button class="menu-item" @click="menuClear"><Icon name="trash" :size="16" />{{ t('Удалить все рисунки') }}</button>
     </div>
 
     <div v-if="ctrl && (ctrl.ui.loading || ctrl.ui.error)" class="pane-state">
       <div v-if="ctrl.ui.loading" class="spinner" />
       <template v-else>
         <p>{{ ctrl.ui.error }}</p>
-        <button class="btn primary" @click="ctrl.load()">Повторить</button>
+        <button class="btn primary" @click="ctrl.load()">{{ t('Повторить') }}</button>
       </template>
     </div>
   </section>
@@ -355,7 +364,7 @@ function toggleScale(id: ScaleMode) {
   content: '';
   position: absolute;
   inset: 0;
-  border: 1px solid var(--accent);
+  border: 1px solid var(--sel-border);
   pointer-events: none;
   z-index: 6;
 }
@@ -425,8 +434,8 @@ function toggleScale(id: ScaleMode) {
   color: var(--text);
 }
 .chip.on {
-  color: var(--accent);
-  border-color: var(--accent);
+  color: var(--sel);
+  border-color: var(--sel-border);
 }
 .rt-btn {
   position: absolute;

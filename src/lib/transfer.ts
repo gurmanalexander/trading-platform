@@ -1,4 +1,5 @@
 import { freezeStorage } from './storage'
+import { t } from './i18n'
 
 /**
  * Перенос данных между устройствами без сервера. Всё, что приложение хранит в браузере
@@ -67,12 +68,12 @@ export async function decode(code: string): Promise<Snapshot> {
   const kind = code[0]
   let bytes: Uint8Array = fromBase64Url(code.slice(1))
   if (kind === 'z') bytes = await pipe(bytes, new DecompressionStream('gzip') as TransformStream<Uint8Array, Uint8Array>)
-  else if (kind !== 'j') throw new Error('Это не код переноса')
+  else if (kind !== 'j') throw new Error(t('Это не код переноса'))
   return validate(JSON.parse(new TextDecoder().decode(bytes)))
 }
 
 function validate(data: unknown): Snapshot {
-  if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('Это не данные tvx')
+  if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error(t('Это не данные tvx'))
   return data as Snapshot
 }
 
@@ -146,6 +147,12 @@ export function describe(data: Snapshot): string {
   const lists = arr<{ items: unknown[] }>(obj(data.lists).all)
   const coins = lists.reduce((n, l) => n + arr(l.items).length, 0)
   const drawings = Object.values(obj(data.drawings)).reduce((n: number, v) => n + arr(v).length, 0)
-  const parts = [`списков: ${lists.length}`, `монет в них: ${coins}`, `рисунков и уровней: ${drawings}`, `оповещений: ${arr(data.alerts).length}`, `шаблонов: ${arr(obj(data.app).templates).length}`]
+  const parts = [
+    t('списков: {n}', { n: lists.length }),
+    t('монет в них: {n}', { n: coins }),
+    t('рисунков и уровней: {n}', { n: drawings }),
+    t('оповещений: {n}', { n: arr(data.alerts).length }),
+    t('шаблонов: {n}', { n: arr(obj(data.app).templates).length }),
+  ]
   return parts.join(', ')
 }

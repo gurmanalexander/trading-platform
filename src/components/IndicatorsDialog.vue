@@ -3,6 +3,7 @@ import Icon from './Icon.vue'
 import Modal from './Modal.vue'
 import { app, activePane, toast } from '../stores/app'
 import { INDICATORS, newIndicator } from '../lib/indicators'
+import { t } from '../lib/i18n'
 
 const MAX_PER_CHART = 12
 const groups = [
@@ -15,7 +16,7 @@ const count = (type: string) => activePane.value.indicators.filter((i) => i.type
 function add(type: string) {
   const list = activePane.value.indicators
   if (list.length >= MAX_PER_CHART) {
-    toast(`На одном графике не больше ${MAX_PER_CHART} индикаторов`, 'error')
+    toast(t('На одном графике не больше {n} индикаторов', { n: MAX_PER_CHART }), 'error')
     return
   }
   if (type === 'vol' && count('vol')) return
@@ -25,13 +26,13 @@ function add(type: string) {
 </script>
 
 <template>
-  <Modal title="Индикаторы" :width="420" @close="app.indicatorsOpen = false">
+  <Modal :title="t('Индикаторы')" :width="420" @close="app.indicatorsOpen = false">
     <div class="ind-list scroll">
       <template v-for="g in groups" :key="g.title">
-        <div class="ind-group muted">{{ g.title }}</div>
+        <div class="ind-group muted">{{ t(g.title) }}</div>
         <button v-for="d in g.list" :key="d.type" class="ind-row" @click="add(d.type)">
-          <span>{{ d.name }}</span>
-          <span v-if="count(d.type)" class="tag">на графике: {{ count(d.type) }}</span>
+          <span>{{ t(d.name) }}</span>
+          <span v-if="count(d.type)" class="tag">{{ t('на графике: {n}', { n: count(d.type) }) }}</span>
           <Icon name="plus" :size="16" />
         </button>
       </template>

@@ -1,3 +1,5 @@
+import { t } from './i18n'
+
 /** Сделка, описанная текстом: «ARBUSDT SHORT / ТВХ: 0.14991 / SL: 0.15165 / TP: 0.1379» */
 export interface Signal {
   symbol?: string
@@ -10,7 +12,7 @@ export interface Signal {
 const NUM = String.raw`(\d+(?:[.,]\d+)?)`
 const SEP = String.raw`\s*[:=\-–—]?\s*`
 // буквы «ТВХ» часто набирают латиницей — принимаем оба написания каждой буквы
-const ENTRY = new RegExp(String.raw`(?:[ТT][ВB][ХX]|TVH|вход|точка\s+входа|entry)` + SEP + NUM, 'iu')
+const ENTRY = new RegExp(String.raw`(?:[ТT][ВB][ХX]|TVH|вход|точка\s+входа|entry(?:\s+price)?)` + SEP + NUM, 'iu')
 const STOP = new RegExp(String.raw`(?:S\/?L|стоп(?:[\s-]?лосс)?|stop(?:[\s-]?loss)?)` + SEP + NUM, 'iu')
 const TARGET = new RegExp(String.raw`(?:T\/?P\s?\d?|тейк(?:[\s-]?профит)?|take(?:[\s-]?profit)?|цель|target)` + SEP + NUM, 'iu')
 const SIDE = /(?:^|[^\p{L}])(LONG|SHORT|ЛОНГ|ШОРТ|BUY|SELL)(?![\p{L}])/iu
@@ -40,10 +42,10 @@ export function parseSignal(text: string): Signal | null {
   return out
 }
 
-/** Текст сделки в том же формате — для копирования позиции */
+/** Текст сделки в том же формате — для копирования позиции (по-английски вместо «ТВХ» — «Entry») */
 export function formatSignal(symbol: string, side: 'long' | 'short', entry: number, stop: number, target: number, precision: number): string {
   const risk = Math.abs(entry - stop)
   const rr = risk ? Math.abs(target - entry) / risk : 0
   const f = (v: number) => String(+v.toFixed(precision))
-  return `${symbol} ${side === 'long' ? 'LONG' : 'SHORT'}\nТВХ: ${f(entry)}\nSL: ${f(stop)}\nTP: ${f(target)}\nR: ${rr.toFixed(2)}`
+  return `${symbol} ${side === 'long' ? 'LONG' : 'SHORT'}\n${t('ТВХ')}: ${f(entry)}\nSL: ${f(stop)}\nTP: ${f(target)}\nR: ${rr.toFixed(2)}`
 }
