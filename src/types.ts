@@ -1,3 +1,4 @@
+import { i18n } from './lib/i18n'
 export type ExchangeId = 'binance' | 'bybit'
 export type MarketId = 'spot' | 'futures'
 
@@ -38,4 +39,12 @@ export const sameSymbol = (a: SymbolRef, b: SymbolRef) =>
   a.exchange === b.exchange && a.market === b.market && a.symbol === b.symbol
 
 export const EXCHANGE_NAMES: Record<ExchangeId, string> = { binance: 'Binance', bybit: 'Bybit' }
-export const MARKET_NAMES: Record<MarketId, string> = { spot: 'Спот', futures: 'Фьючерсы' }
+/** Названия рынков на языке интерфейса: свойства читают язык при обращении, поэтому подписи меняются сразу */
+export const MARKET_NAMES: Record<MarketId, string> = {
+  get spot() {
+    return i18n.lang === 'en' ? 'Spot' : 'Спот'
+  },
+  get futures() {
+    return i18n.lang === 'en' ? 'Futures' : 'Фьючерсы'
+  },
+}
