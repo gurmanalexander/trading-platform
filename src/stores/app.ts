@@ -209,7 +209,9 @@ interface Saved {
   atrTable?: boolean
   panelWidth?: number
   listTab?: BoundTab
-  drawBarPos?: { x: number; y: number } | null
+  /** прежнее место панели — доли окна графика; не переносится: теперь панель ставится в окне браузера */
+  drawBarPos?: unknown
+  drawBarAt?: { x: number; y: number } | null
   view?: Partial<ViewSettings>
   risk?: Partial<RiskSettings>
 }
@@ -310,11 +312,12 @@ export const app = reactive({
   /** телефон: откуда листаются монеты на графике — последняя открытая вкладка, «Отбор» или «Список» */
   listTab: (saved.listTab === 'screener' ? 'screener' : 'watchlist') as BoundTab,
   /**
-   * Куда пользователь перетащил панель свойств рисунка: доли свободного места окна графика (0…1).
+   * Куда пользователь перетащил панель свойств рисунка: доли свободного места окна браузера (0…1) —
+   * панель может стоять и за пределами графика, на котором выбран рисунок.
    * null — панель встаёт сама: у рисунка, а на телефоне — внизу графика.
    */
-  drawBarPos: (saved.drawBarPos && isFinite(saved.drawBarPos.x) && isFinite(saved.drawBarPos.y)
-    ? { x: Math.min(1, Math.max(0, saved.drawBarPos.x)), y: Math.min(1, Math.max(0, saved.drawBarPos.y)) }
+  drawBarAt: (saved.drawBarAt && isFinite(saved.drawBarAt.x) && isFinite(saved.drawBarAt.y)
+    ? { x: Math.min(1, Math.max(0, saved.drawBarAt.x)), y: Math.min(1, Math.max(0, saved.drawBarAt.y)) }
     : null) as { x: number; y: number } | null,
 
   view: sanitizeView(saved.view),
@@ -358,7 +361,7 @@ export const app = reactive({
 
 persist(
   'app',
-  () => [app.themePref, app.layout, app.panes, app.active, app.panel, app.panelOpen, app.magnet, app.crossMagnet, app.sync, app.favTfs, app.templates, app.templateId, app.tabTemplates, app.searchFilter, app.drawingsHidden, app.phoneStack, app.defaults, app.colors, app.atrTable, app.panelWidth, app.listTab, app.drawBarPos, app.view, app.risk],
+  () => [app.themePref, app.layout, app.panes, app.active, app.panel, app.panelOpen, app.magnet, app.crossMagnet, app.sync, app.favTfs, app.templates, app.templateId, app.tabTemplates, app.searchFilter, app.drawingsHidden, app.phoneStack, app.defaults, app.colors, app.atrTable, app.panelWidth, app.listTab, app.drawBarAt, app.view, app.risk],
   () => ({
     themePref: app.themePref,
     layout: app.layout,
@@ -381,7 +384,7 @@ persist(
     atrTable: app.atrTable,
     panelWidth: app.panelWidth,
     listTab: app.listTab,
-    drawBarPos: app.drawBarPos,
+    drawBarAt: app.drawBarAt,
     view: app.view,
     risk: app.risk,
   }),

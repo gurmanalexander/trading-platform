@@ -323,7 +323,7 @@ function toggleScale(id: ScaleMode) {
       <Icon name="skip" :size="16" />
     </button>
 
-    <DrawingBar v-if="ctrl && selected" :layer="ctrl.draw" :max-x="paneWidth || 9999" :max-y="paneHeight || 9999" :precision="precision" />
+    <DrawingBar v-if="ctrl && selected" :layer="ctrl.draw" :host="host" :pane-w="paneWidth" :pane-h="paneHeight" :precision="precision" />
 
     <div v-if="menu.open" class="menu ctx-menu" :style="{ left: Math.max(4, menu.x) + 'px', top: Math.max(4, menu.y) + 'px' }">
       <button class="menu-item" @click="menuAlert"><Icon name="bell" :size="16" />Оповещение на {{ fmtPrice(menu.price, precision) }}</button>

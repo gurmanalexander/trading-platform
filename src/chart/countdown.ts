@@ -1,5 +1,6 @@
 import type { ISeriesPrimitive, ISeriesPrimitiveAxisView, Time } from 'lightweight-charts'
 import { fmtDuration } from '../lib/format'
+import { textOn } from '../lib/color'
 
 export interface CountdownHost {
   /** последняя свеча: время начала (сек), цена закрытия и направление */
@@ -32,8 +33,9 @@ export function countdownPrimitive(host: CountdownHost): ISeriesPrimitive<Time> 
     const y = host.yOf(b.close)
     if (y == null) return
     const bg = b.up ? host.colors().up : host.colors().down
+    const fg = textOn(bg)
     const price = host.priceText(b.close)
-    if (price !== null) views.push({ coordinate: () => y, text: () => price, textColor: () => '#fff', backColor: () => bg })
+    if (price !== null) views.push({ coordinate: () => y, text: () => price, textColor: () => fg, backColor: () => bg })
     const sec = host.tfSec()
     // у месячных свечей длина плавает — таймер не показываем
     if (!host.enabled() || sec <= 0 || sec > 7 * 86400) return
@@ -42,7 +44,7 @@ export function countdownPrimitive(host: CountdownHost): ISeriesPrimitive<Time> 
     // высота метки цены у библиотеки — шрифт плюс отступы по 3/12 шрифта сверху и снизу
     const fs = host.fontSize()
     const text = fmtDuration(left)
-    views.push({ coordinate: () => y + fs * 1.5 + 1, text: () => text, textColor: () => '#fff', backColor: () => bg })
+    views.push({ coordinate: () => y + fs * 1.5 + 1, text: () => text, textColor: () => fg, backColor: () => bg })
   }
   return {
     attached: ({ requestUpdate }) => {

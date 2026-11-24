@@ -146,3 +146,17 @@ describe('часовые пояса', () => {
     expect(isTimeZone('Mars/Base')).toBe(false)
   })
 })
+
+describe('цвет текста на плашке', () => {
+  it('на светлом фоне — тёмный текст, на тёмном и насыщенном — белый', async () => {
+    const { textOn } = await import('../src/lib/color')
+    expect(textOn('#ffffff')).not.toBe('#fff')
+    expect(textOn('#fff')).not.toBe('#fff')
+    expect(textOn('#d6dbe4')).not.toBe('#fff')
+    expect(textOn('rgb(240, 240, 240)')).not.toBe('#fff')
+    expect(textOn('#131722')).toBe('#fff')
+    expect(textOn('#f0566b')).toBe('#fff')
+    expect(textOn('#1fb28a')).toBe('#fff')
+    expect(textOn('#4c8dff')).toBe('#fff')
+  })
+})

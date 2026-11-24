@@ -6,6 +6,7 @@ import { checkpoint, clipboard, selection, setDefaultStyle, styleFor, visibleOn,
 import { formatSignal, type Signal } from '../lib/signal'
 import { fmtPct, fmtPrice, fmtSpan } from '../lib/format'
 import { withAlpha, type ChartColors } from './theme'
+import { textOn } from '../lib/color'
 import { lowerBound } from './bars'
 import { evaluatePosition, fmtQty, fmtR, fmtUsd, movePositionHandle, positionSize, riskReward, setPositionPrices } from './position'
 import { STOP_PART, TAKE_RATIO } from '../lib/atr'
@@ -67,17 +68,11 @@ const STOP_ATR = STOP_PART
 const DEFAULT_RR = TAKE_RATIO
 const MONTHS = ['янв', 'фев', 'мар', 'апр', 'мая', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек']
 
-/** Тёмный или светлый текст — что читается на фоне bg */
-function contrast(bg: string): string {
-  if (bg.length !== 7 || bg[0] !== '#') return '#fff'
-  const n = parseInt(bg.slice(1), 16)
-  return ((n >> 16) * 299 + ((n >> 8) & 255) * 587 + (n & 255) * 114) / 1000 > 150 ? '#111' : '#fff'
-}
 
 const axisLabel = (coordinate: number, text: string, bg: string): ISeriesPrimitiveAxisView => ({
   coordinate: () => coordinate,
   text: () => text,
-  textColor: () => contrast(bg),
+  textColor: () => textOn(bg),
   backColor: () => bg,
 })
 

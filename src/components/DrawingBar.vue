@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onUpdated, reactive, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, onUpdated, reactive, ref } from 'vue'
 import Icon from './Icon.vue'
 import { DRAW_COLORS, defaultVisibility, type Dash, type Visibility } from '../stores/drawings'
 import { hasLineStyle, hasText, isPosition, TEXT_SIZES, type DrawingsLayer } from '../chart/drawings'
@@ -8,7 +8,8 @@ import { app, isPhone, toast } from '../stores/app'
 import { pasteFromClipboard } from '../chart/setup'
 
 // Панель выбранного рисунка: у линий — цвет, толщина, вид и подпись; у позиции — вход, стоп и цель числами
-const props = defineProps<{ layer: DrawingsLayer; maxX: number; maxY: number; precision: number }>()
+// host — область графика, на котором выбран рисунок; paneW/paneH — её размер (меняется — пересчитываем место)
+const props = defineProps<{ layer: DrawingsLayer; host?: HTMLElement; paneW: number; paneH: number; precision: number }>()
 
 const d = computed(() => props.layer.selected())
 const styled = computed(() => !!d.value && hasLineStyle(d.value.type))
@@ -16,10 +17,11 @@ const position = computed(() => !!d.value && isPosition(d.value.type) && d.value
 const isText = computed(() => d.value?.type === 'text')
 // цвет выбирается и у линий, и у текста
 const colored = computed(() => styled.value || isText.value)
-// Где стоит панель. Пока её не трогали — сама: на компьютере над рисунком (нет места сверху — под ним),
-// на телефоне — внизу графика, чтобы не закрывать то, что правят. Перетащили за ручку — остаётся там,
-// куда поставили, для всех рисунков; двойное нажатие на ручку возвращает её на место по умолчанию.
-// Размер берётся настоящий (он зависит от вида рисунка), панель целиком остаётся внутри окна графика.
+// Где стоит панель. Она рисуется поверх всего приложения (в body), поэтому может выходить за край
+// своего графика — на соседний график, панели и полосы; граница — только окно браузера.
+// Пока её не трогали — сама: на компьютере над рисунком (нет места сверху — под ним), на телефоне —
+// внизу графика, чтобы не закрывать то, что правят. Перетащили за ручку — остаётся там, куда
+// поставили, для всех рисунков и всех графиков; двойное нажатие на ручку возвращает её на место по умолчанию.
 const bar = ref<HTMLElement>()
 const size = reactive({ w: 0, h: 0 })
 function measure() {
@@ -28,28 +30,44 @@ function measure() {
   size.w = el.offsetWidth
   size.h = el.offsetHeight
 }
-onMounted(measure)
+const view = reactive({ w: window.innerWidth, h: window.innerHeight })
+function onResize() {
+  view.w = window.innerWidth
+  view.h = window.innerHeight
+}
+onMounted(() => {
+  measure()
+  window.addEventListener('resize', onResize)
+})
 onUpdated(measure)
+onBeforeUnmount(() => window.removeEventListener('resize', onResize))
 const MARGIN = 4
-/** свободное место окна: на сколько панель может сдвинуться по каждой оси */
+/** свободное место окна браузера: на сколько панель может сдвинуться по каждой оси */
 const free = computed(() => {
   const w = size.w || (position.value ? 330 : 280)
   const h = size.h || (colored.value ? 80 : position.value ? 104 : 42)
-  return { x: Math.max(0, (props.maxX || 9999) - w - MARGIN * 2), y: Math.max(0, (props.maxY || 9999) - h - MARGIN * 2), h }
+  return { x: Math.max(0, view.w - w - MARGIN * 2), y: Math.max(0, view.h - h - MARGIN * 2), w, h }
 })
+const clampX = (x: number) => MARGIN + Math.max(0, Math.min(free.value.x, x - MARGIN))
+const clampY = (y: number) => MARGIN + Math.max(0, Math.min(free.value.y, y - MARGIN))
 const pos = computed(() => {
   const f = free.value
-  const px = (left: number, top: number) => ({ left: Math.round(left) + 'px', top: Math.round(top) + 'px', maxWidth: (props.maxX || 9999) - MARGIN * 2 + 'px' })
-  const m = app.drawBarPos
+  const px = (left: number, top: number) => ({ left: Math.round(left) + 'px', top: Math.round(top) + 'px', maxWidth: view.w - MARGIN * 2 + 'px' })
+  const m = app.drawBarAt
   if (m) return px(MARGIN + m.x * f.x, MARGIN + m.y * f.y)
-  // телефон: по центру, над кнопками внизу графика
-  if (isPhone.value) return px(MARGIN + f.x / 2, MARGIN + Math.max(0, f.y - 62))
+  // место графика на экране; от размера окна графика зависит, поэтому пересчитывается вместе с ним
+  void props.paneW
+  void props.paneH
+  const r = props.host?.getBoundingClientRect()
+  if (!r) return null
+  // телефон: по центру графика, над кнопками внизу
+  if (isPhone.value) return px(clampX(r.left + (r.width - f.w) / 2), clampY(r.bottom - f.h - 62))
   const a = props.layer.anchor.value
   if (!a) return null
-  let top = a.y - f.h - 12
+  let top = r.top + a.y - f.h - 12
   // сверху не помещается (или там легенда графика) — ставим под рисунком
-  if (top < 30) top = a.y + 18
-  return px(MARGIN + Math.max(0, Math.min(f.x, a.x - MARGIN)), MARGIN + Math.max(0, Math.min(f.y, top - MARGIN)))
+  if (top < r.top + 30) top = r.top + a.y + 18
+  return px(clampX(r.left + a.x), clampY(top))
 })
 
 // ---------- перетаскивание панели за ручку ----------
@@ -61,8 +79,9 @@ function startMove(e: PointerEvent) {
   e.preventDefault()
   const grip = e.currentTarget as HTMLElement
   grip.setPointerCapture(e.pointerId)
-  const x0 = e.clientX - el.offsetLeft
-  const y0 = e.clientY - el.offsetTop
+  const box = el.getBoundingClientRect()
+  const x0 = e.clientX - box.left
+  const y0 = e.clientY - box.top
   let moved = false
   const move = (ev: PointerEvent) => {
     if (!moved && Math.hypot(ev.clientX - e.clientX, ev.clientY - e.clientY) < 4) return
@@ -70,7 +89,7 @@ function startMove(e: PointerEvent) {
     moving.value = true
     const f = free.value
     const part = (v: number, room: number) => (room > 0 ? Math.min(1, Math.max(0, (v - MARGIN) / room)) : 0)
-    app.drawBarPos = { x: part(ev.clientX - x0, f.x), y: part(ev.clientY - y0, f.y) }
+    app.drawBarAt = { x: part(ev.clientX - x0, f.x), y: part(ev.clientY - y0, f.y) }
   }
   const stop = () => {
     moving.value = false
@@ -83,7 +102,7 @@ function startMove(e: PointerEvent) {
   grip.addEventListener('pointercancel', stop)
 }
 function resetPlace() {
-  app.drawBarPos = null
+  app.drawBarAt = null
 }
 
 const WIDTHS = [1, 2, 3, 4]
@@ -150,10 +169,11 @@ function duplicate() {
 </script>
 
 <template>
+  <Teleport to="body">
   <div v-if="d && pos" ref="bar" class="dbar" :class="{ moving }" :style="pos" @pointerdown.stop @keydown.stop>
     <button
       class="grip"
-      :title="app.drawBarPos ? 'Потяните, чтобы передвинуть панель. Двойное нажатие — вернуть на место по умолчанию' : 'Потяните, чтобы передвинуть панель'"
+      :title="app.drawBarAt ? 'Потяните, чтобы передвинуть панель. Двойное нажатие — вернуть на место по умолчанию' : 'Потяните, чтобы передвинуть панель'"
       aria-label="Передвинуть панель"
       @pointerdown="startMove"
       @dblclick="resetPlace"
@@ -249,12 +269,14 @@ function duplicate() {
     </div>
     <p v-if="position && !isPhone" class="hint muted">Ctrl+V — вставить текст сделки (ТВХ / SL / TP), Ctrl+C — скопировать его</p>
   </div>
+  </Teleport>
 </template>
 
 <style scoped>
 .dbar {
-  position: absolute;
-  z-index: 7;
+  /* поверх всего приложения, но под окнами-диалогами и выпадающими меню */
+  position: fixed;
+  z-index: 40;
   display: flex;
   flex-direction: column;
   gap: 4px;
