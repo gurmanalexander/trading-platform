@@ -51,7 +51,7 @@ if (typeof window !== 'undefined') {
     } catch {
       /* без сохранения */
     }
-    document.documentElement.lang = lang
+    if (typeof document !== 'undefined') document.documentElement.lang = lang
   }
   apply(i18n.lang)
   watch(() => i18n.lang, apply)
