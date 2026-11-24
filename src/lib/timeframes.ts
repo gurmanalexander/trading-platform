@@ -1,6 +1,9 @@
+import { i18n } from './i18n'
+
 export interface Timeframe {
   id: string
-  label: string
+  /** подпись на языке интерфейса */
+  readonly label: string
   /** длительность в секундах (для месяца — приблизительно) */
   sec: number
   binance: string
@@ -11,20 +14,29 @@ const M = 60
 const H = 3600
 const D = 86400
 
+/** Интервал с подписью, которая читает язык при каждом обращении: tf.label везде сразу на текущем языке */
+const tf = (id: string, ru: string, en: string, rest: Omit<Timeframe, 'id' | 'label'>): Timeframe => ({
+  id,
+  get label() {
+    return i18n.lang === 'en' ? en : ru
+  },
+  ...rest,
+})
+
 export const TIMEFRAMES: Timeframe[] = [
-  { id: '1m', label: '1м', sec: M, binance: '1m', bybit: '1' },
-  { id: '3m', label: '3м', sec: 3 * M, binance: '3m', bybit: '3' },
-  { id: '5m', label: '5м', sec: 5 * M, binance: '5m', bybit: '5' },
-  { id: '15m', label: '15м', sec: 15 * M, binance: '15m', bybit: '15' },
-  { id: '30m', label: '30м', sec: 30 * M, binance: '30m', bybit: '30' },
-  { id: '1h', label: '1ч', sec: H, binance: '1h', bybit: '60' },
-  { id: '2h', label: '2ч', sec: 2 * H, binance: '2h', bybit: '120' },
-  { id: '4h', label: '4ч', sec: 4 * H, binance: '4h', bybit: '240' },
-  { id: '6h', label: '6ч', sec: 6 * H, binance: '6h', bybit: '360' },
-  { id: '12h', label: '12ч', sec: 12 * H, binance: '12h', bybit: '720' },
-  { id: '1d', label: '1Д', sec: D, binance: '1d', bybit: 'D' },
-  { id: '1w', label: '1Н', sec: 7 * D, binance: '1w', bybit: 'W' },
-  { id: '1M', label: '1Мес', sec: 30 * D, binance: '1M', bybit: 'M' },
+  tf('1m', '1м', '1m', { sec: M, binance: '1m', bybit: '1' }),
+  tf('3m', '3м', '3m', { sec: 3 * M, binance: '3m', bybit: '3' }),
+  tf('5m', '5м', '5m', { sec: 5 * M, binance: '5m', bybit: '5' }),
+  tf('15m', '15м', '15m', { sec: 15 * M, binance: '15m', bybit: '15' }),
+  tf('30m', '30м', '30m', { sec: 30 * M, binance: '30m', bybit: '30' }),
+  tf('1h', '1ч', '1h', { sec: H, binance: '1h', bybit: '60' }),
+  tf('2h', '2ч', '2h', { sec: 2 * H, binance: '2h', bybit: '120' }),
+  tf('4h', '4ч', '4h', { sec: 4 * H, binance: '4h', bybit: '240' }),
+  tf('6h', '6ч', '6h', { sec: 6 * H, binance: '6h', bybit: '360' }),
+  tf('12h', '12ч', '12h', { sec: 12 * H, binance: '12h', bybit: '720' }),
+  tf('1d', '1Д', '1D', { sec: D, binance: '1d', bybit: 'D' }),
+  tf('1w', '1Н', '1W', { sec: 7 * D, binance: '1w', bybit: 'W' }),
+  tf('1M', '1Мес', '1M', { sec: 30 * D, binance: '1M', bybit: 'M' }),
 ]
 
 export const DEFAULT_FAVORITE_TFS = ['1m', '5m', '1h', '4h', '1d']

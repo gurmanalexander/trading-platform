@@ -4,6 +4,7 @@ import type { Bar } from '../types'
 import { app } from '../stores/app'
 import { checkpoint, clipboard, selection, setDefaultStyle, styleFor, visibleOn, type Dash, type Drawing, type DrawingType, type Pt, type Visibility } from '../stores/drawings'
 import { formatSignal, type Signal } from '../lib/signal'
+import { i18n, locale, t } from '../lib/i18n'
 import { fmtPct, fmtPrice, fmtSpan } from '../lib/format'
 import { withAlpha, type ChartColors } from './theme'
 import { textOn } from '../lib/color'
@@ -67,6 +68,7 @@ const uid = () => Math.random().toString(36).slice(2, 10)
 const STOP_ATR = STOP_PART
 const DEFAULT_RR = TAKE_RATIO
 const MONTHS = ['янв', 'фев', 'мар', 'апр', 'мая', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек']
+const MONTHS_EN = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
 
 const axisLabel = (coordinate: number, text: string, bg: string): ISeriesPrimitiveAxisView => ({
@@ -211,7 +213,7 @@ export class DrawingsLayer {
   private timeText(t: number): string {
     const d = new Date((t + this.host.tz()) * 1000)
     const pad = (n: number) => String(n).padStart(2, '0')
-    const date = `${pad(d.getUTCDate())} ${MONTHS[d.getUTCMonth()]} '${String(d.getUTCFullYear()).slice(2)}`
+    const date = `${pad(d.getUTCDate())} ${(i18n.lang === 'en' ? MONTHS_EN : MONTHS)[d.getUTCMonth()]} '${String(d.getUTCFullYear()).slice(2)}`
     return this.host.tfSec() >= 86400 ? date : `${date}  ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}`
   }
 
@@ -1198,16 +1200,30 @@ export class DrawingsLayer {
         if (!hover && !handles) break
         const pct = (v: number) => fmtPct(entry ? ((v - entry) / entry) * 100 : 0)
         // расстояние от входа в пунктах — шагах цены инструмента, как в TradingView
-        const points = (v: number) => Math.round(Math.abs(v - entry) * 10 ** prec).toLocaleString('ru-RU') + ' п.'
-        const result = st.status === 'open' ? ` · сейчас ${fmtR(st.r)}` : st.status === 'tp' ? ` · тейк ${fmtR(st.r)}` : st.status === 'sl' ? ' · стоп -1R' : st.status === 'closed' ? ` · закрыта ${fmtR(st.r)}` : st.status === 'missed' ? ' · вход не исполнен' : bars.length && bars[bars.length - 1].time >= d.pts[0].t ? ' · ждёт входа' : ''
+        const points = (v: number) => t('{n} п.', { n: Math.round(Math.abs(v - entry) * 10 ** prec).toLocaleString(locale()) })
+        const status =
+          st.status === 'open'
+            ? t('сейчас {r}', { r: fmtR(st.r) })
+            : st.status === 'tp'
+              ? t('тейк {r}', { r: fmtR(st.r) })
+              : st.status === 'sl'
+                ? t('стоп -1R')
+                : st.status === 'closed'
+                  ? t('закрыта {r}', { r: fmtR(st.r) })
+                  : st.status === 'missed'
+                    ? t('вход не исполнен')
+                    : bars.length && bars[bars.length - 1].time >= d.pts[0].t
+                      ? t('ждёт входа')
+                      : ''
+        const result = status ? ` · ${status}` : ''
         const size = positionSize(d, app.risk.deposit, app.risk.pct)
         const texts = [
-          `Цель ${fmtPrice(target, prec)} (${pct(target)}) · ${points(target)}${size ? ` · +${fmtUsd(size.risk * riskReward(d))}` : ''}`,
-          `Стоп ${fmtPrice(stop, prec)} (${pct(stop)}) · ${points(stop)}${size ? ` · −${fmtUsd(size.risk)}` : ''}`,
-          `${d.type === 'long' ? 'Лонг' : 'Шорт'} ${fmtPrice(entry, prec)} · R/R ${riskReward(d).toFixed(2)}${result}`,
+          `${t('Цель')} ${fmtPrice(target, prec)} (${pct(target)}) · ${points(target)}${size ? ` · +${fmtUsd(size.risk * riskReward(d))}` : ''}`,
+          `${t('Стоп')} ${fmtPrice(stop, prec)} (${pct(stop)}) · ${points(stop)}${size ? ` · −${fmtUsd(size.risk)}` : ''}`,
+          `${d.type === 'long' ? t('Лонг') : t('Шорт')} ${fmtPrice(entry, prec)} · R/R ${riskReward(d).toFixed(2)}${result}`,
         ]
         // объём — второй строкой у входа, если в настройках задан депозит
-        const entryLines = size ? [texts[2], `Объём ${fmtQty(size.qty)} · ${fmtUsd(size.notional)}`] : [texts[2]]
+        const entryLines = size ? [texts[2], `${t('Объём')} ${fmtQty(size.qty)} · ${fmtUsd(size.notional)}`] : [texts[2]]
         // узкая позиция: подписи не помещаются между маркерами — выносим их вправо от неё
         const outside = x2 - x1 < Math.max(...texts.map((t) => ctx.measureText(t).width)) + 40
         const x = outside ? x2 + 10 : (x1 + x2) / 2
@@ -1243,12 +1259,12 @@ export class DrawingsLayer {
         const dt = d.pts[1].t - d.pts[0].t
         const nBars = Math.round(dt / this.host.tfSec())
         // в пунктах (шагах цены) и в долях дневного ATR — удобно сравнивать расстояния до уровней
-        const pts = Math.round(Math.abs(diff) * 10 ** prec).toLocaleString('ru-RU') + ' п.'
+        const pts = t('{n} п.', { n: Math.round(Math.abs(diff) * 10 ** prec).toLocaleString(locale()) })
         const atr = this.host.atr()
         const inAtr = atr ? ` · ${(Math.abs(diff) / atr).toFixed(2)} ATR` : ''
         this.tag(
           ctx,
-          [`${diff >= 0 ? '+' : ''}${fmtPrice(diff, prec)} (${fmtPct(pct)}) · ${pts}`, `${nBars} бар., ${fmtSpan(dt)}${inAtr}`],
+          [`${diff >= 0 ? '+' : ''}${fmtPrice(diff, prec)} (${fmtPct(pct)}) · ${pts}`, `${t('{n} бар.', { n: nBars })}, ${fmtSpan(dt)}${inAtr}`],
           mx,
           up ? y - 24 : y + rh + 24,
           col,

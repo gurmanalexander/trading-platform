@@ -2,6 +2,7 @@ import { activePane, theme, toast } from '../stores/app'
 import { chartColors } from './theme'
 import { allCharts } from './registry'
 import { downloadCanvas, snapshotName } from './controller'
+import { t } from '../lib/i18n'
 
 /**
  * Снимок всех окон раскладки одной картинкой: графики стоят так же, как на экране.
@@ -46,16 +47,16 @@ export function snapshotAll(): boolean {
 export async function copyCanvas(canvas: HTMLCanvasElement | null): Promise<boolean> {
   if (!canvas) return false
   if (!navigator.clipboard?.write || typeof ClipboardItem === 'undefined') {
-    toast('Браузер не умеет копировать картинки в буфер — сохраните снимок файлом', 'error')
+    toast(t('Браузер не умеет копировать картинки в буфер — сохраните снимок файлом'), 'error')
     return false
   }
   const blob = new Promise<Blob>((resolve, reject) => canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('empty')))))
   try {
     await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })])
-    toast('Снимок скопирован в буфер обмена')
+    toast(t('Снимок скопирован в буфер обмена'))
     return true
   } catch {
-    toast('Не удалось скопировать картинку в буфер обмена', 'error')
+    toast(t('Не удалось скопировать картинку в буфер обмена'), 'error')
     return false
   }
 }

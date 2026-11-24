@@ -7,6 +7,7 @@ import { parseLines, parseSetup, type Setup } from '../lib/setup'
 import { parseSignal, type Signal } from '../lib/signal'
 import { chartAt } from './registry'
 import { applySignal } from './trade'
+import { locale, t } from '../lib/i18n'
 
 let focusId = 1
 
@@ -64,7 +65,7 @@ export function applySetup(s: Setup, quiet = false, note = '') {
   if (isPhone.value) app.mobileTab = 'chart'
 
   let levelNote = ''
-  if (s.level !== undefined) levelNote = markAndLevel(ref, s) ? `, уровень ${s.level}` : ', уровень уже есть'
+  if (s.level !== undefined) levelNote = markAndLevel(ref, s) ? t('уровень {level}', { level: s.level }) : t('уровень уже есть')
   else markAndLevel(ref, s)
   if (s.date) {
     dateFocus.value = { id: focusId++, key, ...s.date, at: Date.now() }
@@ -73,9 +74,11 @@ export function applySetup(s: Setup, quiet = false, note = '') {
   }
   selection.value = null
   if (quiet) return
-  const side = s.side ? (s.side === 'long' ? ', лонг' : ', шорт') : ''
-  const date = s.date ? `, ${String(s.date.d).padStart(2, '0')}.${String(s.date.m).padStart(2, '0')}.${s.date.y}` : ''
-  toast(`${ref.symbol}${date}${side}${levelNote}${note}`)
+  const info = [ref.symbol]
+  if (s.date) info.push(new Date(s.date.y, s.date.m - 1, s.date.d).toLocaleDateString(locale(), { day: '2-digit', month: '2-digit', year: 'numeric' }))
+  if (s.side) info.push(s.side === 'long' ? t('лонг') : t('шорт'))
+  if (levelNote) info.push(levelNote)
+  toast(info.join(', ') + note)
 }
 
 /**
@@ -95,7 +98,7 @@ function addToLists(ref: SymbolRef): string | null {
 export function applyPastedSetup(s: Setup) {
   if (!s.symbol) return applySetup(s)
   const was = addToLists(refOf(s))
-  applySetup(s, false, was ? ` — уже в списке «${was}»` : ` — добавлен в конец списка «${activeList.value.name}»`)
+  applySetup(s, false, ' — ' + (was ? t('уже в списке «{name}»', { name: was }) : t('добавлен в конец списка «{name}»', { name: activeList.value.name })))
 }
 
 /**
@@ -123,12 +126,15 @@ export function applyBatch(list: Setup[], skipped: string[] = []) {
   if (first) applySetup(first, true)
   app.mobileTab = tab
   const parts: string[] = []
-  if (added.length) parts.push(`В список «${activeList.value.name}» добавлено ${added.length}: ${added.join(', ')}`)
-  if (updated.length) parts.push(`${added.length ? 'у' : 'У'}же в списках, обновлены направление и уровни — ${updated.length}: ${updated.join(', ')}`)
+  if (added.length) parts.push(t('В список «{name}» добавлено {n}: {list}', { name: activeList.value.name, n: added.length, list: added.join(', ') }))
+  if (updated.length) {
+    const vars = { n: updated.length, list: updated.join(', ') }
+    parts.push(added.length ? t('уже в списках, обновлены направление и уровни — {n}: {list}', vars) : t('Уже в списках, обновлены направление и уровни — {n}: {list}', vars))
+  }
   toast(parts.join('; '), 'info', 7000)
   if (skipped.length) {
     const shown = skipped.slice(0, 3).map((l) => `«${l.length > 40 ? l.slice(0, 40) + '…' : l}»`)
-    toast(`Не разобрано строк: ${skipped.length} — ${shown.join(', ')}${skipped.length > 3 ? ' …' : ''}`, 'error', 9000)
+    toast(t('Не разобрано строк: {n} — {lines}', { n: skipped.length, lines: shown.join(', ') + (skipped.length > 3 ? ' …' : '') }), 'error', 9000)
   }
 }
 

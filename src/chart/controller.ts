@@ -21,6 +21,7 @@ import { reactive, shallowRef } from 'vue'
 import { EXCHANGE_NAMES, symbolKey, type Bar, type SymbolRef } from '../types'
 import { adapters } from '../exchanges'
 import { getTf, type Timeframe } from '../lib/timeframes'
+import { locale, t } from '../lib/i18n'
 import { setPrecision } from '../lib/format'
 import { indicatorDef, resolveParams, toSource, type IndicatorDef, type IndicatorInstance, type Source } from '../lib/indicators'
 import type { OiPoint } from '../exchanges/types'
@@ -202,7 +203,7 @@ export class ChartController {
       },
       rightPriceScale: { borderColor: c.border },
       timeScale: { borderColor: c.border, timeVisible: true, secondsVisible: false, rightOffset: 6, barSpacing: 8, minBarSpacing: 0.8 },
-      localization: { locale: 'ru-RU' },
+      localization: { locale: locale() },
       kineticScroll: { touch: true, mouse: false },
     })
 
@@ -446,7 +447,7 @@ export class ChartController {
     try {
       const res = await adapter.fetchKlines(symbol.market, symbol.symbol, this.tf, INITIAL_BARS)
       if (token !== this.token) return
-      if (!res.bars.length) throw new Error('Нет данных по инструменту')
+      if (!res.bars.length) throw new Error(t('Нет данных по инструменту'))
       this.bars = res.bars
       this.lastDataAt = Date.now()
       this.loadedKey = symbolKey(symbol)
@@ -473,7 +474,7 @@ export class ChartController {
         () => token === this.token && this.refreshTail(),
       )
     } catch (e) {
-      if (token === this.token) this.ui.error = e instanceof Error ? e.message : 'Не удалось загрузить данные'
+      if (token === this.token) this.ui.error = e instanceof Error ? e.message : t('Не удалось загрузить данные')
     } finally {
       if (token === this.token) this.ui.loading = false
     }
@@ -996,6 +997,12 @@ export class ChartController {
     this.chart.applyOptions({ layout: { fontSize: app.view.scaleFont } })
     if (this.pane.chartType === 'bars') this.main.applyOptions({ thinBars: app.view.thinBars })
     this.main.applyOptions({ priceLineVisible: app.view.priceLine })
+    this.draw.redraw()
+  }
+
+  /** Сменился язык интерфейса: даты на шкале времени и подписи рисунков — на новом языке */
+  applyLocale() {
+    this.chart.applyOptions({ localization: { locale: locale() } })
     this.draw.redraw()
   }
 

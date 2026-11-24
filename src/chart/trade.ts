@@ -6,6 +6,7 @@ import type { Signal } from '../lib/signal'
 import { chartAt } from './registry'
 import { isPosition } from './drawings'
 import { barStart, setPositionPrices } from './position'
+import { t } from '../lib/i18n'
 
 /**
  * Применяет сделку из текста: цены раскладываются по выбранной позиции, а если позиция
@@ -17,36 +18,36 @@ export function applySignal(sig: Signal): boolean {
   const cur = layer?.selected()
   if (layer && cur && isPosition(cur.type)) {
     const ok = layer.applySignal(sig)
-    if (ok) toast('Цены позиции обновлены из текста')
-    else toast('Не получилось: стоп и цель должны быть по разные стороны от входа', 'error')
+    if (ok) toast(t('Цены позиции обновлены из текста'))
+    else toast(t('Не получилось: стоп и цель должны быть по разные стороны от входа'), 'error')
     return ok
   }
   if (sig.entry === undefined || sig.stop === undefined || sig.target === undefined) {
-    toast('Чтобы создать позицию из текста, нужны вход, стоп и цель. Либо выделите позицию и вставьте снова', 'error')
+    toast(t('Чтобы создать позицию из текста, нужны вход, стоп и цель. Либо выделите позицию и вставьте снова'), 'error')
     return false
   }
   const pane = activePane.value
   const ref: SymbolRef = { exchange: pane.symbol.exchange, market: pane.symbol.market, symbol: sig.symbol ?? pane.symbol.symbol }
   // вход — начало текущей свечи активного окна (17:12 на пятиминутках — это свеча 17:10);
   // ширина — сутки на интервале до часа, чтобы позицию было видно на любом внутридневном графике
-  const t = barStart(Math.floor(Date.now() / 1000), getTf(pane.tf).sec)
+  const t0 = barStart(Math.floor(Date.now() / 1000), getTf(pane.tf).sec)
   const d: Drawing = {
     id: Math.random().toString(36).slice(2, 10),
     type: 'long',
     color: styleFor('long').color,
     pts: [
-      { t, p: sig.entry },
-      { t: t + Math.min(getTf(pane.tf).sec, 3600) * 24, p: sig.target },
-      { t, p: sig.stop },
+      { t: t0, p: sig.entry },
+      { t: t0 + Math.min(getTf(pane.tf).sec, 3600) * 24, p: sig.target },
+      { t: t0, p: sig.stop },
     ],
   }
   if (!setPositionPrices(d, sig.entry, sig.stop, sig.target)) {
-    toast('Не получилось: стоп и цель должны быть по разные стороны от входа', 'error')
+    toast(t('Не получилось: стоп и цель должны быть по разные стороны от входа'), 'error')
     return false
   }
   addDrawing(symbolKey(ref), d)
   if (ref.symbol !== pane.symbol.symbol) setSymbol(ref)
   selection.value = { pane: activeIndex.value, id: d.id }
-  toast(`${d.type === 'long' ? 'Лонг' : 'Шорт'} ${ref.symbol} добавлен на график`)
+  toast(d.type === 'long' ? t('Лонг {symbol} добавлен на график', { symbol: ref.symbol }) : t('Шорт {symbol} добавлен на график', { symbol: ref.symbol }))
   return true
 }

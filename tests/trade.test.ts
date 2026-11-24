@@ -3,6 +3,7 @@ import { atrBounds, atrSpent, dailyAtr, dailyRisk, fiveMinRisk, spentTone, wilde
 import { formatSignal, parseSignal } from '../src/lib/signal'
 import { barStart, evaluatePosition, fmtR, latestPosition, positionSize, setPositionPrices } from '../src/chart/position'
 import type { Drawing } from '../src/stores/drawings'
+import { i18n } from '../src/lib/i18n'
 
 describe('ATR по формулам индикатора Trader Assistant', () => {
   it('дневной ATR — среднее диапазонов пяти предыдущих дневных свечей', () => {
@@ -84,9 +85,30 @@ describe('текст сделки', () => {
   })
 
   it('копирование и вставка взаимно обратны', () => {
+    i18n.lang = 'ru'
     const text = formatSignal('ARBUSDT', 'short', 0.14991, 0.15165, 0.1379, 5)
     expect(text).toBe('ARBUSDT SHORT\nТВХ: 0.14991\nSL: 0.15165\nTP: 0.1379\nR: 6.90')
     expect(parseSignal(text)).toMatchObject({ symbol: 'ARBUSDT', side: 'short', entry: 0.14991, stop: 0.15165, target: 0.1379 })
+  })
+
+  it('английский интерфейс копирует «Entry» вместо «ТВХ», и это снова разбирается', () => {
+    i18n.lang = 'en'
+    const text = formatSignal('ARBUSDT', 'short', 0.14991, 0.15165, 0.1379, 5)
+    expect(text).toBe('ARBUSDT SHORT\nEntry: 0.14991\nSL: 0.15165\nTP: 0.1379\nR: 6.90')
+    expect(parseSignal(text)).toEqual({ symbol: 'ARBUSDT', side: 'short', entry: 0.14991, stop: 0.15165, target: 0.1379 })
+    i18n.lang = 'ru'
+  })
+
+  it('сигнал на английском', () => {
+    expect(parseSignal('BTC/USDT Long\nEntry price: 73500.5\nStop loss: 73100\nTake profit: 75100')).toEqual({
+      symbol: 'BTCUSDT',
+      side: 'long',
+      entry: 73500.5,
+      stop: 73100,
+      target: 75100,
+    })
+    expect(parseSignal('ETHUSDT short\nentry - 2040\nSL 2080\ntarget 1900')).toEqual({ symbol: 'ETHUSDT', side: 'short', entry: 2040, stop: 2080, target: 1900 })
+    expect(parseSignal('SOLUSDT SELL entry 150 stop 155')?.side).toBe('short')
   })
 })
 

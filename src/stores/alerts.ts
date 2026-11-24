@@ -4,6 +4,7 @@ import { load, persist } from '../lib/storage'
 import { fmtPrice, precisionOf } from '../lib/format'
 import { onTicker, watchTicker } from './tickers'
 import { toast } from './app'
+import { t } from '../lib/i18n'
 
 export interface PriceAlert {
   id: string
@@ -104,10 +105,10 @@ watch(
   { immediate: true },
 )
 
-onTicker((key: string, t: Ticker) => {
+onTicker((key: string, tk: Ticker) => {
   for (const a of alerts) {
     if (!a.active || symbolKey(a.ref) !== key) continue
-    if ((a.dir === 'up' && t.last >= a.price) || (a.dir === 'down' && t.last <= a.price)) fire(a, t.last)
+    if ((a.dir === 'up' && tk.last >= a.price) || (a.dir === 'down' && tk.last <= a.price)) fire(a, tk.last)
   }
 })
 
@@ -116,7 +117,9 @@ function fire(a: PriceAlert, last: number) {
   a.triggeredAt = Date.now()
   a.read = false
   const p = precisionOf(symbolKey(a.ref), a.price)
-  const text = `${a.ref.symbol}: цена ${a.dir === 'up' ? 'поднялась до' : 'опустилась до'} ${fmtPrice(a.price, p)} (сейчас ${fmtPrice(last, p)})`
+  const vars = { symbol: a.ref.symbol, price: fmtPrice(a.price, p), last: fmtPrice(last, p) }
+  const text = a.dir === 'up' ? t('{symbol}: цена поднялась до {price} (сейчас {last})', vars) : t('{symbol}: цена опустилась до {price} (сейчас {last})', vars)
+  const title = t('Оповещение о цене')
   toast(text, 'alert', 15000)
   beep()
   navigator.vibrate?.([200, 100, 200])
@@ -125,10 +128,10 @@ function fire(a: PriceAlert, last: number) {
     // На телефонах уведомление можно показать только через service worker
     navigator.serviceWorker
       ?.getRegistration()
-      .then((reg) => (reg ? reg.showNotification('Оповещение о цене', opts) : void new Notification('Оповещение о цене', opts)))
+      .then((reg) => (reg ? reg.showNotification(title, opts) : void new Notification(title, opts)))
       .catch(() => {
         try {
-          new Notification('Оповещение о цене', opts)
+          new Notification(title, opts)
         } catch {
           /* уведомления недоступны — остаётся сообщение в приложении */
         }

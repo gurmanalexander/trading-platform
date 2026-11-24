@@ -1,5 +1,6 @@
 import type { Bar } from '../types'
 import type { Drawing, Pt } from '../stores/drawings'
+import { i18n, locale } from '../lib/i18n'
 
 const isPositionDrawing = (d: Drawing) => d.type === 'long' || d.type === 'short'
 
@@ -152,14 +153,15 @@ export function positionSize(d: Drawing, deposit: number, pct: number): Position
 /** Количество монет: «1 234», «12.5», «0.0123» */
 export function fmtQty(v: number): string {
   if (v >= 1e6) return (v / 1e6).toFixed(2) + 'M'
-  if (v >= 1000) return Math.round(v).toLocaleString('ru-RU')
+  if (v >= 1000) return Math.round(v).toLocaleString(locale())
   if (v >= 10) return String(+v.toFixed(1))
   return String(+v.toPrecision(3))
 }
 
-/** Сумма в долларах: «1 250 $», «12.5 $» */
+/** Сумма в долларах: «1 250 $», «12.5 $» (по-английски «$1,250», «$12.5») */
 export function fmtUsd(v: number): string {
-  return (v >= 100 ? Math.round(v).toLocaleString('ru-RU') : String(+v.toFixed(2))) + ' $'
+  const n = v >= 100 ? Math.round(v).toLocaleString(locale()) : String(+v.toFixed(2))
+  return i18n.lang === 'en' ? '$' + n : n + ' $'
 }
 
 /** «+1.2R», «-0.5R», «0R» */
