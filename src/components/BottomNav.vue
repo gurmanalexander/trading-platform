@@ -68,19 +68,23 @@ import { donate } from '../lib/donate'
   left: 15px;
   display: grid;
   color: #f0566b;
-  animation: heartbeat 1.4s ease-in-out 3;
+  animation: heartbeat 1.3s ease-in-out 2;
+}
+.heart :deep(svg) {
+  fill: #f0566b;
 }
 @keyframes heartbeat {
   0%,
-  60%,
+  28%,
+  70%,
   100% {
     transform: scale(1);
   }
-  15% {
-    transform: scale(1.3);
+  14% {
+    transform: scale(1.4);
   }
-  45% {
-    transform: scale(1.15);
+  42% {
+    transform: scale(1.25);
   }
 }
 @media (prefers-reduced-motion: reduce) {
