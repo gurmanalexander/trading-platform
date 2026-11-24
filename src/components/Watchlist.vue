@@ -178,11 +178,14 @@ let start = { x: 0, y: 0 }
 let pressTimer = 0
 let pending: { kind: 'item' | 'list'; listId: string; index: number; label: string; touch: boolean } | null = null
 let suppressClick = false
+/** когда палец (или перо) последний раз коснулся списка — долгое нажатие им не должно открывать меню браузера */
+let touchAt = 0
 
 function onDown(e: PointerEvent, kind: 'item' | 'list', listId: string, index: number, label: string) {
   if (e.button > 0 || (e.target as HTMLElement).closest('button, .dropdown')) return
   start = { x: e.clientX, y: e.clientY }
   pending = { kind, listId, index, label, touch: e.pointerType !== 'mouse' }
+  if (pending.touch) touchAt = Date.now()
   if (pending.touch) pressTimer = window.setTimeout(() => begin(start.x, start.y), 350)
   window.addEventListener('pointermove', onMove)
   window.addEventListener('pointerup', onUp)
@@ -268,6 +271,15 @@ function cancel() {
   window.removeEventListener('pointercancel', onUp)
 }
 
+/**
+ * Долгое нажатие пальцем — это начало перетаскивания. Браузеры планшетов (Android, Windows) на то же
+ * нажатие открывают своё контекстное меню, а оно обрывает перетаскивание — не даём ему открыться.
+ * Правый щелчок мышью меню не трогает.
+ */
+function onContextMenu(e: MouseEvent) {
+  if (drag.active || pending?.touch || Date.now() - touchAt < 1500) e.preventDefault()
+}
+
 // пока тянем пальцем, список не должен прокручиваться сам
 const blockScroll = (e: TouchEvent) => {
   if (drag.active) e.preventDefault()
@@ -310,16 +322,17 @@ watch(
 </script>
 
 <template>
-  <div class="wl" :class="{ dragging: drag.active }">
+  <div class="wl" :class="{ dragging: drag.active }" @contextmenu="onContextMenu">
     <div class="wl-top">
       <div class="seg" role="group" :aria-label="t('Фильтр по направлению')">
         <button v-for="f in FILTERS" :key="f.id" :class="{ on: lists.filter === f.id, [f.id]: true }" :title="t(f.title)" @click="lists.filter = f.id">{{ t(f.label) }}</button>
       </div>
-      <span class="grow" />
-      <button class="btn sm" :title="t('Поделиться списком: картинки графиков и строки «монета, направление, уровень»')" @click="app.listShareOpen = true"><Icon name="share" :size="16" /></button>
-      <button class="btn sm" :title="t('Вставить из буфера: строки с монетами попадут в текущий список')" @click="pasteFromClipboard()"><Icon name="paste" :size="16" /></button>
-      <ColumnsMenu :model-value="lists.cols" :options="LIST_COLS" @update:model-value="lists.cols = $event as ListCol[]" />
-      <button class="btn sm" :class="{ on: draft.open }" :title="t('Новый список')" @click="startList"><Icon name="listPlus" :size="16" /></button>
+      <div class="wl-actions">
+        <button class="btn sm" :title="t('Поделиться списком: картинки графиков и строки «монета, направление, уровень»')" @click="app.listShareOpen = true"><Icon name="share" :size="16" /></button>
+        <button class="btn sm" :title="t('Вставить из буфера: строки с монетами попадут в текущий список')" @click="pasteFromClipboard()"><Icon name="paste" :size="16" /></button>
+        <ColumnsMenu :model-value="lists.cols" :options="LIST_COLS" @update:model-value="lists.cols = $event as ListCol[]" />
+        <button class="btn sm" :class="{ on: draft.open }" :title="t('Новый список')" @click="startList"><Icon name="listPlus" :size="16" /></button>
+      </div>
     </div>
 
     <form v-if="draft.open" class="draft" @submit.prevent="addList" @keydown.esc.stop="draft.open = false">
@@ -444,14 +457,22 @@ watch(
   height: 100%;
   min-height: 0;
 }
+.wl-list {
+  /* на iPad долгое нажатие не вызывает всплывающее меню и выделение текста */
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
 .wl.dragging {
   cursor: grabbing;
   user-select: none;
 }
 .wl-top {
   display: flex;
+  /* узкая панель: кнопки уходят на вторую строку, а не за край */
+  flex-wrap: wrap;
   align-items: center;
-  gap: 2px;
+  gap: 4px 2px;
   padding: 6px 6px 6px 8px;
   flex: none;
 }
@@ -483,6 +504,13 @@ watch(
 }
 .grow {
   flex: 1;
+}
+/* кнопки держатся вместе у правого края; в узкой панели переходят на вторую строку целиком */
+.wl-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: auto;
 }
 .draft {
   display: flex;

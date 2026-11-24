@@ -443,12 +443,15 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   height: 100dvh;
+  /* что бы ни вылезло за край, страница не шире экрана: на планшете иначе справа пустая полоса */
+  overflow: hidden;
   padding-left: env(safe-area-inset-left);
   padding-right: env(safe-area-inset-right);
 }
 .body {
   position: relative;
   flex: 1;
+  min-width: 0;
   min-height: 0;
   display: flex;
 }
