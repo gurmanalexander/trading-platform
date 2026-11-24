@@ -1,14 +1,15 @@
 <script setup lang="ts">
 import Icon from './Icon.vue'
 import { toasts, dismissToast } from '../stores/app'
+import { t } from '../lib/i18n'
 </script>
 
 <template>
   <div class="toasts" aria-live="polite">
-    <div v-for="t in toasts" :key="t.id" class="toast" :class="t.kind">
-      <Icon v-if="t.kind === 'alert'" name="bell" :size="16" />
-      <span>{{ t.text }}</span>
-      <button class="btn sm" aria-label="Закрыть" @click="dismissToast(t.id)"><Icon name="x" :size="14" /></button>
+    <div v-for="item in toasts" :key="item.id" class="toast" :class="item.kind">
+      <Icon v-if="item.kind === 'alert'" name="bell" :size="16" />
+      <span>{{ item.text }}</span>
+      <button class="btn sm" :aria-label="t('Закрыть')" @click="dismissToast(item.id)"><Icon name="x" :size="14" /></button>
     </div>
   </div>
 </template>

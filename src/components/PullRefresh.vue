@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 import Icon from './Icon.vue'
+import { t } from '../lib/i18n'
 
 // «Потянуть вниз, чтобы обновить» для сенсорного экрана. Жест начинается, только когда список
 // под пальцем прокручен в самый верх; иначе это обычная прокрутка.
@@ -111,7 +112,7 @@ onBeforeUnmount(() => {
     >
       <Icon name="refresh" :size="18" :style="busy ? undefined : { transform: `rotate(${pull * 4}deg)` }" />
     </div>
-    <span class="ptr-live" role="status">{{ busy ? 'Обновление данных' : '' }}</span>
+    <span class="ptr-live" role="status">{{ busy ? t('Обновление данных') : '' }}</span>
   </div>
 </template>
 

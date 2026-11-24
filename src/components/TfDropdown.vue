@@ -3,6 +3,7 @@ import Icon from './Icon.vue'
 import Dropdown from './Dropdown.vue'
 import { app, activePane, setTf, toggleFavTf } from '../stores/app'
 import { TIMEFRAMES, getTf } from '../lib/timeframes'
+import { t } from '../lib/i18n'
 
 // Выбор интервала активного окна и избранных интервалов.
 // label — показывать на кнопке текущий интервал; side — меню сбоку (кнопка стоит в вертикальной колонке)
@@ -12,20 +13,20 @@ defineProps<{ label?: boolean; side?: boolean }>()
 <template>
   <Dropdown :side="side">
     <template #trigger="{ toggle }">
-      <button class="btn" :class="{ on: label }" title="Интервал: выбор и избранные" @click="toggle">
+      <button class="btn" :class="{ on: label }" :title="t('Интервал: выбор и избранные')" @click="toggle">
         <template v-if="label">{{ getTf(activePane.tf).label }}</template>
         <Icon v-if="!side" name="chevron" :size="14" />
       </button>
     </template>
     <template #default="{ close }">
       <div class="tf-menu" :class="{ cols: side }">
-        <div v-for="t in TIMEFRAMES" :key="t.id" class="tf-row">
-          <button class="menu-item" :class="{ on: activePane.tf === t.id }" @click="setTf(t.id), close()">{{ t.label }}</button>
+        <div v-for="tf in TIMEFRAMES" :key="tf.id" class="tf-row">
+          <button class="menu-item" :class="{ on: activePane.tf === tf.id }" @click="setTf(tf.id), close()">{{ tf.label }}</button>
           <button
             class="btn sm star"
-            :class="{ on: app.favTfs.includes(t.id) }"
-            :title="app.favTfs.includes(t.id) ? 'Убрать с панели' : 'Показывать на панели'"
-            @click="toggleFavTf(t.id)"
+            :class="{ on: app.favTfs.includes(tf.id) }"
+            :title="app.favTfs.includes(tf.id) ? t('Убрать с панели') : t('Показывать на панели')"
+            @click="toggleFavTf(tf.id)"
           >
             <Icon name="star" :size="15" />
           </button>

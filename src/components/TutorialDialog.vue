@@ -3,6 +3,7 @@ import { onMounted, ref } from 'vue'
 import Icon from './Icon.vue'
 import Modal from './Modal.vue'
 import { app } from '../stores/app'
+import { t } from '../lib/i18n'
 
 // Обучение: видео-обзор терминала с оглавлением. Файлы лежат рядом с приложением (public/help)
 // и загружаются, только когда окно открыли.
@@ -44,19 +45,19 @@ const mmss = (t: number) => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).
 </script>
 
 <template>
-  <Modal title="Обучение" :width="1180" @close="app.tutorialOpen = false">
+  <Modal :title="t('Обучение')" :width="1180" @close="app.tutorialOpen = false">
     <div class="tu">
       <div class="player">
         <video ref="video" controls playsinline preload="metadata" :src="base + 'tvx-obzor.mp4'" @timeupdate="onTime" @error="failed = true">
-          <track kind="subtitles" srclang="ru" label="Русские" :src="base + 'tvx-obzor.vtt'" />
+          <track kind="subtitles" srclang="ru" :label="t('Русские')" :src="base + 'tvx-obzor.vtt'" />
         </video>
-        <p v-if="failed" class="muted note">Видео не загрузилось. Проверьте соединение и откройте окно ещё раз.</p>
-        <p v-else class="muted note">Обзор идёт от простого к сложному. Выберите часть справа — видео перейдёт к ней. Субтитры включаются кнопкой в проигрывателе.</p>
+        <p v-if="failed" class="muted note">{{ t('Видео не загрузилось. Проверьте соединение и откройте окно ещё раз.') }}</p>
+        <p v-else class="muted note">{{ t('Обзор идёт от простого к сложному. Выберите часть справа — видео перейдёт к ней. Субтитры включаются кнопкой в проигрывателе.') }}</p>
       </div>
-      <nav class="toc scroll" aria-label="Части обзора">
+      <nav class="toc scroll" :aria-label="t('Части обзора')">
         <button v-for="(c, i) in chapters" :key="c.t" :class="{ on: i === current }" @click="jump(c)">
           <Icon name="play" :size="15" />
-          <span>{{ c.title }}</span>
+          <span>{{ t(c.title) }}</span>
           <i>{{ mmss(c.t) }}</i>
         </button>
       </nav>

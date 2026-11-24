@@ -4,32 +4,42 @@ import Icon from './Icon.vue'
 import Modal from './Modal.vue'
 import { app } from '../stores/app'
 import { HOTKEY_GROUPS, parseKeys } from '../lib/hotkeys'
+import { t } from '../lib/i18n'
 
 // Справка по клавишам: группы-карточки, клавиши — «колпачками», сверху — поиск по описанию и клавишам.
 const query = ref('')
 const input = ref<HTMLInputElement>()
 onMounted(() => nextTick(() => input.value?.focus()))
 
+// справочник хранит русские строки; описания и слова в {скобках} переводятся здесь, при показе
 const groups = computed(() => {
   const q = query.value.trim().toLowerCase()
   return HOTKEY_GROUPS.map((g) => ({
-    ...g,
+    id: g.title,
+    icon: g.icon,
+    title: t(g.title),
+    hint: g.hint && t(g.hint),
     rows: g.keys
-      .filter(([k, text]) => !q || text.toLowerCase().includes(q) || k.toLowerCase().replace(/[{}]/g, '').includes(q))
-      .map(([k, text]) => ({ id: k + text, alts: parseKeys(k), text })),
+      .map(([k, text]) => {
+        const alts = parseKeys(k).map((alt) => alt.map((p) => (p.key ? p : { ...p, text: t(p.text) })))
+        // искать можно и по записи сочетания, и по переведённым словам в ней
+        const search = [k.replace(/[{}]/g, ''), ...alts.flat().map((p) => p.text)].join(' ').toLowerCase()
+        return { id: k + text, alts, text: t(text), search }
+      })
+      .filter((r) => !q || r.text.toLowerCase().includes(q) || r.search.includes(q)),
   })).filter((g) => g.rows.length)
 })
 </script>
 
 <template>
-  <Modal title="Горячие клавиши" :width="940" @close="app.hotkeysOpen = false">
+  <Modal :title="t('Горячие клавиши')" :width="940" @close="app.hotkeysOpen = false">
     <div class="hk-top">
       <Icon name="search" :size="16" />
-      <input ref="input" v-model="query" class="field" placeholder="Найти: «уровень», «список», «Alt»…" autocomplete="off" />
-      <button class="btn sm learn" title="Видео-обзор терминала" @click="(app.hotkeysOpen = false), (app.tutorialOpen = true)"><Icon name="learn" :size="16" />Обучение</button>
+      <input ref="input" v-model="query" class="field" :placeholder="t('Найти: «уровень», «список», «Alt»…')" autocomplete="off" />
+      <button class="btn sm learn" :title="t('Видео-обзор терминала')" @click="(app.hotkeysOpen = false), (app.tutorialOpen = true)"><Icon name="learn" :size="16" />{{ t('Обучение') }}</button>
     </div>
     <div class="hk scroll">
-      <section v-for="g in groups" :key="g.title" class="card">
+      <section v-for="g in groups" :key="g.id" class="card">
         <header>
           <span class="ico"><Icon :name="g.icon" :size="16" /></span>
           <h3>{{ g.title }}</h3>
@@ -38,7 +48,7 @@ const groups = computed(() => {
         <div v-for="r in g.rows" :key="r.id" class="row">
           <span class="keys">
             <template v-for="(alt, ai) in r.alts" :key="ai">
-              <i v-if="ai" class="or">или</i>
+              <i v-if="ai" class="or">{{ t('или') }}</i>
               <span class="combo">
                 <template v-for="(p, pi) in alt" :key="pi">
                   <i v-if="pi && p.key && alt[pi - 1].key" class="plus">+</i>
@@ -51,7 +61,7 @@ const groups = computed(() => {
           <span class="what">{{ r.text }}</span>
         </div>
       </section>
-      <p v-if="!groups.length" class="muted none">Ничего не нашлось. Попробуйте другое слово.</p>
+      <p v-if="!groups.length" class="muted none">{{ t('Ничего не нашлось. Попробуйте другое слово.') }}</p>
     </div>
   </Modal>
 </template>

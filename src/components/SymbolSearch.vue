@@ -8,6 +8,7 @@ import ListPicker from './ListPicker.vue'
 import { SOURCES, loadSymbols, withUsdVolume, type SymbolVolume } from '../exchanges'
 import { autoPrecision, fmtCompact, fmtPct, fmtPrice } from '../lib/format'
 import { fromRuLayout } from '../lib/setup'
+import { t } from '../lib/i18n'
 
 type Item = SymbolVolume
 
@@ -102,7 +103,7 @@ const MARKETS: { id: MarketId | 'all'; label: string }[] = [
 </script>
 
 <template>
-  <Modal title="Поиск инструмента" :width="560" @close="close">
+  <Modal :title="t('Поиск инструмента')" :width="560" @close="close">
     <div class="ss-top">
       <div class="ss-input">
         <Icon name="search" :size="16" />
@@ -110,7 +111,7 @@ const MARKETS: { id: MarketId | 'all'; label: string }[] = [
           ref="input"
           v-model="query"
           class="field"
-          placeholder="Например, BTC или ETHUSDT"
+          :placeholder="t('Например, BTC или ETHUSDT')"
           autocomplete="off"
           autocapitalize="characters"
           spellcheck="false"
@@ -118,9 +119,9 @@ const MARKETS: { id: MarketId | 'all'; label: string }[] = [
         />
       </div>
       <div class="ss-filters">
-        <button v-for="e in EXCHANGES" :key="e.id" class="btn sm" :class="{ on: exchange === e.id }" @click="exchange = e.id">{{ e.label }}</button>
+        <button v-for="e in EXCHANGES" :key="e.id" class="btn sm" :class="{ on: exchange === e.id }" @click="exchange = e.id">{{ e.id === 'all' ? t(e.label) : e.label }}</button>
         <span class="gap" />
-        <button v-for="m in MARKETS" :key="m.id" class="btn sm" :class="{ on: market === m.id }" @click="market = m.id">{{ m.label }}</button>
+        <button v-for="m in MARKETS" :key="m.id" class="btn sm" :class="{ on: market === m.id }" @click="market = m.id">{{ t(m.label) }}</button>
       </div>
     </div>
     <div class="ss-list scroll">
@@ -142,8 +143,8 @@ const MARKETS: { id: MarketId | 'all'; label: string }[] = [
         <ListPicker :item="it" />
       </div>
       <div v-if="loading" class="ss-note"><div class="spinner" /></div>
-      <p v-else-if="!results.length" class="ss-note muted">Ничего не найдено</p>
-      <p v-if="failed.length" class="ss-note muted">Не удалось получить список: {{ failed.join(', ') }}</p>
+      <p v-else-if="!results.length" class="ss-note muted">{{ t('Ничего не найдено') }}</p>
+      <p v-if="failed.length" class="ss-note muted">{{ t('Не удалось получить список: {list}', { list: failed.join(', ') }) }}</p>
     </div>
   </Modal>
 </template>

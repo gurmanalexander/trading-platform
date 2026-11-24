@@ -3,6 +3,7 @@ import { nextTick, onMounted, ref } from 'vue'
 import Modal from './Modal.vue'
 import { app, activeIndex } from '../stores/app'
 import { chartAt } from '../chart/registry'
+import { t } from '../lib/i18n'
 
 const input = ref<HTMLInputElement>()
 // значение по умолчанию — сейчас, в местном времени
@@ -24,10 +25,10 @@ function go() {
 </script>
 
 <template>
-  <Modal title="Перейти к дате" :width="300" @close="close">
+  <Modal :title="t('Перейти к дате')" :width="300" @close="close">
     <form class="gt" @submit.prevent="go">
       <input ref="input" v-model="value" class="field" type="datetime-local" />
-      <button class="btn primary" type="submit">Перейти</button>
+      <button class="btn primary" type="submit">{{ t('Перейти') }}</button>
     </form>
   </Modal>
 </template>

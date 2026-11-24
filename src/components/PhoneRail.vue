@@ -6,6 +6,7 @@ import TfDropdown from './TfDropdown.vue'
 import { app, activeIndex, paneCount, MOBILE_TABS } from '../stores/app'
 import { unreadAlerts } from '../stores/alerts'
 import { getTf } from '../lib/timeframes'
+import { t } from '../lib/i18n'
 
 // Телефон набок: высота на вес золота, поэтому верхняя панель и нижняя навигация
 // собраны в одну узкую колонку слева — график занимает всю высоту экрана.
@@ -13,12 +14,12 @@ import { getTf } from '../lib/timeframes'
 </script>
 
 <template>
-  <nav class="rail" aria-label="Разделы и управление графиком">
+  <nav class="rail" :aria-label="t('Разделы и управление графиком')">
     <template v-if="app.mobileTab === 'chart'">
       <TfDropdown label side />
       <Dropdown v-if="paneCount > 1" side>
         <template #trigger="{ toggle }">
-          <button class="btn" :class="{ on: app.phoneStack }" title="Окна раскладки" @click="toggle"><Icon name="windows" /></button>
+          <button class="btn" :class="{ on: app.phoneStack }" :title="t('Окна раскладки')" @click="toggle"><Icon name="windows" /></button>
         </template>
         <template #default="{ close }">
           <button
@@ -28,28 +29,28 @@ import { getTf } from '../lib/timeframes'
             :class="{ on: !app.phoneStack && activeIndex === i - 1 }"
             @click="(app.active = i - 1), (app.phoneStack = false), close()"
           >
-            Окно {{ i }} · {{ getTf(app.panes[i - 1].tf).label }}
+            {{ t('Окно {n}', { n: i }) }} · {{ getTf(app.panes[i - 1].tf).label }}
           </button>
           <div class="menu-sep" />
           <button class="menu-item" :class="{ on: app.phoneStack }" @click="(app.phoneStack = !app.phoneStack), close()">
-            <Icon name="windows" :size="16" />Все окна сразу
+            <Icon name="windows" :size="16" />{{ t('Все окна сразу') }}
           </button>
         </template>
       </Dropdown>
-      <button class="btn" :class="{ on: app.drawBarOpen }" title="Рисование" @click="app.drawBarOpen = !app.drawBarOpen"><Icon name="pencil" /></button>
+      <button class="btn" :class="{ on: app.drawBarOpen }" :title="t('Рисование')" @click="app.drawBarOpen = !app.drawBarOpen"><Icon name="pencil" /></button>
     </template>
     <span class="grow" />
     <button
-      v-for="t in MOBILE_TABS"
-      :key="t.id"
+      v-for="tab in MOBILE_TABS"
+      :key="tab.id"
       class="btn tab"
-      :class="{ on: app.mobileTab === t.id }"
-      :title="t.label"
-      :aria-label="t.label"
-      @click="app.mobileTab = t.id"
+      :class="{ on: app.mobileTab === tab.id }"
+      :title="t(tab.label)"
+      :aria-label="t(tab.label)"
+      @click="app.mobileTab = tab.id"
     >
-      <Icon :name="t.icon" />
-      <i v-if="t.id === 'alerts' && unreadAlerts" class="badge">{{ unreadAlerts }}</i>
+      <Icon :name="tab.icon" />
+      <i v-if="tab.id === 'alerts' && unreadAlerts" class="badge">{{ unreadAlerts }}</i>
     </button>
     <!-- настройки и действия нужны в любом разделе -->
     <PhoneMenu side />

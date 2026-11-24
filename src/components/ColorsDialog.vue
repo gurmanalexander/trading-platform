@@ -2,6 +2,7 @@
 import Modal from './Modal.vue'
 import { app, theme, type ColorKey } from '../stores/app'
 import { defaultColor } from '../chart/theme'
+import { t } from '../lib/i18n'
 
 // Свои цвета интерфейса и графиков — отдельно для тёмной и светлой темы
 const ROWS: { key: ColorKey; label: string; hint: string }[] = [
@@ -26,17 +27,17 @@ function resetAll() {
 </script>
 
 <template>
-  <Modal :title="'Цвета · ' + (theme === 'dark' ? 'тёмная тема' : 'светлая тема')" :width="380" @close="app.colorsOpen = false">
+  <Modal :title="theme === 'dark' ? t('Цвета · тёмная тема') : t('Цвета · светлая тема')" :width="380" @close="app.colorsOpen = false">
     <div class="cd">
-      <div v-for="r in ROWS" :key="r.key" class="cd-row" :title="r.hint">
-        <span>{{ r.label }}</span>
-        <button v-if="app.colors[theme][r.key]" class="btn sm muted" title="Вернуть стандартный" @click="reset(r.key)">сброс</button>
+      <div v-for="r in ROWS" :key="r.key" class="cd-row" :title="t(r.hint)">
+        <span>{{ t(r.label) }}</span>
+        <button v-if="app.colors[theme][r.key]" class="btn sm muted" :title="t('Вернуть стандартный')" @click="reset(r.key)">{{ t('сброс') }}</button>
         <input type="color" :value="value(r.key)" @input="set(r.key, ($event.target as HTMLInputElement).value)" />
       </div>
-      <p class="muted">Цвета задаются для текущей темы. Чтобы настроить другую, переключите тему в настройках.</p>
+      <p class="muted">{{ t('Цвета задаются для текущей темы. Чтобы настроить другую, переключите тему в настройках.') }}</p>
       <div class="cd-actions">
-        <button class="btn" @click="resetAll">Стандартные цвета</button>
-        <button class="btn primary" @click="app.colorsOpen = false">Готово</button>
+        <button class="btn" @click="resetAll">{{ t('Стандартные цвета') }}</button>
+        <button class="btn primary" @click="app.colorsOpen = false">{{ t('Готово') }}</button>
       </div>
     </div>
   </Modal>

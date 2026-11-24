@@ -4,11 +4,16 @@ import Icon from './Icon.vue'
 import { app, activePane } from '../stores/app'
 import { listsOf } from '../stores/watchlist'
 import { stepInfo, stepSource, stepSymbol } from '../stores/screener'
+import { t } from '../lib/i18n'
 
 // Телефон: полоса под графиком листает монеты того списка, из которого открыли график.
 // Слева и справа — соседние монеты (нажатие или смахивание по полосе), посередине — список и место в нём.
-const title = computed(() => (stepSource.value === 'screener' ? 'Отбор' : (listsOf(activePane.value.symbol)[0]?.name ?? 'Списки')))
-const place = computed(() => (stepInfo.value.index >= 0 ? `${stepInfo.value.index + 1} из ${stepInfo.value.count}` : `монет: ${stepInfo.value.count}`))
+const title = computed(() => (stepSource.value === 'screener' ? t('Отбор') : (listsOf(activePane.value.symbol)[0]?.name ?? t('Списки'))))
+const place = computed(() =>
+  stepInfo.value.index >= 0
+    ? t('{n} из {count}', { n: stepInfo.value.index + 1, count: stepInfo.value.count })
+    : t('монет: {n}', { n: stepInfo.value.count }),
+)
 
 let startX = 0
 let startY = 0
@@ -35,14 +40,14 @@ function tap(fn: () => void) {
 
 <template>
   <div v-if="stepInfo.count" class="strip" @touchstart.passive="onStart" @touchend.passive="onEnd">
-    <button class="side" title="Предыдущая монета списка" :disabled="stepInfo.count < 2 && stepInfo.index >= 0" @click="tap(() => stepSymbol(-1))">
+    <button class="side" :title="t('Предыдущая монета списка')" :disabled="stepInfo.count < 2 && stepInfo.index >= 0" @click="tap(() => stepSymbol(-1))">
       <Icon name="prev" :size="18" /><span>{{ stepInfo.prev?.symbol }}</span>
     </button>
-    <button class="mid" title="Открыть список" @click="tap(() => (app.mobileTab = stepSource))">
+    <button class="mid" :title="t('Открыть список')" @click="tap(() => (app.mobileTab = stepSource))">
       <b>{{ title }}</b>
       <span class="muted">{{ place }}</span>
     </button>
-    <button class="side next" title="Следующая монета списка" :disabled="stepInfo.count < 2 && stepInfo.index >= 0" @click="tap(() => stepSymbol(1))">
+    <button class="side next" :title="t('Следующая монета списка')" :disabled="stepInfo.count < 2 && stepInfo.index >= 0" @click="tap(() => stepSymbol(1))">
       <span>{{ stepInfo.next?.symbol }}</span><Icon name="next" :size="18" />
     </button>
   </div>

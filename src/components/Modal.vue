@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted } from 'vue'
 import Icon from './Icon.vue'
+import { t } from '../lib/i18n'
 
 defineProps<{ title: string; width?: number }>()
 const emit = defineEmits<{ close: [] }>()
@@ -20,7 +21,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey, true))
     <div class="modal" role="dialog" :aria-label="title" :style="{ width: (width ?? 520) + 'px' }">
       <header class="modal-head">
         <span class="modal-title">{{ title }}</span>
-        <button class="btn" aria-label="Закрыть" @click="emit('close')"><Icon name="x" /></button>
+        <button class="btn" :aria-label="t('Закрыть')" @click="emit('close')"><Icon name="x" /></button>
       </header>
       <slot />
     </div>

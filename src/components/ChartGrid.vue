@@ -2,6 +2,7 @@
 import { computed, reactive } from 'vue'
 import ChartPane from './ChartPane.vue'
 import { app, activeIndex, isLandscape, isPhone, paneCount } from '../stores/app'
+import { t } from '../lib/i18n'
 
 /** Телефон в режиме «все окна сразу»: окна раскладки идут в один ряд — столбцом, а набок — строкой */
 const stacked = computed(() => isPhone.value && app.phoneStack && paneCount.value > 1)
@@ -86,7 +87,7 @@ function equalize(sizes: number[]) {
         v-if="gi > 0"
         v-show="!single"
         class="split main"
-        title="Потяните, чтобы изменить размер. Двойной щелчок — поровну"
+        :title="t('Потяните, чтобы изменить размер. Двойной щелчок — поровну')"
         @pointerdown="startResize($event, view.groupSizes, gi, view.dir === 'rows')"
         @dblclick="equalize(view.groupSizes)"
       />
@@ -96,7 +97,7 @@ function equalize(sizes: number[]) {
             v-if="ci > 0"
             v-show="!single"
             class="split cross"
-            title="Потяните, чтобы изменить размер. Двойной щелчок — поровну"
+            :title="t('Потяните, чтобы изменить размер. Двойной щелчок — поровну')"
             @pointerdown="startResize($event, view.cellSizes[gi], ci, view.dir === 'cols')"
             @dblclick="equalize(view.cellSizes[gi])"
           />
