@@ -59,5 +59,10 @@ export default {
     'Could not read the pasted text: “{text}”. Expected a coin (#TAOUSDT), optionally with a date, direction and level',
   '{s} добавлен в список «{list}»': '{s} added to “{list}”',
   '{s} уже есть в списке «{list}»': '{s} is already in “{list}”',
+  'Потяните, чтобы изменить ширину панели. Двойной щелчок — стандартная ширина': 'Drag to resize the panel. Double-click to reset the width',
+  'Вернуть панели': 'Show panels',
+  // названия индикаторов, которые и так латиницей
+  'MACD': 'MACD',
+  'Cumulative Delta Volume (CDV)': 'Cumulative Delta Volume (CDV)',
   'Ссылка повреждена: не удалось прочитать, чем поделились': 'The link is broken: could not read what was shared',
 } satisfies Record<string, string>

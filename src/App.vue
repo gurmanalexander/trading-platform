@@ -11,11 +11,12 @@ import SymbolStrip from './components/SymbolStrip.vue'
 import PullRefresh from './components/PullRefresh.vue'
 import Toasts from './components/Toasts.vue'
 import { app, activeIndex, activePane, isPhone, phoneWide, modalOpen, paneCount, theme, cyclePane, openSearch, setZen, showPanel, togglePanel, toast, type Tool } from './stores/app'
-import { addWatch, activeList } from './stores/watchlist'
+import { addWatch, activeList, localizeDefaultLists } from './stores/watchlist'
+import { localizeDefaultChecklist } from './stores/checklist'
 import { clipboard, redo, selection, undo } from './stores/drawings'
 import { stepSymbol } from './stores/screener'
 import { scheduleDonatePulse } from './lib/donate'
-import { t } from './lib/i18n'
+import { i18n, t } from './lib/i18n'
 import { chartAt } from './chart/registry'
 import { applyPastedText, applySetup, setupTextFromUrl } from './chart/setup'
 import { applyShare } from './chart/share'
@@ -41,6 +42,15 @@ const Dashboard = defineAsyncComponent(() => import('./components/Dashboard.vue'
 const TutorialDialog = defineAsyncComponent(() => import('./components/TutorialDialog.vue'))
 const DonateDialog = defineAsyncComponent(() => import('./components/DonateDialog.vue'))
 const OnboardingDialog = defineAsyncComponent(() => import('./components/OnboardingDialog.vue'))
+
+// сменили язык — стандартные списки и чеклист, которые пользователь не менял, переходят на новый язык
+watch(
+  () => i18n.lang,
+  () => {
+    localizeDefaultLists()
+    localizeDefaultChecklist()
+  },
+)
 const SyncDialog = defineAsyncComponent(() => import('./components/SyncDialog.vue'))
 const ShareDialog = defineAsyncComponent(() => import('./components/ShareDialog.vue'))
 const ListShareDialog = defineAsyncComponent(() => import('./components/ListShareDialog.vue'))
@@ -386,7 +396,7 @@ onBeforeUnmount(() => {
       <DrawToolbar v-if="!app.zen && (!isPhone || (app.drawBarOpen && onChart))" :horizontal="isPhone && !phoneWide" />
       <ChartGrid />
       <template v-if="!isPhone && app.panelOpen && !app.zen">
-        <div class="side-split" :class="{ on: panelDrag }" title="Потяните, чтобы изменить ширину панели. Двойной щелчок — стандартная ширина" @pointerdown="startPanelResize" @dblclick="app.panelWidth = 0" />
+        <div class="side-split" :class="{ on: panelDrag }" :title="t('Потяните, чтобы изменить ширину панели. Двойной щелчок — стандартная ширина')" @pointerdown="startPanelResize" @dblclick="app.panelWidth = 0" />
         <SidePanel class="side-dock" :style="app.panelWidth ? { width: app.panelWidth + 'px' } : undefined" :tab="app.panel" tabs />
       </template>
       <div v-if="isPhone && app.mobileTab !== 'chart' && !app.zen" class="sheet" :class="{ top: !phoneWide }">
@@ -394,7 +404,7 @@ onBeforeUnmount(() => {
           <SidePanel :tab="app.mobileTab" :tabs="false" />
         </PullRefresh>
       </div>
-      <button v-if="app.zen" class="zen-exit" title="Вернуть панели" @click="setZen(false)"><Icon name="minimize" :size="18" /></button>
+      <button v-if="app.zen" class="zen-exit" :title="t('Вернуть панели')" @click="setZen(false)"><Icon name="minimize" :size="18" /></button>
     </div>
     <SymbolStrip v-if="isPhone && !phoneWide && !app.zen && onChart" />
     <BottomNav v-if="isPhone && !phoneWide && !app.zen" />
