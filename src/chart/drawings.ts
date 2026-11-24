@@ -10,7 +10,7 @@ import { withAlpha, type ChartColors } from './theme'
 import { textOn } from '../lib/color'
 import { lowerBound } from './bars'
 import { evaluatePosition, fmtQty, fmtR, fmtUsd, movePositionHandle, positionSize, riskReward, setPositionPrices } from './position'
-import { STOP_PART, TAKE_RATIO } from '../lib/atr'
+import { STOP_PART } from '../lib/atr'
 
 /** Что слою рисунков нужно знать о графике */
 export interface DrawHost {
@@ -66,7 +66,6 @@ const uid = () => Math.random().toString(36).slice(2, 10)
 
 // Новая позиция: стоп — 10% дневного ATR, цель — вчетверо дальше (как в индикаторе, см. lib/atr.ts)
 const STOP_ATR = STOP_PART
-const DEFAULT_RR = TAKE_RATIO
 const MONTHS = ['янв', 'фев', 'мар', 'апр', 'мая', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек']
 const MONTHS_EN = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
@@ -114,7 +113,8 @@ export class DrawingsLayer {
   private hoverCursor = ''
   private pressing = false
   private downAt: XY = { x: 0, y: 0 }
-  private drag: { d: Drawing; handle: number; start: XY; orig: XY[]; moved: boolean; copy: boolean } | null = null
+  /** rr — R/R позиции в начале перетаскивания, если включена привязка R/R (иначе 0) */
+  private drag: { d: Drawing; handle: number; start: XY; orig: XY[]; moved: boolean; copy: boolean; rr: number } | null = null
   /** палец опустился на невыбранный рисунок: если не сдвинется — это выбор, иначе прокрутка графика */
   private tap: { id: string; x: number; y: number; at: number } | null = null
   /** последний указатель — палец: ему нужны расстояния побольше */
@@ -482,12 +482,12 @@ export class DrawingsLayer {
     else {
       const top = this.host.series().coordinateToPrice(0) as number | null
       const bottom = this.host.series().coordinateToPrice(size.height) as number | null
-      stopDist = (top != null && bottom != null ? Math.abs(top - bottom) * 0.12 : entry.p * 0.01) / DEFAULT_RR
+      stopDist = (top != null && bottom != null ? Math.abs(top - bottom) * 0.12 : entry.p * 0.01) / app.posRR
     }
     const round = (v: number) => +v.toFixed(this.host.precision())
     const right = this.toPoint(x + Math.max(60, size.width * 0.15), 0, 0)
     const t2 = Math.max(right?.t ?? 0, entry.t + this.host.tfSec())
-    return this.newDrawing(type, [entry, { t: t2, p: round(entry.p + sign * stopDist * DEFAULT_RR) }, { t: entry.t, p: round(entry.p - sign * stopDist) }])
+    return this.newDrawing(type, [entry, { t: t2, p: round(entry.p + sign * stopDist * app.posRR) }, { t: entry.t, p: round(entry.p - sign * stopDist) }])
   }
 
   private toolDown(x: number, y: number) {
@@ -528,7 +528,7 @@ export class DrawingsLayer {
         const round = (v: number) => +v.toFixed(this.host.precision())
         const dist = Math.max(Math.abs(pt.p - d.pts[0].p), 1 / 10 ** this.host.precision())
         d.pts[1] = { t: Math.max(pt.t, d.pts[0].t + this.host.tfSec()), p: round(d.pts[0].p + sign * dist) }
-        d.pts[2].p = round(d.pts[0].p - (sign * dist) / DEFAULT_RR)
+        d.pts[2].p = round(d.pts[0].p - (sign * dist) / app.posRR)
       }
     } else if (isSingle(d.type)) {
       if (this.pressing) d.pts[0] = pt
@@ -646,7 +646,8 @@ export class DrawingsLayer {
     selection.value = { pane: this.host.paneIndex, id: h.d.id }
     const orig = this.geometry(h.d, size.width, size.height)?.sp ?? h.d.pts.map(() => ({ x, y }))
     // с зажатым Ctrl тянется копия: оригинал остаётся на месте
-    this.drag = { d: h.d, handle: ctrl ? -1 : h.handle, start: { x, y }, orig, moved: false, copy: ctrl }
+    const rr = isPosition(h.d.type) && app.rrLock ? riskReward(h.d) : 0
+    this.drag = { d: h.d, handle: ctrl ? -1 : h.handle, start: { x, y }, orig, moved: false, copy: ctrl, rr }
     this.lockScroll(true)
     this.redraw()
   }
@@ -676,7 +677,7 @@ export class DrawingsLayer {
     } else if (g.handle >= 0) {
       const pt = this.toPoint(x, y, magnet)
       if (pt) {
-        if (isPosition(g.d.type)) movePositionHandle(g.d, g.handle, pt, 1 / 10 ** this.host.precision(), this.host.tfSec())
+        if (isPosition(g.d.type)) movePositionHandle(g.d, g.handle, pt, 1 / 10 ** this.host.precision(), this.host.tfSec(), g.rr)
         else g.d.pts[g.handle] = pt
       }
     } else if (g.d.type === 'hline' || g.d.type === 'hray') {

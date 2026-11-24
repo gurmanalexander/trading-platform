@@ -197,4 +197,11 @@ export default {
   'Включить снова': 'Re-arm',
   'Оповещений нет. Задайте цену выше или вызовите меню правой кнопкой мыши на графике. Линию оповещения на графике можно тянуть мышью.':
     'No alerts. Set a price above or right-click the chart to open the menu. You can drag an alert line on the chart with the mouse.',
+  // поле R/R и привязка
+  'Соотношение прибыли к риску: цель — на столько стопов от входа. Новые позиции получают это же значение':
+    'Reward-to-risk: the target is this many stops away from the entry. New positions use the same value',
+  'Привязка R/R включена: тянешь стоп — тейк следует за ним, и наоборот. Нажмите, чтобы двигать их отдельно':
+    'R/R lock is on: drag the stop and the target follows, and vice versa. Click to move them independently',
+  'Привязка R/R выключена: стоп и тейк двигаются отдельно. Нажмите, чтобы связать их':
+    'R/R lock is off: stop and target move independently. Click to link them',
 } satisfies Record<string, string>

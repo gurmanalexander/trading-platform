@@ -196,6 +196,8 @@ interface Saved {
   /** раньше хранился флажком: true — нынешний слабый магнит */
   magnet?: boolean | MagnetMode
   crossMagnet?: boolean
+  posRR?: number
+  rrLock?: boolean
   sync?: Partial<SyncState>
   favTfs?: string[]
   templates?: Template[]
@@ -290,6 +292,10 @@ export const app = reactive({
   magnet: (saved.magnet === 'off' || saved.magnet === 'weak' || saved.magnet === 'strong' ? saved.magnet : saved.magnet === false ? 'off' : 'weak') as MagnetMode,
   /** перекрестие притягивается к ценам свечи (силой магнита; при выключенном магните — как слабый) */
   crossMagnet: saved.crossMagnet === true,
+  /** R/R новой позиции: последнее введённое в поле R/R, по умолчанию 5 к 1 */
+  posRR: typeof saved.posRR === 'number' && saved.posRR > 0 && saved.posRR <= 100 ? saved.posRR : 5,
+  /** привязка R/R: тянешь стоп — тейк следует за ним (и наоборот), соотношение сохраняется */
+  rrLock: saved.rrLock !== false,
   sync: {
     symbol: saved.sync?.symbol ?? true,
     interval: saved.sync?.interval ?? false,
@@ -374,7 +380,7 @@ export const app = reactive({
 
 persist(
   'app',
-  () => [app.themePref, app.layout, app.panes, app.active, app.panel, app.panelOpen, app.magnet, app.crossMagnet, app.sync, app.favTfs, app.templates, app.templateId, app.tabTemplates, app.searchFilter, app.drawingsHidden, app.phoneStack, app.defaults, app.colors, app.atrTable, app.panelWidth, app.listTab, app.drawBarAt, app.view, app.risk],
+  () => [app.themePref, app.layout, app.panes, app.active, app.panel, app.panelOpen, app.magnet, app.crossMagnet, app.posRR, app.rrLock, app.sync, app.favTfs, app.templates, app.templateId, app.tabTemplates, app.searchFilter, app.drawingsHidden, app.phoneStack, app.defaults, app.colors, app.atrTable, app.panelWidth, app.listTab, app.drawBarAt, app.view, app.risk],
   () => ({
     themePref: app.themePref,
     layout: app.layout,
@@ -384,6 +390,8 @@ persist(
     panelOpen: app.panelOpen,
     magnet: app.magnet,
     crossMagnet: app.crossMagnet,
+    posRR: app.posRR,
+    rrLock: app.rrLock,
     sync: app.sync,
     favTfs: app.favTfs,
     templates: app.templates,

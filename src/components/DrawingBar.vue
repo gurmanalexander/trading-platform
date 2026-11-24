@@ -3,7 +3,7 @@ import { computed, onBeforeUnmount, onMounted, onUpdated, reactive, ref } from '
 import Icon from './Icon.vue'
 import { DRAW_COLORS, defaultVisibility, type Dash, type Visibility } from '../stores/drawings'
 import { hasLineStyle, hasText, isPosition, TEXT_SIZES, type DrawingsLayer } from '../chart/drawings'
-import { fmtQty, fmtUsd, positionSize, riskReward } from '../chart/position'
+import { applyRR, fmtQty, fmtUsd, positionSize, riskReward } from '../chart/position'
 import { app, isPhone, toast } from '../stores/app'
 import { pasteFromClipboard } from '../chart/setup'
 import { t } from '../lib/i18n'
@@ -120,7 +120,9 @@ const VIS: { id: Visibility; label: string }[] = [
 
 const vis = computed(() => (d.value ? (d.value.vis ?? defaultVisibility(d.value.type)) : 'all'))
 const fmt = (v: number) => String(+v.toFixed(props.precision))
-const rr = computed(() => (d.value && position.value ? riskReward(d.value).toFixed(2) : ''))
+/** R/R позиции: целым или с одним-двумя знаками, без хвостовых нулей */
+const rr = computed(() => (d.value && position.value ? String(+riskReward(d.value).toFixed(2)) : ''))
+const step = () => 1 / 10 ** props.precision
 /** объём по депозиту и риску из настроек; пусто, пока депозит не задан */
 const posSize = computed(() => {
   const s = d.value && position.value ? positionSize(d.value, app.risk.deposit, app.risk.pct) : null
@@ -135,10 +137,33 @@ function setPrice(index: 0 | 1 | 2, e: Event) {
   const v = parseFloat(input.value.replace(',', '.'))
   const next = cur.pts.map((p) => p.p)
   next[index] = v
+  // привязка R/R: вписали стоп или вход — цель встаёт на прежний R/R; вписали цель — подтягивается стоп
+  const ratio = riskReward(cur)
+  if (app.rrLock && ratio > 0 && v > 0) {
+    const r = applyRR(next[0], next[2], next[1], cur.type as 'long' | 'short', ratio, index === 1 ? 'target' : 'stop', step())
+    next[1] = r.target
+    next[2] = r.stop
+  }
   if (!(v > 0) || !props.layer.setPosition(next[0], next[2], next[1])) {
     input.value = fmt(cur.pts[index].p)
     toast(t('Стоп и цель должны быть по разные стороны от входа'), 'error')
   }
+}
+
+/** Вписали R/R: цель встаёт на столько рисков от входа; число запоминается для новых позиций */
+function setRR(e: Event) {
+  const cur = d.value
+  const input = e.target as HTMLInputElement
+  if (!cur) return
+  const v = parseFloat(input.value.replace(',', '.'))
+  if (!(v > 0 && v <= 100)) {
+    input.value = rr.value
+    return
+  }
+  app.posRR = v
+  const r = applyRR(cur.pts[0].p, cur.pts[2].p, cur.pts[1].p, cur.type as 'long' | 'short', v, 'stop', step())
+  props.layer.setPosition(cur.pts[0].p, r.stop, r.target)
+  input.value = rr.value
 }
 
 /** Enter завершает ввод и возвращает клавиатуру графику (стрелки снова двигают позицию) */
@@ -209,6 +234,21 @@ function duplicate() {
         <span class="up">{{ t('Тейк') }}</span>
         <input class="field" inputmode="decimal" :value="fmt(d.pts[1].p)" @change="setPrice(1, $event)" @keydown.enter="blur" />
       </label>
+      <div class="rr">
+        <label :title="t('Соотношение прибыли к риску: цель — на столько стопов от входа. Новые позиции получают это же значение')">
+          <span>R/R</span>
+          <input class="field" inputmode="decimal" :value="rr" @change="setRR" @keydown.enter="blur" />
+        </label>
+        <button
+          class="btn sm lock"
+          :class="{ on: app.rrLock }"
+          :title="app.rrLock ? t('Привязка R/R включена: тянешь стоп — тейк следует за ним, и наоборот. Нажмите, чтобы двигать их отдельно') : t('Привязка R/R выключена: стоп и тейк двигаются отдельно. Нажмите, чтобы связать их')"
+          :aria-pressed="app.rrLock"
+          @click="app.rrLock = !app.rrLock"
+        >
+          <Icon :name="app.rrLock ? 'lock' : 'unlock'" :size="14" />
+        </button>
+      </div>
     </div>
 
     <div class="row">
@@ -253,7 +293,6 @@ function duplicate() {
       </template>
       <template v-if="position">
         <b class="kind" :class="d.type === 'long' ? 'up' : 'down'">{{ d.type === 'long' ? t('Лонг') : t('Шорт') }}</b>
-        <span class="muted">R/R {{ rr }}</span>
         <span v-if="posSize" class="muted" :title="t('По депозиту и риску на сделку из настроек «Шрифты, таймер, размер позиции»')">{{ posSize }}</span>
         <button v-else class="btn sm muted" :title="t('Задать депозит и риск на сделку — появится объём позиции')" @click="app.viewOpen = true">{{ t('объём?') }}</button>
         <span class="grow" />
@@ -327,6 +366,18 @@ function duplicate() {
   flex-direction: column;
   gap: 2px;
   font-size: 11px;
+  color: var(--muted);
+}
+.rr {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+}
+.rr .field {
+  width: 52px;
+}
+.lock {
+  height: 26px;
   color: var(--muted);
 }
 .prices .field {

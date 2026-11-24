@@ -15,14 +15,49 @@ export function barStart(t: number, sec: number): number {
   return sec > 0 && sec <= 86_400 ? Math.floor(t / sec) * sec : t
 }
 
+/** Цена, округлённая до шага цены step (без «хвостов» от деления) */
+export function roundToStep(v: number, step: number): number {
+  const prec = Math.max(0, Math.round(-Math.log10(step)))
+  return +(Math.round(v / step) * step).toFixed(prec)
+}
+
+/**
+ * Цели и стоп при заданном R/R. fixed — какая цена задана и остаётся на месте: 'stop' — цель
+ * ставится на rr рисков от входа; 'target' — стоп подтягивается так, чтобы цель была в rr рисках.
+ */
+export function applyRR(entry: number, stop: number, target: number, type: 'long' | 'short', rr: number, fixed: 'stop' | 'target', step: number) {
+  const sign = type === 'long' ? 1 : -1
+  if (fixed === 'stop') return { stop, target: roundToStep(entry + sign * Math.abs(entry - stop) * rr, step) }
+  const risk = Math.max(Math.abs(target - entry) / rr, step)
+  return { target, stop: roundToStep(entry - sign * risk, step) }
+}
+
 /**
  * Перемещение маркера позиции с сохранением порядка уровней: у длинной цель выше входа, стоп ниже,
  * у короткой наоборот. handle: 0 — вход, 1 — цель, 2 — стоп, 3 — правый край.
+ * lockRR > 0 — привязка R/R: тянешь стоп или вход — цель следует за ним, тянешь цель — стоп подтягивается,
+ * соотношение остаётся lockRR.
  */
-export function movePositionHandle(d: Drawing, handle: number, pt: Pt, minGap: number, barSec: number) {
+export function movePositionHandle(d: Drawing, handle: number, pt: Pt, minGap: number, barSec: number, lockRR = 0) {
   const sign = d.type === 'long' ? 1 : -1
   const [entry, target, stop] = d.pts
   const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v))
+  const kind = d.type as 'long' | 'short'
+  if (lockRR > 0 && handle <= 2) {
+    if (handle === 0) {
+      entry.p = sign > 0 ? Math.max(pt.p, stop.p + minGap) : Math.min(pt.p, stop.p - minGap)
+      entry.t = Math.min(pt.t, target.t - barSec)
+      stop.t = entry.t
+      target.p = applyRR(entry.p, stop.p, target.p, kind, lockRR, 'stop', minGap).target
+    } else if (handle === 1) {
+      target.p = sign > 0 ? Math.max(pt.p, entry.p + minGap) : Math.min(pt.p, entry.p - minGap)
+      stop.p = applyRR(entry.p, stop.p, target.p, kind, lockRR, 'target', minGap).stop
+    } else {
+      stop.p = sign > 0 ? Math.min(pt.p, entry.p - minGap) : Math.max(pt.p, entry.p + minGap)
+      target.p = applyRR(entry.p, stop.p, target.p, kind, lockRR, 'stop', minGap).target
+    }
+    return
+  }
   if (handle === 0) {
     const lo = Math.min(target.p, stop.p) + minGap
     const hi = Math.max(target.p, stop.p) - minGap
