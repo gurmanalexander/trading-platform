@@ -343,6 +343,12 @@ function onKey(e: KeyboardEvent) {
 
 /** Сетап в адресе страницы: ссылка, которой поделились, или строка, дописанная к адресу руками */
 function openFromUrl() {
+  // ссылка на окно доната (её ставят в README и на странице репозитория)
+  if (location.hash === '#donate') {
+    app.donateOpen = true
+    history.replaceState(null, '', new URL('./', location.href).pathname)
+    return
+  }
   // ссылка переноса данных с другого устройства
   if (location.hash.startsWith('#import=')) {
     app.transfer = { code: location.hash.slice(8) }

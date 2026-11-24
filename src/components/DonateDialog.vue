@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { REPO_URL } from '../lib/github'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import qrcode from 'qrcode-generator'
 import Icon from './Icon.vue'
@@ -106,7 +107,7 @@ onBeforeUnmount(() => clearTimeout(copiedTimer))
             <a class="cta" :href="method.address" target="_blank" rel="noopener"><Icon name="external" :size="16" />{{ t('Открыть Binance Pay') }}</a>
             <p class="hint">
               <template v-for="(p, i) in recipient" :key="i"><b v-if="p.bold">{{ p.text }}</b><template v-else>{{ p.text }}</template></template>
-              <template v-if="!isPhone"> {{ t('Или отсканируйте QR-код в приложении Binance.') }}</template>
+              <template v-if="!isPhone">{{ ' ' + t('Или отсканируйте QR-код в приложении Binance.') }}</template>
             </p>
           </template>
           <template v-else>
@@ -129,6 +130,11 @@ onBeforeUnmount(() => clearTimeout(copiedTimer))
         <Icon name="qr" :size="15" />{{ qrOpen ? t('Скрыть QR-код') : t('Показать QR-код') }}
       </button>
 
+      <a class="gh-cta" :href="REPO_URL" target="_blank" rel="noopener">
+        <Icon name="github" :size="16" />
+        <span>{{ t('Не готовы донатить? Поставьте звёздочку на GitHub — это тоже помогает') }}</span>
+        <Icon name="star" :size="14" />
+      </a>
       <p class="thanks">{{ t('Спасибо, что пользуетесь tvx') }}</p>
     </div>
   </Modal>
@@ -149,6 +155,9 @@ onBeforeUnmount(() => clearTimeout(copiedTimer))
   display: flex;
   gap: 12px;
   align-items: flex-start;
+}
+.hero-icon :deep(svg) {
+  fill: currentColor;
 }
 .hero-icon {
   flex: none;
@@ -336,6 +345,28 @@ onBeforeUnmount(() => clearTimeout(copiedTimer))
   padding: 4px 8px;
   font-size: 13px;
   color: var(--accent);
+}
+.gh-cta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-size: 13px;
+  text-decoration: none;
+  transition: border-color 0.15s;
+}
+.gh-cta span {
+  flex: 1;
+}
+.gh-cta:hover {
+  border-color: #e3b341;
+}
+.gh-cta :deep(svg:last-child) {
+  color: #e3b341;
+  fill: #e3b341;
 }
 .thanks {
   margin: 0;
