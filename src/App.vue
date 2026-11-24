@@ -14,6 +14,7 @@ import { app, activeIndex, activePane, isPhone, phoneWide, modalOpen, paneCount,
 import { addWatch, activeList } from './stores/watchlist'
 import { clipboard, redo, selection, undo } from './stores/drawings'
 import { stepSymbol } from './stores/screener'
+import { scheduleDonatePulse } from './lib/donate'
 import { chartAt } from './chart/registry'
 import { applyPastedText, applySetup, setupTextFromUrl } from './chart/setup'
 import { applyShare } from './chart/share'
@@ -37,6 +38,7 @@ const ColorsDialog = defineAsyncComponent(() => import('./components/ColorsDialo
 const ViewDialog = defineAsyncComponent(() => import('./components/ViewDialog.vue'))
 const Dashboard = defineAsyncComponent(() => import('./components/Dashboard.vue'))
 const TutorialDialog = defineAsyncComponent(() => import('./components/TutorialDialog.vue'))
+const DonateDialog = defineAsyncComponent(() => import('./components/DonateDialog.vue'))
 const SyncDialog = defineAsyncComponent(() => import('./components/SyncDialog.vue'))
 const ShareDialog = defineAsyncComponent(() => import('./components/ShareDialog.vue'))
 const ListShareDialog = defineAsyncComponent(() => import('./components/ListShareDialog.vue'))
@@ -357,6 +359,7 @@ function openFromUrl() {
 }
 
 onMounted(() => {
+  scheduleDonatePulse()
   openFromUrl()
   // ссылку могли открыть в уже работающем приложении — тогда меняется только часть адреса после решётки
   window.addEventListener('hashchange', openFromUrl)
@@ -408,6 +411,7 @@ onBeforeUnmount(() => {
     <ListShareDialog v-if="app.listShareOpen" />
     <SyncDialog v-if="app.syncOpen" />
     <TutorialDialog v-if="app.tutorialOpen" />
+    <DonateDialog v-if="app.donateOpen" />
     <Dashboard v-if="app.dashboardOpen" />
     <ScreenerFilterDialog v-if="app.screenerFilterOpen" />
     <Toasts />

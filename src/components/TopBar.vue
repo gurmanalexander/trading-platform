@@ -35,6 +35,7 @@ import { TIMEFRAMES, getTf } from '../lib/timeframes'
 import { unreadAlerts } from '../stores/alerts'
 import { cloud } from '../stores/cloud'
 import { chartAt } from '../chart/registry'
+import { donate } from '../lib/donate'
 import { copyAll, copyCanvas, snapshotAll } from '../chart/snapshot'
 
 const pane = activePane
@@ -348,6 +349,9 @@ function fullscreen() {
         </template>
       </template>
     </Dropdown>
+    <button v-if="!isPhone" class="btn donate" :class="{ pulse: donate.pulse }" title="Поддержать проект" aria-label="Поддержать проект" @click="app.donateOpen = true">
+      <Icon name="heart" />
+    </button>
     <button v-if="!isPhone" class="btn" title="Обучение: видео-обзор терминала" @click="app.tutorialOpen = true"><Icon name="learn" /></button>
     <button v-if="!isPhone" class="btn" title="Горячие клавиши (?)" @click="app.hotkeysOpen = true"><Icon name="keyboard" /></button>
     <button v-if="!isPhone" class="btn" :class="{ on: app.panelOpen }" title="Боковая панель" @click="togglePanel(app.panel)">
@@ -357,6 +361,39 @@ function fullscreen() {
 </template>
 
 <style scoped>
+/* донат: обычная приглушённая кнопка; изредка сердечко пару раз мягко «вздыхает» (см. lib/donate) */
+.donate:hover {
+  color: #f0566b;
+}
+.donate.pulse {
+  color: #f0566b;
+}
+.donate.pulse :deep(svg) {
+  animation: heartbeat 1.4s ease-in-out 3;
+}
+@keyframes heartbeat {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  15% {
+    transform: scale(1.22);
+  }
+  30% {
+    transform: scale(1);
+  }
+  45% {
+    transform: scale(1.14);
+  }
+  60% {
+    transform: scale(1);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .donate.pulse :deep(svg) {
+    animation: none;
+  }
+}
 .topbar {
   display: flex;
   align-items: center;

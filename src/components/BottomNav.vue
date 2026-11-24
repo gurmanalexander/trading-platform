@@ -3,6 +3,7 @@ import Icon from './Icon.vue'
 import PhoneMenu from './PhoneMenu.vue'
 import { app, MOBILE_TABS as TABS } from '../stores/app'
 import { unreadAlerts } from '../stores/alerts'
+import { donate } from '../lib/donate'
 </script>
 
 <template>
@@ -18,7 +19,11 @@ import { unreadAlerts } from '../stores/alerts'
     <PhoneMenu>
       <template #trigger="{ toggle, open }">
         <button :class="{ on: open }" title="Ещё: настройки и действия" @click="toggle">
-          <span class="ico"><Icon name="more" :size="20" /></span>
+          <span class="ico">
+            <Icon name="more" :size="20" />
+            <!-- изредка (см. lib/donate) у «Ещё» на пару секунд появляется сердечко: там пункт «Поддержать проект» -->
+            <i v-if="donate.pulse" class="heart"><Icon name="heart" :size="11" /></i>
+          </span>
           <span>Ещё</span>
         </button>
       </template>
@@ -56,6 +61,32 @@ import { unreadAlerts } from '../stores/alerts'
 }
 .ico {
   position: relative;
+}
+.heart {
+  position: absolute;
+  top: -6px;
+  left: 15px;
+  display: grid;
+  color: #f0566b;
+  animation: heartbeat 1.4s ease-in-out 3;
+}
+@keyframes heartbeat {
+  0%,
+  60%,
+  100% {
+    transform: scale(1);
+  }
+  15% {
+    transform: scale(1.3);
+  }
+  45% {
+    transform: scale(1.15);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .heart {
+    animation: none;
+  }
 }
 .badge {
   position: absolute;
