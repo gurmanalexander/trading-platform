@@ -192,4 +192,8 @@ function saveNew() {
 .menu-item {
   white-space: normal;
 }
+.donate :deep(svg) {
+  color: #f23645;
+  fill: currentColor;
+}
 </style>

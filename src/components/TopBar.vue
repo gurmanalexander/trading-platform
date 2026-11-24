@@ -372,69 +372,76 @@ function fullscreen() {
 </template>
 
 <style scoped>
-/* донат: обычная приглушённая кнопка; время от времени сердечко «стучит» (см. lib/donate):
-   два удара — «тук-тук» — с заливкой цветом и мягкое кольцо, расходящееся от кнопки */
+/* донат: красное залитое сердечко; время от времени оно «стучит» (см. lib/donate): два крупных удара
+   со свечением и два кольца, расходящихся от кнопки */
 .donate {
   position: relative;
+  color: #f23645;
+}
+.donate :deep(svg) {
+  fill: currentColor;
+  transition: transform 0.15s;
 }
 .donate:hover {
-  color: #f0566b;
+  color: #ff4d5e;
 }
+.donate:hover :deep(svg) {
+  transform: scale(1.12);
+}
+.donate::before,
 .donate::after {
   content: '';
   position: absolute;
-  inset: 3px;
+  inset: 4px;
   border-radius: 50%;
-  border: 2px solid #f0566b;
+  border: 2px solid #f23645;
   opacity: 0;
   pointer-events: none;
-}
-.donate.pulse {
-  color: #f0566b;
 }
 .donate.pulse :deep(svg) {
   animation: heartbeat 1.3s ease-in-out 2;
 }
-.donate.pulse::after {
+.donate.pulse::before {
   animation: heart-ring 1.3s ease-out 2;
 }
+.donate.pulse::after {
+  animation: heart-ring 1.3s ease-out 0.25s 2;
+}
 @keyframes heartbeat {
-  0% {
+  0%,
+  100% {
     transform: scale(1);
-    fill: rgba(240, 86, 107, 0);
+    filter: drop-shadow(0 0 0 rgba(242, 54, 69, 0));
   }
   14% {
-    transform: scale(1.3);
-    fill: rgba(240, 86, 107, 1);
+    transform: scale(1.4);
+    filter: drop-shadow(0 0 6px rgba(242, 54, 69, 0.9));
   }
   28% {
-    transform: scale(1.02);
+    transform: scale(1.05);
   }
   42% {
-    transform: scale(1.2);
-    fill: rgba(240, 86, 107, 1);
+    transform: scale(1.28);
+    filter: drop-shadow(0 0 5px rgba(242, 54, 69, 0.8));
   }
   70% {
     transform: scale(1);
-    fill: rgba(240, 86, 107, 0.6);
-  }
-  100% {
-    transform: scale(1);
-    fill: rgba(240, 86, 107, 0);
+    filter: drop-shadow(0 0 2px rgba(242, 54, 69, 0.3));
   }
 }
 @keyframes heart-ring {
   0% {
-    transform: scale(0.6);
-    opacity: 0.7;
+    transform: scale(0.5);
+    opacity: 0.85;
   }
   100% {
-    transform: scale(1.5);
+    transform: scale(1.7);
     opacity: 0;
   }
 }
 @media (prefers-reduced-motion: reduce) {
   .donate.pulse :deep(svg),
+  .donate.pulse::before,
   .donate.pulse::after {
     animation: none;
   }

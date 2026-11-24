@@ -68,11 +68,12 @@ import { t } from '../lib/i18n'
   top: -6px;
   left: 15px;
   display: grid;
-  color: #f0566b;
+  color: #f23645;
   animation: heartbeat 1.3s ease-in-out 2;
 }
 .heart :deep(svg) {
-  fill: #f0566b;
+  fill: currentColor;
+  filter: drop-shadow(0 0 3px rgba(242, 54, 69, 0.7));
 }
 @keyframes heartbeat {
   0%,
