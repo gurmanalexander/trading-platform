@@ -2,7 +2,7 @@ import type { IChartApi, IPrimitivePaneRenderer, IPrimitivePaneView, ISeriesApi,
 import { computed, shallowRef, watch } from 'vue'
 import type { Bar } from '../types'
 import { app } from '../stores/app'
-import { checkpoint, clipboard, selection, setDefaultStyle, styleFor, visibleOn, type Dash, type Drawing, type DrawingType, type Pt, type Visibility } from '../stores/drawings'
+import { checkpoint, clipboard, defaultVisibility, selection, setDefaultStyle, styleFor, visChoice, visibleOn, type Dash, type Drawing, type DrawingType, type Pt, type VisChoice } from '../stores/drawings'
 import { formatSignal, type Signal } from '../lib/signal'
 import { i18n, locale, t } from '../lib/i18n'
 import { fmtPct, fmtPrice, fmtSpan } from '../lib/format'
@@ -607,6 +607,9 @@ export class DrawingsLayer {
     const st = styleFor(type)
     const d: Drawing = { id: uid(), type, pts, color: st.color, width: st.width, dash: st.dash }
     if (ind) d.ind = ind
+    // видимость, сохранённая для инструмента кнопкой «по умолчанию»
+    if (st.vis === 'tf') d.tfs = [this.host.tfSec()]
+    else if (st.vis && st.vis !== defaultVisibility(type)) d.vis = st.vis
     return d
   }
 
@@ -888,11 +891,23 @@ export class DrawingsLayer {
     this.redraw()
   }
 
-  setVisibility(vis: Visibility) {
+  /** Длина свечи графика, сек */
+  tfSec(): number {
+    return this.host.tfSec()
+  }
+
+  /** На каких интервалах виден выбранный рисунок; 'tf' — только на интервале этого графика */
+  setVisibility(vis: VisChoice) {
     const d = this.selected()
     if (!d) return
     checkpoint()
-    d.vis = vis
+    if (vis === 'tf') {
+      d.tfs = [this.host.tfSec()]
+      delete d.vis
+    } else {
+      delete d.tfs
+      d.vis = vis
+    }
     this.redraw()
   }
 
@@ -1035,8 +1050,11 @@ export class DrawingsLayer {
       const legend = this.host.el.parentElement?.querySelector<HTMLElement>('.legend')
       const top = (legend?.offsetHeight ?? 56) + 14
       const pt = this.toPoint(14, top, 0) ?? { t: 0, p: 0 }
+      const base = this.newDrawing('text', [pt])
+      // заметка видна на всех внутридневных интервалах, что бы ни было задано для обычного текста
+      delete base.tfs
       this.list.push({
-        ...this.newDrawing('text', [pt]),
+        ...base,
         text,
         size: 12,
         bg: true,
@@ -1052,7 +1070,7 @@ export class DrawingsLayer {
   /** Запоминает стиль выбранного рисунка как стиль по умолчанию для этого инструмента */
   saveAsDefault() {
     const d = this.selected()
-    if (d) setDefaultStyle(d.type, { color: d.color, width: d.width ?? 1, dash: d.dash ?? 'solid' })
+    if (d) setDefaultStyle(d.type, { color: d.color, width: d.width ?? 1, dash: d.dash ?? 'solid', vis: visChoice(d) })
   }
 
   removeSelected() {
@@ -1084,6 +1102,8 @@ export class DrawingsLayer {
     const d: Drawing = { ...JSON.parse(JSON.stringify(src)), id: uid() }
     d.pts = d.pts.map((p) => ({ t: p.t + shift, p: p.p }))
     if (d.pin) d.pin = { x: d.pin.x + 0.02, y: d.pin.y + 0.04 }
+    // рисунок «только своего интервала» вставили на другом — он становится рисунком этого интервала
+    if (d.tfs?.length && !d.tfs.includes(this.host.tfSec())) d.tfs = [this.host.tfSec()]
     // копия заметки чеклиста — обычный текст: заметка у инструмента одна
     delete d.note
     checkpoint()
