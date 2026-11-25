@@ -5,6 +5,8 @@ export type DrawingType = 'trend' | 'ray' | 'hline' | 'hray' | 'vline' | 'cross'
 export type Dash = 'solid' | 'dashed' | 'dotted'
 /** На каких интервалах рисунок виден: на всех, только внутри дня (< 1Д) или только от дня и старше */
 export type Visibility = 'all' | 'intraday' | 'daily'
+/** Выбор видимости на панели рисунка: интервалы по группам или 'tf' — только тот интервал, на котором смотрят */
+export type VisChoice = Visibility | 'tf'
 
 /** Точка привязки: время (сек UTC) и цена — рисунок не зависит от масштаба и таймфрейма */
 export interface Pt {
@@ -30,6 +32,11 @@ export interface Drawing {
   dash?: Dash
   text?: string
   vis?: Visibility
+  /**
+   * Интервалы (длина свечи, сек), на которых рисунок виден, например [300] — только на 5 минутах.
+   * Заданы — важнее vis: текст или линия с одного интервала не мешают на других.
+   */
+  tfs?: number[]
   /** размер шрифта текста, px */
   size?: number
   /** текст на подложке */
@@ -49,18 +56,14 @@ export interface Drawing {
   ind?: string
 }
 
-/** Позиции по умолчанию видны только на внутридневных интервалах: на дневке они сливаются в точку */
-export const defaultVisibility = (type: DrawingType): Visibility => (type === 'long' || type === 'short' ? 'intraday' : 'all')
-
-export function visibleOn(d: Drawing, tfSec: number): boolean {
-  const vis = d.vis ?? defaultVisibility(d.type)
-  return vis === 'all' || (vis === 'intraday' ? tfSec < 86400 : tfSec >= 86400)
-}
+export { defaultVisibility, visChoice, visibleOn } from '../lib/visibility'
 
 export interface DrawStyle {
   color: string
   width: number
   dash: Dash
+  /** видимость новых рисунков; нет — как обычно у этого инструмента */
+  vis?: VisChoice
 }
 
 export const DRAW_COLORS = ['#4c8dff', '#1fb28a', '#f0566b', '#e8a838', '#a78bfa', '#d6dbe4']
@@ -72,8 +75,9 @@ persist('drawDefaults', drawDefaults, () => drawDefaults)
 
 export const styleFor = (type: DrawingType): DrawStyle => ({ ...BASE_STYLE, ...drawDefaults[type] })
 export function setDefaultStyle(type: DrawingType, style: DrawStyle) {
-  drawDefaults[type] = { color: style.color, width: style.width, dash: style.dash }
+  drawDefaults[type] = { color: style.color, width: style.width, dash: style.dash, ...(style.vis ? { vis: style.vis } : {}) }
 }
+
 
 /** Рисунки по ключу инструмента */
 export const drawings = reactive<Record<string, Drawing[]>>(load('drawings', {}))
