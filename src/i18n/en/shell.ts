@@ -201,8 +201,9 @@ export default {
   'Обучение': 'Tutorial',
   'Русские': 'Russian',
   'Видео не загрузилось. Проверьте соединение и откройте окно ещё раз.': 'The video did not load. Check your connection and open this window again.',
-  'Обзор идёт от простого к сложному. Выберите часть справа — видео перейдёт к ней. Субтитры включаются кнопкой в проигрывателе.':
-    'The video tour is in Russian and goes from basics to advanced. Pick a part on the right to jump to it. Russian subtitles can be turned on in the player.',
+  'Обзор идёт от простого к сложному. Выберите часть справа — видео перейдёт к ней. Субтитры выключаются кнопкой в проигрывателе.':
+    'The tour goes from basics to advanced. Pick a part on the right to jump to it. Subtitles can be turned off in the player.',
+  'Язык видео': 'Video language',
   'Части обзора': 'Tour chapters',
   // оглавление видео (public/help/chapters.json)
   'Вступление': 'Introduction',

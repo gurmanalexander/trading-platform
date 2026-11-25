@@ -1,31 +1,44 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { ref, watch } from 'vue'
 import Icon from './Icon.vue'
 import Modal from './Modal.vue'
 import { app } from '../stores/app'
-import { t } from '../lib/i18n'
+import { i18n, LANGS, t, type Lang } from '../lib/i18n'
 
 // Обучение: видео-обзор терминала с оглавлением. Файлы лежат рядом с приложением (public/help)
-// и загружаются, только когда окно открыли.
+// и загружаются, только когда окно открыли. Обзор записан на двух языках (scripts/tutorial):
+// по умолчанию — на языке интерфейса, переключатель над оглавлением выбирает другой.
 interface Chapter {
   /** секунда начала */
   t: number
   title: string
 }
 const base = import.meta.env.BASE_URL + 'help/'
+const FILES: Record<Lang, { video: string; vtt: string; chapters: string; label: string }> = {
+  ru: { video: 'tvx-obzor.mp4', vtt: 'tvx-obzor.vtt', chapters: 'chapters.json', label: 'Русские' },
+  en: { video: 'tvx-overview.mp4', vtt: 'tvx-overview.vtt', chapters: 'chapters.en.json', label: 'English' },
+}
+const lang = ref<Lang>(i18n.lang)
 const video = ref<HTMLVideoElement>()
 const chapters = ref<Chapter[]>([])
 const current = ref(0)
 const failed = ref(false)
 
-onMounted(async () => {
-  try {
-    const res = await fetch(base + 'chapters.json')
-    if (res.ok) chapters.value = await res.json()
-  } catch {
-    /* без оглавления видео всё равно можно смотреть */
-  }
-})
+watch(
+  lang,
+  async (l) => {
+    failed.value = false
+    current.value = 0
+    chapters.value = []
+    try {
+      const res = await fetch(base + FILES[l].chapters)
+      if (res.ok && l === lang.value) chapters.value = await res.json()
+    } catch {
+      /* без оглавления видео всё равно можно смотреть */
+    }
+  },
+  { immediate: true },
+)
 
 function jump(c: Chapter) {
   const v = video.value
@@ -48,16 +61,20 @@ const mmss = (t: number) => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).
   <Modal :title="t('Обучение')" :width="1180" @close="app.tutorialOpen = false">
     <div class="tu">
       <div class="player">
-        <video ref="video" controls playsinline preload="metadata" :src="base + 'tvx-obzor.mp4'" @timeupdate="onTime" @error="failed = true">
-          <track kind="subtitles" srclang="ru" :label="t('Русские')" :src="base + 'tvx-obzor.vtt'" />
+        <video :key="lang" ref="video" controls playsinline preload="metadata" :src="base + FILES[lang].video" @timeupdate="onTime" @error="failed = true">
+          <!-- субтитры включены сразу: в них — пояснения к каждому шагу -->
+          <track kind="subtitles" default :srclang="lang" :label="t(FILES[lang].label)" :src="base + FILES[lang].vtt" />
         </video>
         <p v-if="failed" class="muted note">{{ t('Видео не загрузилось. Проверьте соединение и откройте окно ещё раз.') }}</p>
-        <p v-else class="muted note">{{ t('Обзор идёт от простого к сложному. Выберите часть справа — видео перейдёт к ней. Субтитры включаются кнопкой в проигрывателе.') }}</p>
+        <p v-else class="muted note">{{ t('Обзор идёт от простого к сложному. Выберите часть справа — видео перейдёт к ней. Субтитры выключаются кнопкой в проигрывателе.') }}</p>
       </div>
       <nav class="toc scroll" :aria-label="t('Части обзора')">
+        <div class="langs" role="group" :aria-label="t('Язык видео')">
+          <button v-for="l in LANGS" :key="l.id" :class="{ on: lang === l.id }" @click="lang = l.id">{{ l.label }}</button>
+        </div>
         <button v-for="(c, i) in chapters" :key="c.t" :class="{ on: i === current }" @click="jump(c)">
           <Icon name="play" :size="15" />
-          <span>{{ t(c.title) }}</span>
+          <span>{{ c.title }}</span>
           <i>{{ mmss(c.t) }}</i>
         </button>
       </nav>
@@ -90,6 +107,25 @@ video {
   flex-direction: column;
   gap: 1px;
   max-height: min(62vh, 620px);
+}
+.langs {
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  margin-bottom: 6px;
+  border-radius: 7px;
+  background: var(--hover);
+}
+.toc .langs button {
+  flex: 1;
+  justify-content: center;
+  padding: 4px 8px;
+  font-size: 12px;
+}
+.toc .langs button.on {
+  background: var(--panel);
+  color: var(--text);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.14);
 }
 .toc button {
   display: flex;
