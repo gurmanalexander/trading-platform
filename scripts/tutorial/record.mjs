@@ -4,11 +4,14 @@
 //   node scripts/tutorial/record.mjs                 — оба языка, файлы в public/help
 //   node scripts/tutorial/record.mjs --lang en       — один язык
 //   node scripts/tutorial/record.mjs --until 3 --fast --shots   — черновой прогон первых глав со снимками
+//   node scripts/tutorial/record.mjs --script        — только текст: SCENARIO.md и out/<lang>/lines.json для озвучки
 //
-// Озвучка: если есть scripts/tutorial/audio/<lang>/<номер реплики>.mp3 (или .wav), длительность реплики
-// берётся по файлу, и звук ложится в видео. Номера реплик печатаются в scripts/tutorial/out/<lang>/lines.txt.
+// Озвучка: файл scripts/tutorial/audio/<lang>/<хеш реплики>.mp3 (делает tts.py по lines.json). Есть файл —
+// реплика длится столько, сколько звук, и звук ложится в видео; нет — видео без звука, текст в субтитрах.
+// Подробно — в README.md рядом.
 
 import { mkdirSync, rmSync, writeFileSync, existsSync, readdirSync } from 'node:fs'
+import { createHash } from 'node:crypto'
 import { execFileSync, spawnSync } from 'node:child_process'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -42,6 +45,8 @@ const UNTIL = arg('until') ? +arg('until') : Infinity
 const FAST = argv.includes('--fast')
 const SHOTS = argv.includes('--shots')
 const NO_PHONE = argv.includes('--no-phone')
+/** только текст сценария, без браузера и записи */
+const SCRIPT = argv.includes('--script')
 const OUT = {
   ru: { video: 'tvx-obzor.mp4', vtt: 'tvx-obzor.vtt', chapters: 'chapters.json' },
   en: { video: 'tvx-overview.mp4', vtt: 'tvx-overview.vtt', chapters: 'chapters.en.json' },
@@ -49,6 +54,10 @@ const OUT = {
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, FAST ? ms / 4 : ms))
 const now = () => Date.now() / 1000
+
+/** Имя файла озвучки реплики: правка одной фразы не сдвигает остальные */
+const lineHash = (lang, text) => createHash('sha1').update(lang + '\n' + text).digest('hex').slice(0, 12)
+const audioOf = (lang, text) => ['mp3', 'wav'].map((e) => join(HERE, 'audio', lang, `${lineHash(lang, text)}.${e}`)).find(existsSync)
 
 function duration(file) {
   const out = execFileSync('ffprobe', ['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', file]).toString()
@@ -149,12 +158,24 @@ function director(page, lang, dict, log) {
       }
       const name = title[lang]
       const label = n ? `${n}. ${name}` : name
+      log.chapter = label
+      if (DRY) {
+        log.chapters.push({ t: 0, title: label })
+        if (n) log.script.push({ hash: lineHash(lang, cardText(lang, n, name)), chapter: label, text: cardText(lang, n, name) })
+        return
+      }
       const t = now()
       log.chapters.push({ t, title: label })
       if (n) {
+        // заставка главы: «Часть 3. Окна и шаблоны.» — тоже реплика (её можно озвучить)
+        const text = cardText(lang, n, name)
+        const audio = audioOf(lang, text)
+        const hold = Math.max(2.6, audio ? duration(audio) + 0.3 : 0)
+        log.script.push({ hash: lineHash(lang, text), chapter: label, text })
         await page.evaluate(([s, b]) => window.__tutCard(s, b), [lang === 'ru' ? `Часть ${n}` : `Part ${n}`, name])
-        log.lines.push({ start: t, end: t + 2.4, text: lang === 'ru' ? `Часть ${n}. ${name}.` : `Part ${n}. ${name}.` })
-        await sleep(2600)
+        log.lines.push({ start: t, end: t + hold - 0.2, text })
+        if (audio) log.audio.push({ file: audio, t })
+        await sleep(hold * 1000)
         await page.evaluate(() => window.__tutCard('', null))
         await sleep(500)
       }
@@ -163,10 +184,12 @@ function director(page, lang, dict, log) {
     async say(text, act) {
       const s = text[lang]
       const id = ++log.n
-      const audio = ['mp3', 'wav'].map((e) => join(HERE, 'audio', lang, `${id}.${e}`)).find(existsSync)
+      log.script.push({ hash: lineHash(lang, s), chapter: log.chapter, text: s })
+      if (DRY) return
+      const audio = audioOf(lang, s)
+      // без озвучки — столько, сколько нужно прочитать субтитры (близко к темпу речи)
       const need = audio ? duration(audio) + 0.35 : Math.max(2.5, s.length / (lang === 'ru' ? 13.5 : 15) + 0.9)
       const start = now()
-      log.script.push(`${id}\t${s}`)
       if (act) await act()
       const left = need - (now() - start)
       if (left > 0) await new Promise((r) => setTimeout(r, FAST ? left * 250 : left * 1000))
@@ -266,11 +289,57 @@ function director(page, lang, dict, log) {
 
 class StopRecording extends Error {}
 
+const cardText = (lang, n, name) => (lang === 'ru' ? `Часть ${n}. ${name}.` : `Part ${n}. ${name}.`)
+let DRY = false
+
+/**
+ * Страница-пустышка для --script: любое обращение возвращает её же, вызовы ничего не делают.
+ * Сценарий проходит целиком, действия не выполняются — собирается только текст.
+ */
+function dummyPage() {
+  const fn = () => proxy
+  const proxy = new Proxy(fn, {
+    get: (_, k) => (k === 'then' ? undefined : k === Symbol.toPrimitive ? () => 0 : proxy),
+    apply: () => proxy,
+  })
+  return proxy
+}
+
+/** --script: SCENARIO.md (оба языка рядом) и out/<lang>/lines.json — тексты реплик для озвучки */
+async function writeScript(dict) {
+  DRY = true
+  const by = {}
+  for (const lang of ['ru', 'en']) {
+    const log = { dir: '', lines: [], chapters: [], script: [], audio: [], n: 0, stopped: false, chapter: '' }
+    const d = director(dummyPage(), lang, dict, log)
+    for (const k of Object.keys(d)) if (typeof d[k] === 'function' && !['T', 'L', 'chapter', 'say', 'page'].includes(k)) d[k] = async () => ({ x: 0, y: 0 })
+    await desktop(d)
+    await phone(d)
+    by[lang] = log.script
+    const dir = join(HERE, 'out', lang)
+    mkdirSync(dir, { recursive: true })
+    writeFileSync(join(dir, 'lines.json'), JSON.stringify(log.script.map(({ hash, text }) => ({ hash, text })), null, 1) + '\n')
+  }
+  let md = '# Сценарий обучающего видео\n\nСобран из `scenes.mjs` командой `node scripts/tutorial/record.mjs --script` — не правьте руками: текст меняется в `scenes.mjs`.\n'
+  md += 'Слева — русская запись, справа — английская; действия на экране описаны в `scenes.mjs` рядом с каждой репликой.\n'
+  let cur = null
+  by.ru.forEach((r, i) => {
+    const en = by.en[i]
+    if (r.chapter !== cur) {
+      cur = r.chapter
+      md += `\n## ${r.chapter} · ${en?.chapter ?? ''}\n\n| # | Русский | English |\n| --- | --- | --- |\n`
+    }
+    md += `| ${i + 1} | ${r.text.replace(/\|/g, '\\|')} | ${(en?.text ?? '').replace(/\|/g, '\\|')} |\n`
+  })
+  writeFileSync(join(HERE, 'SCENARIO.md'), md)
+  console.log(`SCENARIO.md · реплик: ${by.ru.length} (ru) / ${by.en.length} (en)`)
+}
+
 async function recordLang(lang, server, dict, url) {
   const work = join(HERE, 'out', lang)
   rmSync(work, { recursive: true, force: true })
   mkdirSync(work, { recursive: true })
-  const log = { dir: work, lines: [], chapters: [], script: [], audio: [], n: 0, stopped: false }
+  const log = { dir: work, lines: [], chapters: [], script: [], audio: [], n: 0, stopped: false, chapter: '' }
   const browser = await chromium.launch()
   const tz = lang === 'ru' ? 'Europe/Moscow' : 'Europe/London'
   const ctx = await browser.newContext({ viewport: { width: W, height: H }, deviceScaleFactor: 1, locale: lang === 'ru' ? 'ru-RU' : 'en-US', timezoneId: tz })
@@ -355,9 +424,11 @@ async function recordLang(lang, server, dict, url) {
   if (log.audio.length) {
     // озвучка: каждая реплика — со своей отметки времени
     const inputs = log.audio.flatMap((a) => ['-i', a.file])
-    const filters = log.audio.map((a, i) => `[${i + 1}:a]adelay=${Math.round(shift(a.t) * 1000)}:all=1[a${i}]`).join(';')
-    const mix = `${filters};${log.audio.map((_, i) => `[a${i}]`).join('')}amix=inputs=${log.audio.length}:normalize=0[aout]`
-    execFileSync('ffmpeg', ['-y', '-loglevel', 'error', '-i', silent, ...inputs, '-filter_complex', mix, '-map', '0:v', '-map', '[aout]', '-c:v', 'copy', '-c:a', 'aac', '-b:a', '80k', '-movflags', '+faststart', final])
+    const filters = log.audio.map((a, i) => `[${i + 1}:a]aresample=48000,adelay=${Math.round(shift(a.t) * 1000)}:all=1[a${i}]`).join(';\n')
+    // громкость выравнивается по всему ролику (как в первой версии обзора)
+    const mix = `${filters};\n${log.audio.map((_, i) => `[a${i}]`).join('')}amix=inputs=${log.audio.length}:normalize=0:dropout_transition=0,loudnorm=I=-16:TP=-1.5:LRA=11[aout]`
+    writeFileSync(join(work, 'audio-filter.txt'), mix)
+    execFileSync('ffmpeg', ['-y', '-loglevel', 'error', '-i', silent, ...inputs, '-filter_complex_script', join(work, 'audio-filter.txt'), '-map', '0:v', '-map', '[aout]', '-c:v', 'copy', '-c:a', 'aac', '-b:a', '96k', '-movflags', '+faststart', final])
   } else execFileSync('cp', [silent, final])
 
   const vtt = 'WEBVTT\n\n' + log.lines.map((c) => `${vttTime(shift(c.start))} --> ${vttTime(shift(c.end))}\n${c.text}\n`).join('\n')
@@ -365,15 +436,19 @@ async function recordLang(lang, server, dict, url) {
   const where = draft ? work : dest
   writeFileSync(join(where, out.vtt), vtt)
   writeFileSync(join(where, out.chapters), JSON.stringify(chapters, null, 1) + '\n')
-  writeFileSync(join(work, 'lines.txt'), log.script.join('\n') + '\n')
+  writeFileSync(join(work, 'lines.json'), JSON.stringify(log.script.map(({ hash, text }) => ({ hash, text })), null, 1) + '\n')
+  const voiced = log.audio.length
+  if (!voiced) console.log(`[${lang}] без озвучки: node scripts/tutorial/record.mjs --script, затем scripts/tutorial/tts.py (см. README)`)
   console.log(`[${lang}] ${final} · ${duration(final).toFixed(0)} s · глав ${chapters.length}`)
 }
 
 const server = await createServer({ root: ROOT, server: { port: 5199, strictPort: true }, logLevel: 'error' })
-await server.listen()
+// для текста сценария сервер нужен только как загрузчик словаря — порт не занимаем
+if (!SCRIPT) await server.listen()
 try {
   const dict = await loadDict(server)
-  for (const lang of LANGS) await recordLang(lang, server, dict, 'http://localhost:5199/')
+  if (SCRIPT) await writeScript(dict)
+  else for (const lang of LANGS) await recordLang(lang, server, dict, 'http://localhost:5199/')
 } finally {
   await server.close()
 }
