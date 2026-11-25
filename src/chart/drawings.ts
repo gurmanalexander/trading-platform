@@ -2,7 +2,7 @@ import type { IChartApi, IPrimitivePaneRenderer, IPrimitivePaneView, ISeriesApi,
 import { computed, shallowRef, watch } from 'vue'
 import type { Bar } from '../types'
 import { app } from '../stores/app'
-import { checkpoint, clipboard, defaultVisibility, selection, setDefaultStyle, styleFor, visChoice, visibleOn, type Dash, type Drawing, type DrawingType, type Pt, type VisChoice } from '../stores/drawings'
+import { checkpoint, clipboard, defaultVisibility, selection, setDefaultStyle, setVisibleTfs, styleFor, visibleOn, type Dash, type Drawing, type DrawingType, type DrawStyle, type Pt } from '../stores/drawings'
 import { formatSignal, type Signal } from '../lib/signal'
 import { i18n, locale, t } from '../lib/i18n'
 import { fmtPct, fmtPrice, fmtSpan } from '../lib/format'
@@ -608,7 +608,10 @@ export class DrawingsLayer {
     const d: Drawing = { id: uid(), type, pts, color: st.color, width: st.width, dash: st.dash }
     if (ind) d.ind = ind
     // видимость, сохранённая для инструмента кнопкой «по умолчанию»
-    if (st.vis === 'tf') d.tfs = [this.host.tfSec()]
+    const tf = this.host.tfSec()
+    if (st.vis === 'tf') d.tfs = [tf]
+    // набор интервалов; тот, где рисуют, в него входит всегда — иначе рисунок пропал бы сразу
+    else if (st.tfs?.length) d.tfs = [...new Set([...st.tfs, tf])].sort((a, b) => a - b)
     else if (st.vis && st.vis !== defaultVisibility(type)) d.vis = st.vis
     return d
   }
@@ -896,18 +899,12 @@ export class DrawingsLayer {
     return this.host.tfSec()
   }
 
-  /** На каких интервалах виден выбранный рисунок; 'tf' — только на интервале этого графика */
-  setVisibility(vis: VisChoice) {
+  /** Видимость выбранного рисунка набором интервалов (длины свечей, сек); пустой набор не принимается */
+  setTfs(set: number[]) {
     const d = this.selected()
-    if (!d) return
+    if (!d || !set.length) return
     checkpoint()
-    if (vis === 'tf') {
-      d.tfs = [this.host.tfSec()]
-      delete d.vis
-    } else {
-      delete d.tfs
-      d.vis = vis
-    }
+    setVisibleTfs(d, set)
     this.redraw()
   }
 
@@ -1070,7 +1067,13 @@ export class DrawingsLayer {
   /** Запоминает стиль выбранного рисунка как стиль по умолчанию для этого инструмента */
   saveAsDefault() {
     const d = this.selected()
-    if (d) setDefaultStyle(d.type, { color: d.color, width: d.width ?? 1, dash: d.dash ?? 'solid', vis: visChoice(d) })
+    if (!d) return
+    const style: DrawStyle = { color: d.color, width: d.width ?? 1, dash: d.dash ?? 'solid' }
+    // один интервал — «где нарисовали», несколько — этот набор, иначе — группа
+    if (d.tfs?.length === 1) style.vis = 'tf'
+    else if (d.tfs?.length) style.tfs = d.tfs
+    else style.vis = d.vis ?? defaultVisibility(d.type)
+    setDefaultStyle(d.type, style)
   }
 
   removeSelected() {

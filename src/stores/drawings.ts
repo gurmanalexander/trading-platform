@@ -56,14 +56,16 @@ export interface Drawing {
   ind?: string
 }
 
-export { defaultVisibility, visChoice, visibleOn } from '../lib/visibility'
+export { defaultVisibility, setVisibleTfs, visibleOn, visibleTfs } from '../lib/visibility'
 
 export interface DrawStyle {
   color: string
   width: number
   dash: Dash
-  /** видимость новых рисунков; нет — как обычно у этого инструмента */
+  /** видимость новых рисунков; 'tf' — только на интервале, где нарисовали; нет — как обычно у инструмента */
   vis?: VisChoice
+  /** видимость новых рисунков — набором интервалов (к нему добавляется интервал, где нарисовали) */
+  tfs?: number[]
 }
 
 export const DRAW_COLORS = ['#4c8dff', '#1fb28a', '#f0566b', '#e8a838', '#a78bfa', '#d6dbe4']
@@ -75,7 +77,13 @@ persist('drawDefaults', drawDefaults, () => drawDefaults)
 
 export const styleFor = (type: DrawingType): DrawStyle => ({ ...BASE_STYLE, ...drawDefaults[type] })
 export function setDefaultStyle(type: DrawingType, style: DrawStyle) {
-  drawDefaults[type] = { color: style.color, width: style.width, dash: style.dash, ...(style.vis ? { vis: style.vis } : {}) }
+  drawDefaults[type] = {
+    color: style.color,
+    width: style.width,
+    dash: style.dash,
+    ...(style.vis ? { vis: style.vis } : {}),
+    ...(style.tfs?.length ? { tfs: [...style.tfs] } : {}),
+  }
 }
 
 

@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, onUpdated, reactive, ref } from 'vue'
 import Icon from './Icon.vue'
-import { DRAW_COLORS, visChoice, type Dash, type VisChoice } from '../stores/drawings'
-import { TIMEFRAMES } from '../lib/timeframes'
+import { DRAW_COLORS, type Dash } from '../stores/drawings'
+import VisibilityMenu from './VisibilityMenu.vue'
 import { hasLineStyle, hasText, isPosition, TEXT_SIZES, type DrawingsLayer } from '../chart/drawings'
 import { applyRR, fmtQty, fmtUsd, positionSize, riskReward } from '../chart/position'
 import { app, isPhone, toast } from '../stores/app'
@@ -113,19 +113,7 @@ const DASH_LIST: { id: Dash; label: string; pattern: string }[] = [
   { id: 'dashed', label: 'Штриховая', pattern: '5 3' },
   { id: 'dotted', label: 'Пунктирная', pattern: '1.5 3' },
 ]
-const VIS: { id: VisChoice; label: string }[] = [
-  { id: 'all', label: 'все ТФ' },
-  { id: 'intraday', label: '< 1Д' },
-  { id: 'daily', label: '≥ 1Д' },
-]
 
-const vis = computed(() => (d.value ? visChoice(d.value) : 'all'))
-/** интервал графика, на котором выбран рисунок: «только 5м» */
-const tfLabel = computed(() => {
-  void d.value
-  const sec = props.layer.tfSec()
-  return TIMEFRAMES.find((f) => f.sec === sec)?.label ?? ''
-})
 const fmt = (v: number) => String(+v.toFixed(props.precision))
 /** R/R позиции: целым или с одним-двумя знаками, без хвостовых нулей */
 const rr = computed(() => (d.value && position.value ? String(+riskReward(d.value).toFixed(2)) : ''))
@@ -186,10 +174,14 @@ function editText() {
 function makeDefault() {
   props.layer.saveAsDefault()
   // «только этот интервал» — главное, что поменялось: говорим об этом прямо
+  const own = d.value?.tfs?.length === 1
+  const several = (d.value?.tfs?.length ?? 0) > 1
   toast(
-    d.value && visChoice(d.value) === 'tf'
+    own
       ? t('Новые рисунки этим инструментом будут видны только на том интервале, где их нарисовали')
-      : t('Стиль сохранён: новые рисунки этого инструмента будут такими же'),
+      : several
+        ? t('Стиль сохранён: новые рисунки будут видны на тех же интервалах и на том, где их нарисовали')
+        : t('Стиль сохранён: новые рисунки этого инструмента будут такими же'),
   )
 }
 async function copyTrade() {
@@ -310,10 +302,7 @@ function duplicate() {
         <button v-else class="btn sm muted" :title="t('Задать депозит и риск на сделку — появится объём позиции')" @click="app.viewOpen = true">{{ t('объём?') }}</button>
         <span class="grow" />
       </template>
-      <select class="field vis" :title="t('На каких интервалах показывать')" :value="vis" @change="layer.setVisibility(($event.target as HTMLSelectElement).value as VisChoice)">
-        <option v-for="v in VIS" :key="v.id" :value="v.id">{{ t(v.label) }}</option>
-        <option value="tf">{{ t('только {tf}', { tf: tfLabel }) }}</option>
-      </select>
+      <VisibilityMenu :layer="layer" :d="d" />
       <template v-if="position">
         <button class="btn sm" :title="t('Вставить текст сделки из буфера: ТВХ / SL / TP разложатся по этой позиции')" @click="pasteFromClipboard()"><Icon name="paste" :size="16" /></button>
         <button class="btn sm" :title="t('Скопировать позицию текстом: вход, стоп, тейк')" @click="copyTrade"><Icon name="share" :size="16" /></button>
