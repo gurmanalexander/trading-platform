@@ -1,0 +1,442 @@
+WEBVTT
+
+00:00:00.057 --> 00:00:04.889
+This is an overview of tvx, a free charting terminal for Binance and Bybit.
+
+00:00:04.939 --> 00:00:16.216
+We will go from simple to advanced: the first launch and the chart, windows, the screener and watchlists, drawing and positions, and finally quick tricks, sync and the phone.
+
+00:00:16.666 --> 00:00:19.066
+Part 1. First launch.
+
+00:00:19.906 --> 00:00:23.585
+On the first launch the terminal asks for a couple of settings.
+
+00:00:23.635 --> 00:00:26.248
+The interface language is English or Russian.
+
+00:00:26.769 --> 00:00:31.338
+The theme is light, dark or the system one.
+
+00:00:31.388 --> 00:00:40.470
+Then the time zone for intraday charts, and the exchange and market where coins open.
+
+00:00:40.989 --> 00:00:44.193
+All of this can be changed later in the settings.
+
+00:00:44.243 --> 00:00:45.123
+Press “Start”.
+
+00:00:45.631 --> 00:00:52.722
+Here are three windows of one coin: five minutes at the top, the daily chart bottom left and the hourly one on the right.
+
+00:00:52.772 --> 00:00:57.325
+On the right is the panel with the screener, watchlists, checklist and alerts.
+
+00:00:57.829 --> 00:01:01.974
+To change the coin, just start typing its name and the search opens.
+
+00:01:02.024 --> 00:01:05.491
+Press Enter, and the coin changes in all windows at once.
+
+00:01:05.996 --> 00:01:09.958
+The interval of the active window is switched with the buttons at the top.
+
+00:01:10.008 --> 00:01:13.754
+The drop-down has all intervals, and the star puts one on the toolbar.
+
+00:01:14.266 --> 00:01:17.792
+You can also type the interval: digits mean minutes.
+
+00:01:17.842 --> 00:01:21.231
+Type 15 and Enter, and 5 brings back five minutes.
+
+00:01:21.681 --> 00:01:24.613
+Part 2. The chart and its look.
+
+00:01:25.454 --> 00:01:30.792
+Drag the chart with the mouse, and the wheel zooms the time scale.
+
+00:01:31.301 --> 00:01:36.735
+The wheel over the price scale stretches the chart vertically, and the “auto” button resets the scale.
+
+00:01:36.785 --> 00:01:40.283
+A view you set up by hand is remembered for the coin and interval.
+
+00:01:40.786 --> 00:01:46.293
+Next to the last price is the time until the candle closes, and the price is colored like the bar.
+
+00:01:46.343 --> 00:01:49.072
+The grid and time scale continue into the future.
+
+00:01:49.585 --> 00:01:57.944
+The chart type menu has bars, candles, hollow candles, Heikin Ashi and line, plus thin bars and the current price line.
+
+00:01:58.457 --> 00:02:02.960
+The time zone is changed with the button in the bottom right corner of the chart.
+
+00:02:03.010 --> 00:02:06.838
+Intraday charts show the chosen time, daily ones show exchange dates.
+
+00:02:07.344 --> 00:02:19.181
+The gear menu has the theme, custom colors and the “Fonts, timer, position size” window: larger scale and legend fonts, the candle timer and the deposit used for position size.
+
+00:02:19.690 --> 00:02:23.628
+Alt+Enter maximizes the active window and restores the layout.
+
+00:02:23.678 --> 00:02:30.447
+Alt+G jumps all windows to a date, and the arrow at the bottom right brings you back to the current price.
+
+00:02:30.897 --> 00:02:33.733
+Part 3. Windows and templates.
+
+00:02:34.547 --> 00:02:39.121
+Pick the layout here: up to eight charts, presets or your own grid.
+
+00:02:39.171 --> 00:02:43.193
+Below is window sync: symbol, interval, crosshair and time.
+
+00:02:43.696 --> 00:02:49.507
+The crosshair is mirrored in every window, which helps to compare one spot on different intervals.
+
+00:02:49.557 --> 00:02:52.199
+Window and side panel borders can be dragged.
+
+00:02:52.702 --> 00:02:57.551
+Save a good setup as a template: layout, intervals, chart types and indicators.
+
+00:02:57.601 --> 00:03:03.628
+A starred template becomes a toolbar button, and it can be bound to the Screener or Watchlist tab.
+
+00:03:04.079 --> 00:03:06.479
+Part 4. Screener.
+
+00:03:07.299 --> 00:03:15.587
+The Screener tab lists the exchange coins that match your conditions: exchange, market, daily turnover, price change and sorting.
+
+00:03:15.637 --> 00:03:20.047
+You can also show only crypto, only stocks and TradFi, or everything.
+
+00:03:20.569 --> 00:03:23.868
+Columns are configurable: price, change, volume.
+
+00:03:23.918 --> 00:03:28.751
+The price is colored by the daily change, and clicking a header sorts.
+
+00:03:29.271 --> 00:03:31.145
+Clicking a row opens the coin.
+
+00:03:31.195 --> 00:03:37.557
+Space pages through the screener, Shift+Space goes back, and the arrow keys move one coin at a time.
+
+00:03:38.091 --> 00:03:43.212
+Left of the name is the direction mark: one click marks the coin long, a second one short.
+
+00:03:43.262 --> 00:03:47.865
+The dot on the right shows which lists the coin is in and adds it to any of them.
+
+00:03:48.370 --> 00:03:54.255
+You can take several coins at once: Ctrl+click picks them one by one, Shift+click picks a range.
+
+00:03:54.305 --> 00:03:58.768
+Right-click, and all of them get a direction and go to the list you need.
+
+00:03:59.218 --> 00:04:01.646
+Part 5. Watchlists.
+
+00:04:02.465 --> 00:04:05.666
+On the Watchlist tab all your lists flow as sections.
+
+00:04:05.716 --> 00:04:09.162
+Each has a color tag, and clicking the name collapses it.
+
+00:04:09.212 --> 00:04:11.064
+Prices and changes update live.
+
+00:04:11.590 --> 00:04:15.993
+The star marks the current list: coins go there with Alt+W and on paste.
+
+00:04:16.043 --> 00:04:21.126
+Coins and whole lists are dragged with the mouse, or with a long press on a tablet.
+
+00:04:21.633 --> 00:04:24.668
+The switch at the top filters by direction.
+
+00:04:24.718 --> 00:04:30.694
+Next to it: share the list, paste coins from the clipboard, columns, and a new list.
+
+00:04:31.202 --> 00:04:39.704
+“Share list” makes, for every checked coin, a picture with all windows and a line “coin, direction, level”, handy to send to Telegram.
+
+00:04:40.154 --> 00:04:42.554
+Part 6. Drawing.
+
+00:04:44.642 --> 00:04:46.655
+Drawing tools are on the left.
+
+00:04:46.705 --> 00:04:50.438
+A horizontal level takes one click, fastest with Alt+H.
+
+00:04:50.488 --> 00:04:53.601
+The level price shows right away on the scale.
+
+00:04:54.121 --> 00:04:58.655
+The level belongs to the coin, not the window, so it shows on every interval.
+
+00:04:58.705 --> 00:05:02.406
+Handles appear on hover, and you can drag a drawing right away.
+
+00:05:02.926 --> 00:05:07.126
+Click the line to open its panel: color, width, style, label.
+
+00:05:07.176 --> 00:05:11.934
+Drag the panel by its grip wherever you like, even outside the chart.
+
+00:05:12.455 --> 00:05:19.267
+Timeframe visibility works like in TradingView: tick any intervals one by one, as groups, or with a preset.
+
+00:05:19.317 --> 00:05:23.308
+For example, keep this level only on five minutes and one hour.
+
+00:05:23.820 --> 00:05:26.465
+Trend lines and rectangles take two clicks.
+
+00:05:26.515 --> 00:05:32.922
+The magnet snaps points to candle prices: it has three modes, and the crosshair can snap to prices too.
+
+00:05:33.433 --> 00:05:36.532
+The Text tool: click on the chart and type.
+
+00:05:36.582 --> 00:05:41.584
+Text has size, color and background, and can be pinned to the screen.
+
+00:05:42.105 --> 00:05:45.512
+Ctrl+Z undoes, Delete removes the selected drawing.
+
+00:05:45.562 --> 00:05:49.647
+Arrow keys nudge a drawing, and dragging with Ctrl copies it.
+
+00:05:50.098 --> 00:05:53.582
+Part 7. Ruler and drawing on indicators.
+
+00:05:54.400 --> 00:05:56.876
+The ruler is Alt+M or Shift+click.
+
+00:05:56.926 --> 00:06:04.678
+It shows the difference in price and percent, in ticks, bars and time, and in fractions of the daily ATR.
+
+00:06:05.181 --> 00:06:09.201
+Let’s add an indicator, with the button at the top or the slash key.
+
+00:06:09.251 --> 00:06:11.355
+We take the Relative Strength Index.
+
+00:06:11.864 --> 00:06:19.862
+You can draw in an indicator pane too: levels, lines and the ruler use the indicator values, and the magnet snaps to its line.
+
+00:06:19.912 --> 00:06:23.822
+For example, an overbought level on the RSI and a ruler on it.
+
+00:06:24.273 --> 00:06:27.325
+Part 8. Long and short positions.
+
+00:06:29.504 --> 00:06:32.851
+Long and short positions work like in TradingView.
+
+00:06:32.901 --> 00:06:35.773
+Pick the tool and click at the entry price.
+
+00:06:35.823 --> 00:06:42.975
+The stop is set automatically at 10% of the daily ATR, and the target by the R/R ratio, 5 to 1 by default.
+
+00:06:43.481 --> 00:06:50.641
+Entry, stop and target are dragged with the mouse and snap to candle prices; hold Shift to drag without the magnet.
+
+00:06:50.691 --> 00:06:52.271
+Or type them on the panel.
+
+00:06:52.776 --> 00:06:57.593
+The R/R field sets the ratio: change it to 3 and the target moves closer.
+
+00:06:57.643 --> 00:07:03.126
+With the lock on, stop and target are linked: drag the stop and the target follows.
+
+00:07:03.646 --> 00:07:07.792
+The chart shows how the trade is going, with the result in units of risk.
+
+00:07:07.842 --> 00:07:12.677
+And if you set a deposit and risk in the settings, the label shows the position size.
+
+00:07:13.182 --> 00:07:17.216
+Ctrl+C copies the position as text: entry, stop and target.
+
+00:07:17.266 --> 00:07:25.453
+And the other way round: paste such text and the position is rebuilt from it, or a new one appears if none is selected.
+
+00:07:25.903 --> 00:07:28.691
+Part 9. Quick paste and Share.
+
+00:07:30.138 --> 00:07:38.080
+The fastest way to open a setup is to paste a line from your notes or a spreadsheet: date, coin, direction and level.
+
+00:07:38.130 --> 00:07:41.496
+Copy the line and press Ctrl+V right on the chart.
+
+00:07:42.007 --> 00:07:49.021
+The terminal opens the coin, sets the direction and level, adds it to the current list and moves the charts to the date.
+
+00:07:49.537 --> 00:07:55.345
+You can paste several lines at once, and the coins go to the current list with directions and levels.
+
+00:07:55.395 --> 00:07:57.607
+There is also a “Paste as text” window.
+
+00:07:58.112 --> 00:08:06.229
+The Result column shows how far the price is from the nearest level in fractions of the daily ATR, or the result of a position if there is one.
+
+00:08:06.734 --> 00:08:10.401
+The Share button shows the nearest levels and latest positions.
+
+00:08:10.451 --> 00:08:14.472
+Tick what you need and get a link, a QR code or text for a messenger.
+
+00:08:14.522 --> 00:08:17.540
+For the recipient everything opens and draws itself.
+
+00:08:17.990 --> 00:08:20.538
+Part 10. Trade checklist.
+
+00:08:21.366 --> 00:08:23.647
+The checklist is its own tab, Alt+K.
+
+00:08:23.697 --> 00:08:29.669
+Tick the style, level type, conditions and entry, and a note appears on the chart right away.
+
+00:08:29.719 --> 00:08:31.741
+Answers are remembered per coin.
+
+00:08:32.243 --> 00:08:37.908
+The checklist text can be copied, and the “on chart” box decides whether the note is shown.
+
+00:08:37.958 --> 00:08:41.801
+The gear opens block setup: questions, answers and conditions.
+
+00:08:42.251 --> 00:08:45.351
+Part 11. ATR and indicators.
+
+00:08:46.175 --> 00:08:54.596
+The legend shows the daily ATR, the average of five previous daily candles, how much of it is used today and the stop size.
+
+00:08:54.646 --> 00:09:01.758
+The ATR table on lower intervals, with stop, target, slack and day bounds, is toggled by the ATR button.
+
+00:09:02.280 --> 00:09:13.667
+Indicators: volume, moving averages, Bollinger, VWAP, RSI, MACD, stochastic, ATR, and for futures the CDV volume delta and open interest.
+
+00:09:13.717 --> 00:09:18.342
+Parameters and colors are changed right from the legend.
+
+00:09:18.792 --> 00:09:21.268
+Part 12. Price alerts.
+
+00:09:22.086 --> 00:09:25.495
+Set an alert with a right-click on the chart or with Alt+A.
+
+00:09:25.545 --> 00:09:29.364
+Its line can be grabbed with the mouse and moved to another price.
+
+00:09:29.868 --> 00:09:36.962
+When the price reaches the level, the terminal shows a message and plays a sound, and unread alerts are counted on the bell.
+
+00:09:37.012 --> 00:09:39.209
+Alerts work while the terminal is open.
+
+00:09:39.659 --> 00:09:42.519
+Part 13. Watchlist dashboard.
+
+00:09:43.349 --> 00:09:46.886
+The dashboard opens with the toolbar button or Alt+D.
+
+00:09:46.936 --> 00:09:53.586
+At the top is a summary: coins and directions, trades, coins near a level, room to move and alerts.
+
+00:09:53.636 --> 00:09:57.443
+Below are the details, and clicking a row opens the coin.
+
+00:09:57.893 --> 00:10:02.001
+Part 14. Snapshots, settings and hotkeys.
+
+00:10:02.839 --> 00:10:11.132
+The camera saves all windows as one picture, and the button next to it copies the snapshot to the clipboard, ready to paste into a chat.
+
+00:10:11.182 --> 00:10:14.076
+The camera menu also has the active window only.
+
+00:10:14.583 --> 00:10:20.799
+Candle, background and grid colors are set separately for the light and dark themes.
+
+00:10:20.849 --> 00:10:26.020
+The interface language is switched in the settings, without reloading.
+
+00:10:26.544 --> 00:10:29.949
+All hotkeys are in the help, and search finds the one you need.
+
+00:10:29.999 --> 00:10:35.981
+Next to it are the Tutorial button with this overview and the heart, if you would like to support the project.
+
+00:10:36.431 --> 00:10:38.979
+Part 15. Device sync.
+
+00:10:39.837 --> 00:10:41.954
+Sync is turned on in the settings.
+
+00:10:42.004 --> 00:10:49.346
+Lists with directions, levels and drawings, alerts, the checklist and templates become the same on all your devices.
+
+00:10:49.864 --> 00:10:52.838
+A second device connects with the link or QR code.
+
+00:10:52.888 --> 00:11:00.034
+There is no server of our own: data is encrypted on the device and goes through public relays that only see ciphertext.
+
+00:11:00.084 --> 00:11:03.239
+The link is the key to your data, so keep it private.
+
+00:11:03.690 --> 00:11:06.742
+Part 16. The terminal on a phone.
+
+00:11:07.587 --> 00:11:13.977
+Open the sync link on your phone, and it has the same lists, levels, positions and alerts as the computer.
+
+00:11:14.484 --> 00:11:21.905
+The chart fills the screen, template windows switch with the tabs at the top, and the button next to them shows all windows at once.
+
+00:11:22.430 --> 00:11:29.252
+Under the chart is a strip with neighbouring coins of the list: arrows or a swipe step through them without leaving the chart.
+
+00:11:29.774 --> 00:11:34.718
+At the bottom are the sections: screener, lists, checklist and alerts.
+
+00:11:34.768 --> 00:11:36.787
+Tap a coin to open its chart.
+
+00:11:37.298 --> 00:11:39.372
+The pencil opens the drawing tools.
+
+00:11:39.422 --> 00:11:48.537
+Paste works without a keyboard too: copy a trade or lines with coins and press the paste button in the list, in the More menu or on the position panel.
+
+00:11:49.044 --> 00:11:54.773
+Turn the phone sideways and navigation moves to a column on the left while the chart takes the full width.
+
+00:11:54.823 --> 00:11:58.481
+The terminal can be added to the home screen and starts like an app.
+
+00:11:58.990 --> 00:11:59.537
+That’s it.
+
+00:11:59.587 --> 00:12:06.343
+Start with the screener and watchlists, add your levels, turn on sync, and come back to the rest when you need it.
+
+00:12:06.393 --> 00:12:07.179
+Happy trading!

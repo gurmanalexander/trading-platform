@@ -90,7 +90,7 @@ export default {
   'Ещё: настройки и действия': 'More: settings and actions',
   'Ещё': 'More',
   'Обновить данные': 'Refresh data',
-  'Обучение: видео-обзор': 'Tutorial: video tour (in Russian)',
+  'Обучение: видео-обзор': 'Tutorial: video tour',
   'Обзор по спискам': 'Watchlist dashboard',
   'Вставить из буфера (сделка, сетапы)': 'Paste from clipboard (trade, setups)',
   'В список «{list}»': 'Add to "{list}"',
@@ -201,8 +201,9 @@ export default {
   'Обучение': 'Tutorial',
   'Русские': 'Russian',
   'Видео не загрузилось. Проверьте соединение и откройте окно ещё раз.': 'The video did not load. Check your connection and open this window again.',
-  'Обзор идёт от простого к сложному. Выберите часть справа — видео перейдёт к ней. Субтитры включаются кнопкой в проигрывателе.':
-    'The video tour is in Russian and goes from basics to advanced. Pick a part on the right to jump to it. Russian subtitles can be turned on in the player.',
+  'Обзор идёт от простого к сложному. Выберите часть справа — видео перейдёт к ней. Субтитры выключаются кнопкой в проигрывателе.':
+    'The tour goes from basics to advanced. Pick a part on the right to jump to it. Subtitles can be turned off in the player.',
+  'Язык видео': 'Video language',
   'Части обзора': 'Tour chapters',
   // оглавление видео (public/help/chapters.json)
   'Вступление': 'Introduction',
@@ -224,7 +225,7 @@ export default {
   // HotkeysDialog
   'Горячие клавиши': 'Keyboard shortcuts',
   'Найти: «уровень», «список», «Alt»…': 'Search: "level", "list", "Alt"…',
-  'Видео-обзор терминала': 'Video tour of the terminal (in Russian)',
+  'Видео-обзор терминала': 'Video tour of the terminal',
   'или': 'or',
   'Ничего не нашлось. Попробуйте другое слово.': 'Nothing found. Try another word.',
   // lib/hotkeys.ts: группы, описания и слова в {скобках}
