@@ -90,7 +90,7 @@ export default {
   'Ещё: настройки и действия': 'More: settings and actions',
   'Ещё': 'More',
   'Обновить данные': 'Refresh data',
-  'Обучение: видео-обзор': 'Tutorial: video tour (in Russian)',
+  'Обучение: видео-обзор': 'Tutorial: video tour',
   'Обзор по спискам': 'Watchlist dashboard',
   'Вставить из буфера (сделка, сетапы)': 'Paste from clipboard (trade, setups)',
   'В список «{list}»': 'Add to "{list}"',
@@ -225,7 +225,7 @@ export default {
   // HotkeysDialog
   'Горячие клавиши': 'Keyboard shortcuts',
   'Найти: «уровень», «список», «Alt»…': 'Search: "level", "list", "Alt"…',
-  'Видео-обзор терминала': 'Video tour of the terminal (in Russian)',
+  'Видео-обзор терминала': 'Video tour of the terminal',
   'или': 'or',
   'Ничего не нашлось. Попробуйте другое слово.': 'Nothing found. Try another word.',
   // lib/hotkeys.ts: группы, описания и слова в {скобках}
