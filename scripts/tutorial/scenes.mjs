@@ -17,6 +17,32 @@ async function inChart(d, i, fx, fy) {
 }
 
 /** Закрыть окно (Escape) или выпадающее меню (оно закрывается нажатием мимо — без видимого щелчка) */
+/**
+ * Точка на цене в окне i (как в первой версии обзора — по данным графика, а не долями экрана):
+ * fx — доля ширины области цены; kind — 'close' (закрытие бара под x), 'high' / 'low' (максимум / минимум видимой части).
+ */
+async function onPrice(d, i, fx, kind) {
+  const host = await d.page.locator('.chart-host').nth(i).boundingBox()
+  const x = host.x + (host.width - 72) * fx
+  const y = await d.page.evaluate(
+    async ([i, lx, kind]) => {
+      const c = (await import('/src/chart/registry.ts')).chartAt(i)
+      const ts = c.chart.timeScale()
+      const bars = c.bars
+      const idx = Math.max(0, Math.min(bars.length - 1, Math.round(ts.coordinateToLogical(lx) ?? 0)))
+      let v = bars[idx].close
+      if (kind === 'high' || kind === 'low') {
+        const r = ts.getVisibleLogicalRange()
+        const part = bars.slice(Math.max(0, Math.floor(r.from)), Math.min(bars.length, Math.ceil(r.to)))
+        v = kind === 'high' ? Math.max(...part.map((b) => b.high)) : Math.min(...part.map((b) => b.low))
+      }
+      return c.yOf(v)
+    },
+    [i, x - host.x, kind],
+  )
+  return { x, y: host.y + Math.max(20, Math.min(host.height - 40, y ?? host.height / 2)) }
+}
+
 async function esc(d) {
   await d.page.keyboard.press('Escape')
   await d.page.evaluate(() => document.body.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true })))
@@ -463,7 +489,8 @@ async function chapters4to7(d) {
       await d.hover('.drawbar .btn >> nth=3')
       await d.sleep(500)
       await d.keys('Alt+h', 'Alt+H')
-      await d.click(await inChart(d, 0, 0.62, 0.32))
+      // уровень — по максимуму видимой части графика
+      await d.click(await onPrice(d, 0, 0.62, 'high'))
       await d.sleep(600)
     },
   )
@@ -520,8 +547,8 @@ async function chapters4to7(d) {
       await d.sleep(700)
       await d.click('.dropdown-menu .menu-item >> nth=2')
       await d.keys('Alt+t', 'Alt+T')
-      await d.click(await inChart(d, 0, 0.2, 0.75))
-      await d.click(await inChart(d, 0, 0.55, 0.55))
+      await d.click(await onPrice(d, 0, 0.2, 'close'))
+      await d.click(await onPrice(d, 0, 0.55, 'close'))
       await d.sleep(500)
       await d.click(await inChart(d, 0, 0.9, 0.9))
     },
@@ -656,7 +683,7 @@ async function chapters8to11(d) {
     ),
     async () => {
       await d.click('.drawbar .btn >> nth=10')
-      await d.click(await inChart(d, 0, 0.7, 0.55))
+      await d.click(await onPrice(d, 0, 0.7, 'close'))
       await d.sleep(900)
     },
   )

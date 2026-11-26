@@ -17,6 +17,8 @@ import edge_tts
 HERE = os.path.dirname(os.path.abspath(__file__))
 VOICES = {"ru": "ru-RU-DmitryNeural", "en": "en-US-AndrewNeural"}
 RATE = {"ru": "+4%", "en": "+0%"}
+# знаков в секунду, быстрее которых клип считается оборванным (английская речь в знаках заметно быстрее)
+MAX_CPS = {"ru": 19, "en": 25}
 
 # Как произносить то, что голос читает неверно. Субтитры не меняются — только текст для голоса.
 PRONOUNCE = {
@@ -72,7 +74,7 @@ async def one(lang, line, out_dir, failed):
         try:
             await edge_tts.Communicate(text, VOICES[lang], rate=RATE[lang], proxy=os.environ.get("HTTPS_PROXY")).save(path)
             # сервис иногда обрывает ответ: слишком короткий для своего текста клип — брак
-            if len(text) / probe(path) > 19:
+            if len(text) / probe(path) > MAX_CPS[lang]:
                 raise RuntimeError("клип оборван")
             return
         except Exception as e:  # сеть: повторяем с паузой
