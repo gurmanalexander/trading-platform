@@ -141,11 +141,17 @@ function cancel() {
 
 // ---------- отправка ----------
 
+/**
+ * Chrome на компьютере отказывает («Permission denied»), если файлов больше 10 за раз —
+ * поэтому картинки уходят пачками: каждое нажатие «Отправить» — следующая пачка.
+ */
+const SHARE_BATCH = 10
 const files = computed(() => shots.value.map((s) => new File([s.blob!], s.name + '.png', { type: 'image/png' })))
 /** Система умеет принять картинки файлами (телефон, часть браузеров на компьютере) */
 const canShareFiles = computed(() => {
   try {
-    return !!navigator.canShare && files.value.length > 0 && navigator.canShare({ files: files.value })
+    // проверяем на одной пачке: все сразу некоторые браузеры не примут, а пачками — да
+    return !!navigator.canShare && files.value.length > 0 && navigator.canShare({ files: files.value.slice(0, SHARE_BATCH) })
   } catch {
     return false
   }
@@ -163,11 +169,6 @@ async function copyText(silent = false) {
   }
 }
 
-/**
- * Chrome на компьютере отказывает («Permission denied»), если файлов больше 10 за раз —
- * поэтому картинки уходят пачками: каждое нажатие «Отправить» — следующая пачка.
- */
-const SHARE_BATCH = 10
 /** Сколько картинок уже передано */
 const sentCount = ref(0)
 const leftCount = computed(() => Math.max(0, files.value.length - sentCount.value))
