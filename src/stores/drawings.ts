@@ -1,7 +1,7 @@
 import { reactive, ref } from 'vue'
 import { load, persist } from '../lib/storage'
 
-export type DrawingType = 'trend' | 'ray' | 'hline' | 'hray' | 'vline' | 'cross' | 'rect' | 'fib' | 'long' | 'short' | 'text' | 'measure'
+export type DrawingType = 'trend' | 'ray' | 'hline' | 'hray' | 'vline' | 'cross' | 'rect' | 'fib' | 'long' | 'short' | 'text' | 'measure' | 'brush'
 export type Dash = 'solid' | 'dashed' | 'dotted'
 /** На каких интервалах рисунок виден: на всех, только внутри дня (< 1Д) или только от дня и старше */
 export type Visibility = 'all' | 'intraday' | 'daily'
@@ -75,7 +75,9 @@ const BASE_STYLE: DrawStyle = { color: '#4c8dff', width: 1, dash: 'solid' }
 export const drawDefaults = reactive<Record<string, DrawStyle>>(load('drawDefaults', {}))
 persist('drawDefaults', drawDefaults, () => drawDefaults)
 
-export const styleFor = (type: DrawingType): DrawStyle => ({ ...BASE_STYLE, ...drawDefaults[type] })
+/** карандашом рисуют поверх свечей — линия по умолчанию потолще, чтобы её было видно */
+const TYPE_STYLE: Partial<Record<DrawingType, Partial<DrawStyle>>> = { brush: { width: 2 } }
+export const styleFor = (type: DrawingType): DrawStyle => ({ ...BASE_STYLE, ...TYPE_STYLE[type], ...drawDefaults[type] })
 export function setDefaultStyle(type: DrawingType, style: DrawStyle) {
   drawDefaults[type] = {
     color: style.color,

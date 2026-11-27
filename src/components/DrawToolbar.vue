@@ -21,6 +21,7 @@ const TOOLS: { id: Tool; label: string; sep?: boolean }[] = [
   { id: 'rect', label: 'Прямоугольник (Alt+Shift+R)' },
   { id: 'fib', label: 'Уровни Фибоначчи (Alt+F)' },
   { id: 'text', label: 'Текст' },
+  { id: 'brush', label: 'Карандаш (Alt+B)' },
   { id: 'long', label: 'Длинная позиция', sep: true },
   { id: 'short', label: 'Короткая позиция' },
   { id: 'measure', label: 'Линейка (Alt+M или Shift+щелчок)', sep: true },

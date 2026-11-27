@@ -17,7 +17,7 @@ export const MOBILE_TABS: { id: MobileTab; label: string; icon: string }[] = [
   { id: 'checklist', label: 'Чеклист', icon: 'checklist' },
   { id: 'alerts', label: 'Оповещения', icon: 'bell' },
 ]
-export type Tool = 'cursor' | 'trend' | 'ray' | 'hline' | 'hray' | 'vline' | 'cross' | 'rect' | 'fib' | 'long' | 'short' | 'text' | 'measure'
+export type Tool = 'cursor' | 'trend' | 'ray' | 'hline' | 'hray' | 'vline' | 'cross' | 'rect' | 'fib' | 'long' | 'short' | 'text' | 'measure' | 'brush'
 export type Theme = 'dark' | 'light'
 /** Магнит, как в TradingView: слабый притягивает только вблизи цены свечи, сильный — всегда к ближайшей */
 export type MagnetMode = 'off' | 'weak' | 'strong'

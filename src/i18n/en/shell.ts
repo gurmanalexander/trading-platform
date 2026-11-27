@@ -277,6 +277,7 @@ export default {
   'Вертикальная линия': 'Vertical line',
   'Уровни Фибоначчи': 'Fibonacci retracement',
   'Прямоугольник': 'Rectangle',
+  'Карандаш: рисовать от руки, пока не нажмёте Esc': 'Pencil: draw freehand until you press Esc',
   'Линейка: щелчок — начало, щелчок — конец; Alt+M ещё раз или Esc — убрать': 'Ruler: click for start, click for end; Alt+M again or Esc to remove',
   'Перекрестие с магнитом: притягивается к открытию, хаю, лою и закрытию свечи': 'Magnet crosshair: snaps to the candle open, high, low and close',
   'Отменить рисование, убрать линейку': 'Cancel drawing, remove the ruler',

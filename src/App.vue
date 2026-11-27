@@ -100,7 +100,7 @@ const topBar = computed(() => !app.zen && !phoneWide.value && onChart.value)
 
 // ---------- горячие клавиши ----------
 
-const ALT_TOOLS: Record<string, Tool> = { KeyT: 'trend', KeyH: 'hline', KeyJ: 'hray', KeyV: 'vline', KeyC: 'cross', KeyF: 'fib' }
+const ALT_TOOLS: Record<string, Tool> = { KeyT: 'trend', KeyH: 'hline', KeyJ: 'hray', KeyV: 'vline', KeyC: 'cross', KeyF: 'fib', KeyB: 'brush' }
 
 function addToWatchlist() {
   const s = activePane.value.symbol
