@@ -76,13 +76,15 @@ ATR toolkit, screener, watchlists and alerts — no sign-up, no ads, no API keys
   scales; grid and time labels continue into the future; last price colored by the last bar with a candle countdown;
   time zone selector (device time by default).
 - **Drawing tools:** trend line, ray, horizontal line and ray, vertical line, cross, rectangle, Fibonacci, long/short
-  position, text, ruler (`Alt+M`). Magnet with off / weak / strong modes and a magnet crosshair (`Alt+Shift+M`)
+  position, text, freehand pencil (`Alt+B`), ruler (`Alt+M`). Magnet with off / weak / strong modes and a magnet crosshair (`Alt+Shift+M`)
   that snaps to candle OHLC. Per-timeframe visibility like TradingView (pick any set of timeframes, whole groups, or presets), undo/redo, copy/paste, keyboard nudging. Lines, shapes and
   the ruler also work in indicator panes (RSI, MACD, OI…), in the indicator's own values.
 - **ATR toolkit:** daily ATR, how much of it is spent, stop / target / slack from daily and 5-minute ATR,
   daily range bounds.
 - **Trade checklist** next to the chart, remembered per coin, can be pinned to the chart as a note.
 - **Price alerts:** in-app, sound, vibration, browser notifications; drag the alert line on the chart.
+- **Chart view on symbol change:** like TradingView, a new symbol keeps the zoom and position. Drag the chart in any
+  direction (vertical drag turns off auto-scale). "Separate zoom for each symbol" in the View window remembers the view per symbol and interval.
 - **Quick input:** start typing to search a symbol, type digits for an interval, paste a setup line
   like `10.11.2026 #1000PEPEUSDT Long 0.0053656` to open it with direction and level.
 - **Share:** a link or QR code with levels and positions; share a whole watchlist as chart images to Telegram.
@@ -131,7 +133,7 @@ Want to look first? The journal has built-in demo data.
 | --- | --- |
 | Search a symbol / change interval | start typing letters / digits (`5`, `15`, `1h`, `4h`, `D`) |
 | Next / previous coin in the list | `↓` / `↑` |
-| Horizontal line, trend line, ruler | `Alt+H`, `Alt+T`, `Alt+M` |
+| Horizontal line, trend line, pencil, ruler | `Alt+H`, `Alt+T`, `Alt+B`, `Alt+M` |
 | Magnet crosshair | `Alt+Shift+M` |
 | Add to watchlist, alert, checklist | `Alt+W`, `Alt+A`, `Alt+K` |
 | Undo / redo, copy / paste drawing | `Ctrl+Z` / `Ctrl+Y`, `Ctrl+C` / `Ctrl+V` |

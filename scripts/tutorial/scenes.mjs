@@ -159,11 +159,15 @@ export async function desktop(d) {
   // ---------- 2 ----------
   await d.chapter(2, ru('График и его вид', 'The chart and its look'))
   await d.say(
-    ru('График двигается мышью, а колесо меняет масштаб по времени.', 'Drag the chart with the mouse, and the wheel zooms the time scale.'),
+    ru(
+      'График двигается мышью во все стороны, а колесо меняет масштаб по времени.',
+      'Drag the chart with the mouse in any direction, and the wheel zooms the time scale.',
+    ),
     async () => {
       const a = await inChart(d, 0, 0.6, 0.5)
       await d.drag(a, { x: a.x - 260, y: a.y + 10 }, 900)
       await d.drag({ x: a.x - 260, y: a.y }, a, 700)
+      await d.drag(a, { x: a.x, y: a.y + 80 }, 700)
       await d.wheel(-120, 4)
       await d.sleep(400)
       await d.wheel(120, 4)
@@ -171,8 +175,8 @@ export async function desktop(d) {
   )
   await d.say(
     ru(
-      'Колесо над ценовой шкалой растягивает график по вертикали, кнопка «авто» возвращает обычный масштаб. Вид, настроенный вручную, запоминается для монеты и интервала.',
-      'The wheel over the price scale stretches the chart vertically, and the “auto” button resets the scale. A view you set up by hand is remembered for the coin and interval.',
+      'Колесо над ценовой шкалой растягивает график по вертикали, кнопка «авто» возвращает обычный масштаб. Другая монета открывается в том же масштабе и на том же месте.',
+      'The wheel over the price scale stretches the chart vertically, and the “auto” button resets the scale. Another coin opens with the same zoom and position.',
     ),
     async () => {
       const host = await d.page.locator('.chart-host').first().boundingBox()
@@ -559,7 +563,7 @@ async function chapters4to7(d) {
       'The Text tool: click on the chart and type. Text has size, color and background, and can be pinned to the screen.',
     ),
     async () => {
-      await d.click('.drawbar .btn >> nth=9')
+      await d.click(`.drawbar .btn[title="${d.T('Текст')}"]`)
       await d.click(await inChart(d, 0, 0.62, 0.12))
       await d.sleep(500)
       await d.type(d.L(ru('Жду пробой уровня', 'Waiting for a breakout')), 60)
@@ -583,6 +587,40 @@ async function chapters4to7(d) {
       await d.keys('Control+z', 'Ctrl+Z')
       await d.sleep(500)
       await d.click(await inChart(d, 0, 0.9, 0.9))
+    },
+  )
+  await d.say(
+    ru(
+      'Карандаш — Alt+B — рисует от руки: обвести участок, показать стрелкой. Он остаётся в руке, пока не нажмёте Esc, а штрих двигается и красится, как любой рисунок.',
+      'The pencil, Alt+B, draws freehand: circle an area or sketch an arrow. It stays active until you press Esc, and a stroke moves and changes color like any drawing.',
+    ),
+    async () => {
+      await d.keys('Alt+b', 'Alt+B')
+      const c = await inChart(d, 0, 0.45, 0.45)
+      // овал вокруг участка
+      await d.move(c.x + 70, c.y, 300)
+      await d.page.mouse.down()
+      for (let i = 1; i <= 48; i++) {
+        const a = (i / 48) * Math.PI * 2
+        await d.move(c.x + Math.cos(a) * 70, c.y + Math.sin(a) * 40, 25)
+      }
+      await d.page.mouse.up()
+      // стрелка к нему
+      await d.move(c.x + 190, c.y - 90, 300)
+      await d.page.mouse.down()
+      await d.move(c.x + 85, c.y - 20, 500)
+      await d.move(c.x + 110, c.y - 22, 150)
+      await d.page.mouse.up()
+      await d.move(c.x + 85, c.y - 20, 300)
+      await d.page.mouse.down()
+      await d.move(c.x + 95, c.y - 45, 150)
+      await d.page.mouse.up()
+      await d.sleep(600)
+      await d.keys('Escape', 'Esc')
+      await d.sleep(800)
+      await d.keys('Control+z', 'Ctrl+Z')
+      await d.keys('Control+z', 'Ctrl+Z')
+      await d.keys('Control+z', 'Ctrl+Z')
     },
   )
 
@@ -682,7 +720,7 @@ async function chapters8to11(d) {
       'Long and short positions work like in TradingView. Pick the tool and click at the entry price. The stop is set automatically at 10% of the daily ATR, and the target by the R/R ratio, 5 to 1 by default.',
     ),
     async () => {
-      await d.click('.drawbar .btn >> nth=10')
+      await d.click(`.drawbar .btn[title="${d.T('Длинная позиция')}"]`)
       await d.click(await onPrice(d, 0, 0.7, 'close'))
       await d.sleep(900)
     },

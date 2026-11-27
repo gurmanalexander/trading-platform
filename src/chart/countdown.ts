@@ -17,6 +17,8 @@ export interface CountdownHost {
    * чужую цену. В TradingView метка — всегда текущая цена, цветом последнего бара.
    */
   priceText(price: number): string | null
+  /** false — график удалён: таймер останавливается (при удалении графика библиотека примитив не отключает) */
+  alive(): boolean
 }
 
 /**
@@ -49,6 +51,10 @@ export function countdownPrimitive(host: CountdownHost): ISeriesPrimitive<Time> 
   return {
     attached: ({ requestUpdate }) => {
       timer = window.setInterval(() => {
+        if (!host.alive()) {
+          clearInterval(timer)
+          return
+        }
         if (host.enabled() && document.visibilityState === 'visible') requestUpdate()
       }, 1000)
     },

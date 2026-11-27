@@ -30,6 +30,7 @@ const LUCIDE = {
   cursor: 'mouse-pointer-2',
   rect: 'rectangle-horizontal',
   measure: 'ruler',
+  brush: 'pencil-line',
   magnet: 'magnet',
   pencil: 'pencil',
   list: 'list',

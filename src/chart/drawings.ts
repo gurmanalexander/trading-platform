@@ -11,6 +11,7 @@ import { textOn } from '../lib/color'
 import { lowerBound } from './bars'
 import { evaluatePosition, fmtQty, fmtR, fmtUsd, movePositionHandle, positionSize, riskReward, setPositionPrices } from './position'
 import { STOP_PART } from '../lib/atr'
+import { distToSegment, simplifyPath } from '../lib/path'
 
 /** Что слою рисунков нужно знать о графике */
 export interface DrawHost {
@@ -96,6 +97,11 @@ export const hasLineStyle = (t: DrawingType) => !isPosition(t) && t !== 'measure
 export const TEXT_SIZES = [10, 12, 14, 18, 24]
 export const hasText = (t: DrawingType) => t === 'hline' || t === 'hray' || t === 'trend' || t === 'ray' || t === 'rect'
 const uid = () => Math.random().toString(36).slice(2, 10)
+/** карандаш: следующая точка штриха — не ближе этого к прошлой, px */
+const BRUSH_STEP = 2
+/** карандаш: при сохранении убираются точки, отклоняющиеся от прямой меньше этого, px */
+const BRUSH_TOLERANCE = 0.6
+
 
 // Новая позиция: стоп — 10% дневного ATR, цель — вчетверо дальше (как в индикаторе, см. lib/atr.ts)
 const STOP_ATR = STOP_PART
@@ -110,14 +116,6 @@ const axisLabel = (coordinate: number, text: string, bg: string): ISeriesPrimiti
   backColor: () => bg,
 })
 
-function distToSegment(px: number, py: number, a: XY, b: XY): number {
-  const dx = b.x - a.x
-  const dy = b.y - a.y
-  const len2 = dx * dx + dy * dy
-  let t = len2 ? ((px - a.x) * dx + (py - a.y) * dy) / len2 : 0
-  t = Math.max(0, Math.min(1, t))
-  return Math.hypot(px - (a.x + t * dx), py - (a.y + t * dy))
-}
 
 /** Конец луча: продолжение a→b до границы области w×h */
 function rayEnd(a: XY, b: XY, w: number, h: number): XY {
@@ -322,8 +320,8 @@ export class DrawingsLayer {
         addPrice(d.pts[1].p, c.profit)
         addPrice(d.pts[2].p, c.loss)
         if (active) addPrice(d.pts[0].p, c.crossLabel)
-      } else if (active && d.type !== 'vline' && d.type !== 'text') d.pts.forEach((p) => addPrice(p.p, d.color))
-      if (active && d.type !== 'hline' && d.type !== 'text') {
+      } else if (active && d.type !== 'vline' && d.type !== 'text' && d.type !== 'brush') d.pts.forEach((p) => addPrice(p.p, d.color))
+      if (active && d.type !== 'hline' && d.type !== 'text' && d.type !== 'brush') {
         addTime(d.pts[0].t)
         if (d.pts.length > 1 && d.pts[1].t !== d.pts[0].t) addTime(d.pts[1].t)
       }
@@ -356,6 +354,34 @@ export class DrawingsLayer {
     return x0 == null ? null : x0 + (lg - base) * ts.options().barSpacing
   }
 
+  /** Координата времени без привязки к свече — для штриха карандаша, который идёт и между свечами */
+  private xExact(t: number): number | null {
+    const raw = this.host.timeToLogical(t)
+    if (raw == null) return null
+    const ts = this.host.chart.timeScale()
+    const base = Math.min(this.host.bars().length - 1, Math.max(0, Math.round(raw)))
+    const x0 = ts.logicalToCoordinate(base as Logical)
+    return x0 == null ? null : x0 + (raw - base) * ts.options().barSpacing
+  }
+
+  /**
+   * Точка карандаша: точно под курсором, без магнита и без привязки к свече. Время — дробное:
+   * внутри промежутка между свечами, поэтому штрих не ступенчатый и на любом интервале встаёт на место.
+   */
+  private freePoint(x: number, y: number): Pt | null {
+    // библиотека отдаёт номер свечи целым — дробную часть досчитываем от центра этой свечи
+    const ts = this.host.chart.timeScale()
+    const base = ts.coordinateToLogical(x)
+    const bx = base == null ? null : ts.logicalToCoordinate(base)
+    const price = this.sf.series.coordinateToPrice(y) as number | null
+    if (base == null || bx == null || price == null) return null
+    const lg = base + (x - bx) / ts.options().barSpacing
+    const i = Math.floor(lg)
+    const t0 = this.host.logicalToTime(i)
+    const t = t0 + (lg - i) * (this.host.logicalToTime(i + 1) - t0)
+    return { t: Math.round(t * 1000) / 1000, p: +price.toFixed(this.sf.precision + 2) }
+  }
+
   /**
    * Время, на котором точку показывать на этом графике. Точку ставили на старшем интервале — ищем
    * внутри той свечи младшую, где цена точки была хаем или лоу: луч, проведённый через хай часовой
@@ -373,8 +399,8 @@ export class DrawingsLayer {
     return p.t
   }
 
-  private toScreen(p: Pt): XY | null {
-    const x = this.xOf(this.anchorTime(p))
+  private toScreen(p: Pt, exact = false): XY | null {
+    const x = exact ? this.xExact(p.t) : this.xOf(this.anchorTime(p))
     const y = this.sf.series.priceToCoordinate(p.p)
     if (x == null || y == null) return null
     return { x, y }
@@ -430,10 +456,13 @@ export class DrawingsLayer {
       }
       return { sp: [at], handles: [at] }
     }
-    const s = d.pts.map((p) => this.toScreen(p))
+    const s = d.pts.map((p) => this.toScreen(p, d.type === 'brush'))
     if (s.some((p) => !p)) return null
     const sp = s as XY[]
     switch (d.type) {
+      case 'brush':
+        // у штриха нет маркеров: тянут его целиком
+        return { sp, handles: [] }
       case 'hline':
         // маркер уровня — у правого края, как в TradingView: не закрывает свечи в середине экрана
         return { sp, handles: [{ x: Math.max(w / 2, w - HLINE_HANDLE_INSET), y: sp[0].y }] }
@@ -651,6 +680,16 @@ export class DrawingsLayer {
     // позиция — про цену инструмента: в панели индикатора её не ставим
     if (at.s.key && !this.draft && isPosition(tool)) return
     this.within(at.s, () => {
+      if (tool === 'brush') {
+        const pt = this.freePoint(x, at.y)
+        if (!pt) return
+        this.measure = null
+        this.draft = this.newDrawing('brush', [pt], at.s.key)
+        this.downAt = { x, y }
+        this.pressing = true
+        this.redraw()
+        return
+      }
       const pt = this.toPoint(x, at.y, this.snapRadius(app.magnet, tool === 'measure'))
       if (!pt) return
       this.measure = null
@@ -684,6 +723,23 @@ export class DrawingsLayer {
   }
 
   private toolMoveIn(x: number, y: number, isMouse: boolean) {
+    if (app.tool === 'brush' || this.draft?.type === 'brush') {
+      const d = this.draft
+      if (!d || !this.pressing) {
+        if (isMouse) {
+          // перекрестие — на свече под курсором, как у других инструментов (без магнита)
+          const pt = this.toPoint(x, y, 0)
+          if (pt) this.syncCrosshair(pt)
+        }
+        return
+      }
+      const last = this.toScreen(d.pts[d.pts.length - 1], true)
+      if (last && Math.hypot(x - last.x, y - last.y) < BRUSH_STEP) return
+      const pt = this.freePoint(x, y)
+      if (pt) d.pts.push(pt)
+      this.redraw()
+      return
+    }
     const pt = this.toPoint(x, y, this.snapRadius(app.magnet, app.tool === 'measure' || this.draft?.type === 'measure'))
     if (!pt) return
     if (isMouse) this.syncCrosshair(pt)
@@ -712,6 +768,12 @@ export class DrawingsLayer {
     this.pressing = false
     const d = this.draft
     if (!d) return
+    if (d.type === 'brush') {
+      // щелчок без движения — не рисунок
+      if (d.pts.length > 1) this.commit()
+      else this.cancelDraft()
+      return
+    }
     // протянули — фигура готова; просто щёлкнули — ждём второй щелчок
     if (isSingle(d.type) || isPosition(d.type) || Math.hypot(x - this.downAt.x, y - this.downAt.y) > 8) this.commit()
   }
@@ -721,6 +783,20 @@ export class DrawingsLayer {
     this.draft = null
     this.pressing = false
     if (!d) return
+    if (d.type === 'brush') {
+      // лишние точки не нужны ни в хранилище, ни в истории отмены
+      const surface = this.surfaceOf(d)
+      if (surface)
+        this.within(surface, () => {
+          const sp = d.pts.map((p) => this.toScreen(p, true))
+          if (sp.every(Boolean)) d.pts = simplifyPath(sp as XY[], BRUSH_TOLERANCE).map((i) => d.pts[i])
+        })
+      checkpoint()
+      this.list.push(d)
+      // карандаш остаётся в руке: можно рисовать следующий штрих; выход — Esc или курсор
+      this.redraw()
+      return
+    }
     if (d.type === 'measure') {
       this.measure = d
     } else {
@@ -863,6 +939,12 @@ export class DrawingsLayer {
       const snap = this.toPoint(x, g.orig[0].y + dy, magnet)
       const own = g.d.type === 'hray' ? this.toPoint(g.orig[0].x + dx, g.orig[0].y + dy, 0) : null
       if (snap) g.d.pts[0] = { t: own?.t ?? g.d.pts[0].t, p: snap.p }
+    } else if (g.d.type === 'brush') {
+      // штрих двигается целиком, без магнита — иначе каждая точка прилипла бы к своей свече
+      g.orig.forEach((o, i) => {
+        const pt = this.freePoint(o.x + dx, o.y + dy)
+        if (pt) g.d.pts[i] = pt
+      })
     } else {
       g.orig.forEach((o, i) => {
         const pt = this.toPoint(o.x + dx, o.y + dy, magnet)
@@ -1184,6 +1266,8 @@ export class DrawingsLayer {
       }
       case 'trend':
         return distToSegment(x, y, sp[0], sp[1]) <= tol
+      case 'brush':
+        return sp.some((p, i) => i > 0 && distToSegment(x, y, sp[i - 1], p) <= tol + (d.width ?? 1) / 2)
       case 'ray':
         return distToSegment(x, y, sp[0], rayEnd(sp[0], sp[1], size.width, size.height)) <= tol
       case 'rect':
@@ -1282,6 +1366,18 @@ export class DrawingsLayer {
     const crisp = (v: number) => (width % 2 ? Math.round(v) + 0.5 : Math.round(v))
 
     switch (d.type) {
+      case 'brush': {
+        ctx.lineCap = 'round'
+        ctx.beginPath()
+        ctx.moveTo(sp[0].x, sp[0].y)
+        // одна точка (только начали) — видна кружком
+        if (sp.length === 1) ctx.lineTo(sp[0].x + 0.01, sp[0].y)
+        for (let i = 1; i < sp.length; i++) ctx.lineTo(sp[i].x, sp[i].y)
+        ctx.stroke()
+        ctx.lineCap = 'butt'
+        // у штриха нет маркеров; точки нужны, чтобы поставить панель действий у выбранного
+        return sp
+      }
       case 'trend':
         line(sp[0], sp[1])
         if (d.text) label(d.text, (sp[0].x + sp[1].x) / 2, (sp[0].y + sp[1].y) / 2 - 4, 'center')

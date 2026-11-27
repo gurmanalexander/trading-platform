@@ -128,6 +128,7 @@ export default {
   'Прямоугольник (Alt+Shift+R)': 'Rectangle (Alt+Shift+R)',
   'Уровни Фибоначчи (Alt+F)': 'Fib retracement (Alt+F)',
   'Текст': 'Text',
+  'Карандаш (Alt+B)': 'Pencil (Alt+B)',
   'Длинная позиция': 'Long position',
   'Короткая позиция': 'Short position',
   'Линейка (Alt+M или Shift+щелчок)': 'Ruler (Alt+M or Shift+click)',

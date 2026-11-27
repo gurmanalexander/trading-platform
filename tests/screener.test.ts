@@ -176,6 +176,32 @@ describe('списки наблюдения', () => {
     w.lists.filter = 'all'
   })
 
+  it('направление по позиции на графике можно снять; новая позиция возвращает его', async () => {
+    const w = await import('../src/stores/watchlist')
+    const { drawings, addDrawing } = await import('../src/stores/drawings')
+    const { nextTick } = await import('vue')
+    const item = row('POSUSDT', 1, 0, 0)
+    const key = 'binance:futures:POSUSDT'
+    const pos = (id: string, type: 'long' | 'short', t: number) => ({ id, type, color: '#fff', pts: [{ t, p: 1 }, { t: t + 60, p: 2 }, { t, p: 0.5 }] })
+    addDrawing(key, pos('p1', 'long', 100))
+    expect(w.sideOf(item)).toBe('long')
+    w.cycleSide(item)
+    expect(w.sideOf(item)).toBe('short')
+    w.cycleSide(item)
+    expect(w.sideOf(item)).toBeNull()
+    await nextTick()
+    // позиция осталась на графике, а направление снято
+    expect(drawings[key]).toHaveLength(1)
+    expect(w.sideOf(item)).toBeNull()
+    addDrawing(key, pos('p2', 'short', 200))
+    await nextTick()
+    expect(w.sideOf(item)).toBe('short')
+    // по кругу от видимого: шорт → нет → лонг
+    w.cycleSide(item)
+    w.cycleSide(item)
+    expect(w.sideOf(item)).toBe('long')
+  })
+
   it('монета добавляется в выбранный список и убирается из него', async () => {
     const w = await import('../src/stores/watchlist')
     const item = row('PICKUSDT', 1, 0, 0)

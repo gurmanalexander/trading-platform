@@ -1,9 +1,9 @@
 import { symbolKey, type SymbolRef } from '../types'
 import { app, paneCount, theme, type PaneState } from '../stores/app'
-import { alerts } from '../stores/alerts'
 import { drawings } from '../stores/drawings'
 import { chartColors } from './theme'
 import { ChartController, snapshotName } from './controller'
+import { chartAt } from './registry'
 
 /** Снимок монеты: все окна текущей раскладки одной картинкой */
 export interface CoinShot {
@@ -28,8 +28,8 @@ const frames = (ms: number) =>
   Promise.race([new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r()))).then(() => sleep(ms / 2)), sleep(ms * 2)])
 
 /**
- * Рисует монеты по очереди на графиках вне экрана: раскладка, интервалы, вид графиков и индикаторы —
- * как сейчас в окнах, рисунки и запомненный вид — как у каждой монеты. То, что на экране, не трогается.
+ * Рисует монеты по очереди на графиках вне экрана: раскладка, интервалы, вид графиков, индикаторы,
+ * масштаб и место по времени — как сейчас в окнах, рисунки — как у каждой монеты. То, что на экране, не трогается.
  * step вызывается перед каждой монетой; вернул false — остановиться.
  */
 export async function renderCoins(refs: SymbolRef[], step: (index: number, ref: SymbolRef) => boolean): Promise<CoinShot[]> {
@@ -54,6 +54,12 @@ export async function renderCoins(refs: SymbolRef[], step: (index: number, ref: 
   // свои копии настроек окон: инструмент меняется здесь, а не в окнах на экране
   const panes: PaneState[] = app.panes.slice(0, paneCount.value).map((p) => JSON.parse(JSON.stringify(p)))
   const charts = cells.map((cell, i) => new ChartController(cell, panes[i], 1000 + i, { live: false }))
+  // масштаб и место окон — как сейчас на экране (как при смене монеты в TradingView);
+  // со «своим масштабом у каждой монеты» — запомненный вид монеты, а без него обычный
+  const screen = panes.map((_, i) => {
+    const ts = app.view.coinView ? null : chartAt(i)?.chart.timeScale()
+    return ts ? { spacing: ts.options().barSpacing, offset: ts.scrollPosition() } : null
+  })
   const out: CoinShot[] = []
   try {
     await frames(60)
@@ -61,15 +67,16 @@ export async function renderCoins(refs: SymbolRef[], step: (index: number, ref: 
       const ref = refs[i]
       if (!step(i, ref)) break
       const key = symbolKey(ref)
-      const prices = alerts.filter((a) => a.active && symbolKey(a.ref) === key).map((a) => a.price)
       await Promise.all(
         charts.map((c, k) => {
           panes[k].symbol = { exchange: ref.exchange, market: ref.market, symbol: ref.symbol }
           c.draw.setList(drawings[key] ?? [])
-          c.setAlertLines(prices)
-          // масштаб прошлой монеты не переносится: у этой либо свой запомненный вид, либо обычный
-          c.chart.timeScale().applyOptions({ barSpacing: 8 })
-          return c.load()
+          // масштаб прошлой монеты не переносится: он берётся с экрана либо из вида этой монеты
+          c.chart.timeScale().applyOptions({ barSpacing: screen[k]?.spacing ?? 8 })
+          return c.load().then(() => {
+            const v = screen[k]
+            if (v) c.chart.timeScale().scrollToPosition(v.offset, false)
+          })
         }),
       )
       const ok = charts.some((c) => c.bars.length > 0 && !c.ui.error)
