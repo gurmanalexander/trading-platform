@@ -307,4 +307,6 @@ export default {
   'Звезда на GitHub': 'Star on GitHub',
   'Не готовы донатить? Поставьте звёздочку на GitHub — это тоже помогает': 'Not ready to donate? Star tvx on GitHub — it helps too',
   'Рисовать и тянуть рисунок без магнита': 'Draw and drag without the magnet',
+  'Журнал сделок': 'Trading journal',
+  'Журнал сделок: статистика по вашим сделкам на бирже': 'Trading journal: statistics on your exchange trades',
 } satisfies Record<string, string>

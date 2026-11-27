@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#0f1217" />
+    <meta name="color-scheme" content="dark light" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="tvx journal" />
+    <link rel="icon" type="image/svg+xml" href="./icon.svg" />
+    <link rel="apple-touch-icon" href="./icon-180.png" />
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <title>tvx journal — free trading journal for Binance &amp; Bybit</title>
+    <meta name="description" content="Free serverless trading journal for Binance and Bybit futures: PnL, win rate, drawdown, fees, calendar and per-coin statistics. Read-only API keys stay in a browser extension on your computer; encrypted sync to your phone." />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="tvx" />
+    <meta property="og:title" content="tvx journal — free trading journal for Binance &amp; Bybit" />
+    <meta property="og:description" content="PnL, win rate, drawdown, calendar and per-coin statistics from your exchange history. No server, no sign-up; API keys never leave your computer." />
+    <script>
+      // тема до первой отрисовки: выбранная в журнале, иначе как в tvx, иначе как в системе
+      var t
+      try {
+        t = JSON.parse(localStorage.getItem('tvx:j:theme') || '""') || JSON.parse(localStorage.getItem('tvx:app') || '{}').themePref
+      } catch (e) {}
+      if (t !== 'dark' && t !== 'light') t = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+      document.documentElement.dataset.theme = t
+    </script>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="./src/main.ts"></script>
+  </body>
+</html>
