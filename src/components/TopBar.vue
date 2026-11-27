@@ -378,6 +378,7 @@ loadStars()
     <button v-if="!isPhone" class="btn donate" :class="{ pulse: donate.pulse }" :title="t('Поддержать проект')" :aria-label="t('Поддержать проект')" @click="app.donateOpen = true">
       <Icon name="heart" />
     </button>
+    <a v-if="!isPhone" class="btn" href="./journal/" :title="t('Журнал сделок: статистика по вашим сделкам на бирже')" :aria-label="t('Журнал сделок: статистика по вашим сделкам на бирже')"><Icon name="trendUp" /></a>
     <button v-if="!isPhone" class="btn" :title="t('Обучение: видео-обзор терминала')" @click="app.tutorialOpen = true"><Icon name="learn" /></button>
     <button v-if="!isPhone" class="btn" :title="t('Горячие клавиши (?)')" @click="app.hotkeysOpen = true"><Icon name="keyboard" /></button>
     <button v-if="!isPhone" class="btn" :class="{ on: app.panelOpen }" :title="t('Боковая панель')" @click="togglePanel(app.panel)">

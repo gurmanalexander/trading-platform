@@ -3,3 +3,7 @@ dist
 *.local
 .DS_Store
 scripts/tutorial/out/
+dist-extension
+dist-extension.zip
+dist-extension-*
+.e2e
