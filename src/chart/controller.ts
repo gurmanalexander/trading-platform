@@ -856,6 +856,7 @@ export class ChartController {
         colors: () => (isOhlc(this.pane.chartType) ? this.colors : { up: this.colors.line, down: this.colors.line }),
         // в процентной шкале метку подписывает библиотека — в процентах
         priceText: (p) => (this.pane.scale === 'percent' ? null : this.main.priceFormatter().format(p)),
+        alive: () => !this.disposed,
       }),
     )
     s.applyOptions({ lastValueVisible: this.pane.scale === 'percent' })
