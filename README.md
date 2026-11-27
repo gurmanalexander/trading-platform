@@ -104,16 +104,26 @@ history into statistics — with no server and no sign-up, in the same spirit as
   and the full list of trades with tags, notes and CSV export. Every trade opens on the tvx chart at its entry day.
 - **How it connects.** Exchanges reject keyed requests sent straight from a web page, so the keys live in a small
   browser extension, **tvx bridge**. It signs read-only requests and hands the journal finished trades only.
+- **Works in the background.** While the browser is open, the bridge loads new trades by itself every few minutes —
+  the journal tab can stay closed. With sync on, it also sends them to your other devices.
 - **Security.** The bridge accepts **read-only keys only** — it checks the key's permissions on the exchange and
   rejects one that can trade or withdraw; it has no order code at all. The secret is stored as a non-extractable
-  signing key, the extension may connect to exchange hosts only, and the journal site never sees the keys.
+  signing key, keyed requests go to exchange hosts only, and the journal site never sees the keys.
 - **Phone.** Trades, notes and account state sync end-to-end encrypted over the same Nostr relays (and the same sync
   code) as the terminal. The phone needs no extension and never receives the keys.
 - **Supported now:** Binance USDⓈ-M Futures (the exchange serves the last 3 months), Bybit USDT/USDC perpetuals
   (2 years). Everything loaded stays in the journal for good.
 
-Install the bridge: download `tvx-bridge.zip` from the journal's **Accounts** tab, unzip it, open `chrome://extensions`,
-turn on Developer mode and click **Load unpacked**. Want to look first? The journal has built-in demo data.
+Install the bridge from the journal's **Accounts** tab:
+
+- **Chrome, Edge, Brave, Opera, Vivaldi, Yandex Browser:** download `tvx-bridge.zip`, unzip it, open
+  `chrome://extensions`, turn on Developer mode and click **Load unpacked**.
+- **Firefox:** download `tvx-bridge-firefox.zip`, open `about:debugging#/runtime/this-firefox` and click
+  **Load Temporary Add-on**. It works until Firefox restarts — a permanent install needs the add-on signed by Mozilla.
+  The Firefox build has not been tested in a real Firefox yet.
+- **Safari:** no build — Apple accepts extensions only through Xcode and a paid developer account.
+
+Want to look first? The journal has built-in demo data.
 
 ## Keyboard shortcuts
 

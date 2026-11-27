@@ -31,11 +31,30 @@ export function createMock(opts = {}) {
   /** счётчик запросов по путям — для тестов */
   const calls = {}
 
+  /** исходные демо-данные и сделки, добавленные по ходу проверки */
+  const raws = new Map()
+  const extra = new Map()
+  const rawOf = (name) => {
+    if (!raws.has(name)) raws.set(name, demoData(name, started))
+    return raws.get(name)
+  }
+
+  /** Новая закрытая сделка «только что» — чтобы проверить, что мост сам подхватывает свежее */
+  function addTrade(name, { sym = 'BTCUSDT', side = 1, entry = 100_000, exit = 100_500, qty = 0.01 } = {}) {
+    const list = extra.get(name) ?? []
+    extra.set(name, list)
+    const next = 1_000_000 + list.length
+    const t = now()
+    list.push({ id: String(next), t: t - 60_000, sym, side, px: entry, qty, fee: entry * qty * 0.0005 })
+    list.push({ id: String(next + 1), t: t - 20_000, sym, side: -side, px: exit, qty, fee: exit * qty * 0.0005 })
+    cache.delete(name)
+  }
+
   function dataset(name) {
     let d = cache.get(name)
     if (d) return d
-    const raw = demoData(name, started)
-    const fills = raw.fills.slice().sort((a, b) => a.t - b.t || Number(a.id) - Number(b.id))
+    const raw = rawOf(name)
+    const fills = [...raw.fills, ...(extra.get(name) ?? [])].sort((a, b) => a.t - b.t || Number(a.id) - Number(b.id))
     // позиция по каждому инструменту — чтобы знать закрытый объём и результат каждого исполнения
     const pos = new Map()
     const rows = fills.map((f) => {
@@ -261,6 +280,11 @@ export function createMock(opts = {}) {
   function handle(rawUrl, rawHeaders = {}) {
     const url = new URL(rawUrl, 'http://mock')
     const headers = Object.fromEntries(Object.entries(rawHeaders).map(([k, v]) => [k.toLowerCase(), String(v)]))
+    // управление проверкой: /control/trade?account=demo-bybit добавляет сделку «только что»
+    if (url.pathname === '/control/trade') {
+      addTrade(url.searchParams.get('account') ?? 'demo-bybit')
+      return json(200, { ok: true })
+    }
     const m = /^\/(binance-f|binance-s|bybit)(\/.*)$/.exec(url.pathname)
     if (!m) return json(404, { error: 'unknown exchange' })
     calls[m[2]] = (calls[m[2]] ?? 0) + 1
@@ -273,5 +297,5 @@ export function createMock(opts = {}) {
     return new Response(JSON.stringify(r.body), { status: r.status, headers: { 'content-type': 'application/json', ...r.headers } })
   }
 
-  return { handle, fetch, calls, dataset, started }
+  return { handle, fetch, calls, dataset, addTrade, started }
 }

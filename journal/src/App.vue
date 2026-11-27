@@ -7,7 +7,8 @@ import SyncDialog from './components/SyncDialog.vue'
 import TradeDrawer from './components/TradeDrawer.vue'
 import { EXCHANGES } from './core/protocol'
 import { i18n, t } from './lib/i18n'
-import { init, prefs, refresh, setDemo, state } from './store/journal'
+import { startBridgeConfig } from './store/bridgeConfig'
+import { init, pollNow, prefs, setDemo, refresh, state } from './store/journal'
 import { cloud, startSync } from './store/sync'
 import { PERIODS, tvxHome, ui, type Tab } from './store/view'
 import Accounts from './views/Accounts.vue'
@@ -74,15 +75,13 @@ onMounted(async () => {
   window.addEventListener('hashchange', fromHash)
   await init()
   startSync()
-  // пока журнал открыт, счета обновляются сами: при возврате на вкладку и раз в пять минут
-  onWake((away) => {
+  startBridgeConfig()
+  // историю догружает мост, по своему расписанию; журнал лишь чаще спрашивает его, когда на него смотрят
+  onWake(() => {
     ui.now = Date.now()
-    if (away > 60_000) refresh()
+    pollNow()
   })
-  setInterval(() => {
-    ui.now = Date.now()
-    if (document.visibilityState === 'visible') refresh()
-  }, 5 * 60_000)
+  setInterval(() => (ui.now = Date.now()), 60_000)
 })
 
 const empty = computed(() => state.ready && !state.accounts.length)

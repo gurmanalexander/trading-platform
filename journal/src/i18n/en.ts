@@ -105,7 +105,6 @@ const EN: Record<string, string> = {
     'Exchanges reject keyed requests sent straight from a web page, so the keys live in a small browser extension — the “bridge”. It requests your history from the exchange and hands the journal finished trades only.',
   'Скачать расширение': 'Download the extension',
   'и распакуйте архив в отдельную папку': 'and unzip it into its own folder',
-  'Откройте в Chrome, Edge или Brave страницу chrome://extensions и включите «Режим разработчика».': 'In Chrome, Edge or Brave open chrome://extensions and turn on “Developer mode”.',
   'Нажмите «Загрузить распакованное расширение» и выберите папку с расширением.': 'Click “Load unpacked” and pick the extension folder.',
   'Вернитесь сюда и добавьте ключ только для чтения.': 'Come back here and add a read-only key.',
   'Проверяю…': 'Checking…',
@@ -120,7 +119,6 @@ const EN: Record<string, string> = {
   'сгенерированные данные для знакомства': 'generated data for a first look',
   'загружаю историю… {p}%': 'loading history… {p}%',
   'обновлено {when}': 'updated {when}',
-  'ключ на этом устройстве': 'key is on this device',
   'ключ на другом устройстве — сделки приходят через синхронизацию': 'key is on another device — trades arrive through sync',
   'ключ истекает {date}': 'key expires {date}',
   'Сделки и пометки этого счёта будут удалены из журнала на всех ваших устройствах. Ключ в расширении останется — удалите его там отдельно.':
@@ -129,7 +127,6 @@ const EN: Record<string, string> = {
   'Binance отдаёт историю фьючерсов только за последние 3 месяца, Bybit — за 2 года. Всё загруженное остаётся в журнале навсегда.':
     'Binance serves futures history for the last 3 months only, Bybit for 2 years. Everything loaded stays in the journal for good.',
   'Телефон и другие устройства': 'Phone and other devices',
-  'Синхронизация включена: на связи {n} из {m} ретрансляторов.': 'Sync is on: {n} of {m} relays online.',
   'Сделки и пометки можно видеть на телефоне. Данные шифруются на устройстве, ключи бирж не передаются.': 'See your trades and notes on your phone. Data is encrypted on the device; exchange keys are never sent.',
   'Подключить устройство': 'Connect a device',
   'Настроить синхронизацию': 'Set up sync',
@@ -288,14 +285,10 @@ const EN: Record<string, string> = {
   'Только чтение': 'Read-only',
   'Мост проверяет права ключа и не примет ключ, которым можно торговать или выводить средства. Кода для ордеров в расширении нет.':
     'The bridge checks the key’s permissions and rejects a key that can trade or withdraw. The extension has no order code at all.',
-  'Только биржи': 'Exchanges only',
-  'Расширению разрешены соединения лишь с адресами Binance и Bybit. Никаких сторонних серверов и аналитики.':
-    'The extension may connect to Binance and Bybit addresses only. No third-party servers, no analytics.',
   'Пока нет ни одного счёта. Добавьте ключ только для чтения — и журнал покажет ваши сделки.': 'No accounts yet. Add a read-only key and the journal will show your trades.',
   'Название счёта': 'Account name',
   'ещё {n} дн.': '{n} days left',
   'Удалить счёт': 'Delete account',
-  'Счёт «{name}» добавлен. Вернитесь в журнал — сделки загрузятся сами.': 'Account “{name}” added. Go back to the journal — trades will load on their own.',
   'Добавить счёт': 'Add an account',
   Биржа: 'Exchange',
   Название: 'Name',
@@ -304,6 +297,27 @@ const EN: Record<string, string> = {
   'Проверяю ключ на бирже…': 'Checking the key with the exchange…',
   'Проверить и добавить': 'Check and add',
   'Удалить ключ можно в любой момент здесь и на самой бирже. Расширение — открытый код:': 'You can delete a key at any time here and on the exchange itself. The extension is open source:',
+  // фоновая работа моста и установка в разных браузерах
+  'Пока браузер открыт, мост сам догружает новые сделки каждые несколько минут — эту вкладку можно закрыть.':
+    'While the browser is open, the bridge loads new trades by itself every few minutes — you can close this tab.',
+  Браузер: 'Browser',
+  'Откройте страницу расширений (в адресной строке: chrome://extensions) и включите «Режим разработчика».': 'Open the extensions page (type chrome://extensions in the address bar) and turn on “Developer mode”.',
+  'Скачать расширение для Firefox': 'Download the extension for Firefox',
+  'Откройте в Firefox страницу about:debugging#/runtime/this-firefox и нажмите «Загрузить временное дополнение».': 'In Firefox open about:debugging#/runtime/this-firefox and click “Load Temporary Add-on”.',
+  'Выберите скачанный архив. Вернитесь сюда и добавьте ключ только для чтения.': 'Pick the downloaded archive. Come back here and add a read-only key.',
+  'Так дополнение работает до перезапуска Firefox: для постоянной установки его нужно подписать у Mozilla. Подписанной сборки пока нет.':
+    'Loaded this way, the add-on works until Firefox restarts: a permanent install needs it signed by Mozilla. There is no signed build yet.',
+  'Сборки для Safari пока нет: Apple принимает расширения только через Xcode и платную учётную запись разработчика. На Mac подойдут Chrome, Edge, Brave или Firefox; на iPhone сделки приходят через синхронизацию.':
+    'There is no Safari build yet: Apple accepts extensions only through Xcode and a paid developer account. On a Mac use Chrome, Edge, Brave or Firefox; on an iPhone trades arrive through sync.',
+  'ждёт первой загрузки': 'waiting for the first load',
+  'Синхронизация включена: на связи {n} из {m} ретрансляторов. Новые сделки мост отправляет сам, даже когда журнал закрыт.':
+    'Sync is on: {n} of {m} relays online. The bridge sends new trades by itself, even when the journal is closed.',
+  'Работает в фоне': 'Works in the background',
+  'Запросы с ключом уходят только на адреса Binance и Bybit. Если в журнале включена синхронизация, мост сам передаёт вашим устройствам зашифрованные сделки — без ключей. Аналитики и сторонних серверов нет.':
+    'Keyed requests go to Binance and Bybit addresses only. If sync is on in the journal, the bridge sends encrypted trades to your devices by itself — without the keys. No analytics, no third-party servers.',
+  'Счёт «{name}» добавлен. История уже загружается — журнал покажет сделки, как только она будет готова.': 'Account “{name}” added. Its history is loading — the journal will show the trades as soon as it is ready.',
+  'Пока браузер открыт, мост сам догружает новые сделки каждые несколько минут — вкладку журнала держать открытой не нужно.':
+    'While the browser is open, the bridge loads new trades by itself every few minutes — no need to keep the journal tab open.',
 }
 
 export default EN

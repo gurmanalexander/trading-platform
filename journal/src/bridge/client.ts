@@ -1,4 +1,4 @@
-import { BRIDGE, type BridgeErrorCode, type BridgeRequest, type BridgeResponse, type Hello, type PullChunk, type PullCursor, type Snapshot } from '../core/protocol'
+import { BRIDGE, type AccountData, type AccountStatus, type BridgeConfig, type BridgeErrorCode, type BridgeRequest, type BridgeResponse, type Hello } from '../core/protocol'
 
 /**
  * Сторона страницы в обмене с расширением-мостом. Запрос уходит через window.postMessage,
@@ -68,7 +68,8 @@ export async function hello(): Promise<Hello> {
   throw last
 }
 
-// биржа может отвечать долго, а одна порция — это до десятка запросов с паузами
-export const pull = (account: string, since: number, cursor: PullCursor | null) => call<PullChunk>({ op: 'pull', account, since, cursor }, 120_000)
-export const snapshot = (account: string) => call<Snapshot>({ op: 'snapshot', account }, 60_000)
+export const bridgeStatus = () => call<Record<string, AccountStatus>>({ op: 'status' }, 8000)
+export const bridgeTrades = (account: string) => call<AccountData>({ op: 'trades', account }, 20_000)
+export const bridgeRefresh = (account?: string) => call<boolean>(account ? { op: 'refresh', account } : { op: 'refresh' }, 8000)
+export const bridgeConfig = (config: BridgeConfig) => call<boolean>({ op: 'config', config }, 8000)
 export const openBridgeOptions = () => call<boolean>({ op: 'options' }, 3000)

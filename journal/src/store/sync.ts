@@ -3,8 +3,9 @@ import { load, save } from '../../../src/lib/storage'
 import { onWake } from '../../../src/lib/wake'
 import type { Envelope, NostrEvent, SyncKeys } from '../../../src/lib/nostr'
 import { isDemo } from '../core/demo'
+import { accountDoc, packTrade, sortTrades, unpackTrade, weekOf } from '../core/pack'
 import type { Note, Trade } from '../core/types'
-import { importAccount, importNotes, importSnapshot, importWeek, notes, quarterOf, snapshots, state, trades, weekOf } from './journal'
+import { importAccount, importNotes, importSnapshot, importWeek, notes, quarterOf, snapshots, state, trades } from './journal'
 
 /**
  * Синхронизация журнала между устройствами — тем же способом, что в tvx: документы шифруются на
@@ -42,27 +43,6 @@ export const cloud = reactive({
   tooBig: 0,
 })
 
-// ---------- упаковка сделок ----------
-
-const r = (v: number) => +v.toPrecision(10)
-
-/** Сделка в виде короткого массива: в документе их сотни */
-export function packTrade(t: Trade): unknown[] {
-  const tail = t.id.slice(t.acct.length + 1 + t.sym.length + 3) // после «счёт:инструмент:L:»
-  return [tail, t.sym, t.side, t.open, t.close, r(t.entry), r(t.exit), r(t.qty), r(t.vol), r(t.gross), r(t.fee), r(t.funding), t.fills, t.partial ? 1 : 0]
-}
-
-export function unpackTrade(acct: string, a: unknown): Trade | null {
-  if (!Array.isArray(a) || a.length < 13) return null
-  const [tail, sym, side, open, close, entry, exit, qty, vol, gross, fee, funding, fills, partial] = a
-  if (typeof tail !== 'string' || typeof sym !== 'string' || !/^[A-Z0-9_-]{2,40}$/.test(sym) || (side !== 1 && side !== -1)) return null
-  const nums = [open, close, entry, exit, qty, vol, gross, fee, funding, fills]
-  if (!nums.every((v) => typeof v === 'number' && isFinite(v))) return null
-  const t: Trade = { id: `${acct}:${sym}:${side > 0 ? 'L' : 'S'}:${tail}`, acct, sym, side, open, close, entry, exit, qty, vol, gross, fee, funding, fills }
-  if (partial) t.partial = true
-  return t
-}
-
 // ---------- документы ----------
 
 const syncable = () => state.accounts.filter((a) => !a.demo)
@@ -89,14 +69,14 @@ function getDoc(id: string): unknown {
   if (kind === 'a') {
     if (state.removed.includes(acct)) return null
     const a = state.accounts.find((x) => x.id === acct && !x.demo)
-    return a ? { id: a.id, exchange: a.exchange, label: a.label, hint: a.hint, addedAt: a.addedAt } : undefined
+    return a ? accountDoc(a) : undefined
   }
   if (state.removed.includes(acct) || !state.accounts.some((a) => a.id === acct)) return undefined
   if (kind === 's') return snapshots[acct]
   if (kind === 't') {
     const week = Number(part)
     const list = (trades[acct] ?? []).filter((t) => weekOf(t.open) === week)
-    return list.length ? list.map(packTrade) : undefined
+    return list.length ? sortTrades(list).map(packTrade) : undefined
   }
   if (kind === 'n') {
     const q = Number(part)

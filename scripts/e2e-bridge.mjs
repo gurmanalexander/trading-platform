@@ -1,9 +1,10 @@
 // Сквозная проверка: расширение-мост + журнал + учебная биржа в настоящем Chromium.
 //
 // Что проверяется: ключ с правом торговли мост отклоняет; ключи только для чтения принимает;
-// журнал находит мост, загружает историю обоих счетов и показывает статистику; сайт не может
-// получить ключи; второе устройство без расширения получает сделки через синхронизацию
-// (последнее — только с флагом --sync: нужны общедоступные ретрансляторы Nostr).
+// мост сам, в фоне, загружает историю счетов — журнал для этого открывать не нужно; журнал
+// показывает готовые сделки; сайт не может получить ключи. С флагом --sync (нужны общедоступные
+// ретрансляторы Nostr): второе устройство без расширения получает сделки через синхронизацию,
+// а свежая сделка доходит до него, когда вкладка журнала на «компьютере» закрыта.
 //
 // Запуск (нужны собранный dist и Playwright с Chromium):
 //   npm run build && node scripts/e2e-bridge.mjs [--sync] [--shots <папка>]
@@ -51,7 +52,8 @@ await new Promise((r) => site.listen(SITE_PORT, '127.0.0.1', r))
 
 const extDir = join(root, 'dist-extension-e2e')
 execFileSync(process.execPath, [join(root, 'scripts/build-extension.mjs'), '--dev'], {
-  env: { ...process.env, TVX_BRIDGE_MOCK: `http://localhost:${MOCK_PORT}`, TVX_EXT_OUT: 'dist-extension-e2e' },
+  // расписание фоновой догрузки ускорено: раз в 12 секунд вместо пяти минут
+  env: { ...process.env, TVX_BRIDGE_MOCK: `http://localhost:${MOCK_PORT}`, TVX_EXT_OUT: 'dist-extension-e2e', TVX_BRIDGE_TICK: '0.2' },
   stdio: 'inherit',
 })
 
@@ -95,6 +97,11 @@ try {
   check('два ключа только для чтения добавлены', (await opt.locator('.acct').count()) === 2)
   check('поля ключа очищены после добавления', (await opt.inputValue('.row:has-text("API Secret") input')) === '')
   check('у ключа Bybit показан срок действия', (await opt.locator('.acct .exp').count()) === 1)
+  // журнал ещё ни разу не открывали — историю грузит сама фоновая часть расширения
+  const loaded = await opt
+    .waitForFunction(() => [...document.querySelectorAll('.acct .st')].length === 2 && [...document.querySelectorAll('.acct .st')].every((el) => /обновлено/.test(el.textContent ?? '')), null, { timeout: 120_000 })
+    .then(() => true, () => false)
+  check('мост сам загрузил историю обоих счетов, журнал не открыт', loaded, (await opt.locator('.acct .st').allTextContents()).join(' | '))
   if (shots) await opt.screenshot({ path: join(shots, 'bridge-accounts.png'), fullPage: true })
 
   // секрет в хранилище расширения — только не извлекаемый ключ подписи
@@ -118,16 +125,17 @@ try {
   page.on('pageerror', (e) => errors.push(e.message))
   // недоступный ретранслятор — не ошибка журнала: он работает с теми, что на связи
   page.on('console', (m) => m.type() === 'error' && !/WebSocket connection/.test(m.text()) && errors.push(m.text()))
+  const opened = Date.now()
   await page.goto(SITE)
   await page.waitForSelector('.hero-num', { timeout: 30_000 })
-  // история грузится по частям — ждём, пока оба счёта закончат
-  await page.waitForFunction(() => !document.querySelector('.top .spin'), null, { timeout: 120_000 })
   await page.click('.periods .sg:last-child') // «Всё время»
-  await page.waitForTimeout(300)
+  // сделки уже собраны мостом — журналу остаётся их забрать
+  await page.waitForFunction(() => /^\s*[1-9]\d{2,}/.test(document.querySelector('.hero-sub')?.textContent ?? ''), null, { timeout: 30_000 }).catch(() => {})
+  const shownIn = Date.now() - opened
   const hero = (await page.textContent('.hero-num')) ?? ''
   const sub = (await page.textContent('.hero-sub')) ?? ''
   const count = Number((/^\s*(\d+)/.exec(sub) ?? [])[1])
-  check('журнал нашёл мост и загрузил сделки', count > 150, `${hero.trim()} · ${sub.trim().slice(0, 40)}`)
+  check('журнал получил от моста готовые сделки', count > 150, `${hero.trim()} · ${sub.trim().slice(0, 40)} · через ${shownIn} мс после открытия`)
   check('оба счёта показаны в отборе', (await page.locator('.achip').count()) === 2)
   if (shots) await page.screenshot({ path: join(shots, 'journal-live.png') })
 
@@ -146,11 +154,12 @@ try {
         postMessage({ to: 'tvx-bridge', id, req }, location.origin)
         setTimeout(() => resolve({ timeout: true }), 4000)
       })
-    return { hello: await ask({ op: 'hello' }), secrets: await ask({ op: 'secrets' }), order: await ask({ op: 'order', account: 'x', symbol: 'BTCUSDT' }) }
+    return { hello: await ask({ op: 'hello' }), secrets: await ask({ op: 'secrets' }), order: await ask({ op: 'order', account: 'x', symbol: 'BTCUSDT' }), own: await ask({ own: 'removed', account: 'x' }) }
   })
   const helloText = JSON.stringify(probe.hello)
   check('в ответе моста нет ни ключа, ни секрета', probe.hello.ok && !helloText.includes('mock-binance-read') && !helloText.includes('mock-secret') && !/apiKey|"key"/.test(helloText))
   check('неизвестные запросы мост отклоняет', probe.secrets.ok === false && probe.order.ok === false, `${probe.secrets.error}, ${probe.order.error}`)
+  check('служебные запросы страницы расширения сайту недоступны', probe.own.ok === false, String(probe.own.error))
 
   // со страницы другого сайта моста нет вовсе
   const other = await ctx.newPage()
@@ -188,7 +197,7 @@ try {
   await page.goto('about:blank')
   await page.goto(SITE)
   await page.waitForSelector('.hero-num')
-  await page.waitForFunction(() => !document.querySelector('.top .spin'), null, { timeout: 60_000 })
+  await page.waitForTimeout(1500)
   const sub2 = (await page.textContent('.hero-sub')) ?? ''
   check('после перезагрузки сделки на месте', Number((/^\s*(\d+)/.exec(sub2) ?? [])[1]) === count, sub2.trim().slice(0, 30))
 
@@ -225,11 +234,24 @@ try {
     await p2.click('.btab:nth-child(4)')
     const acctText = (await p2.textContent('.acct-list').catch(() => '')) ?? ''
     check('на телефоне счета помечены как «ключ на другом устройстве»', /ключ на другом устройстве/.test(acctText))
+    await p2.click('.btab:nth-child(1)')
     if (shots) {
-      await p2.click('.btab:nth-child(1)')
       await p2.waitForTimeout(400)
       await p2.screenshot({ path: join(shots, 'phone-synced.png') })
     }
+
+    // На «компьютере» закрываем и журнал, и страницу расширения: остаётся только его фоновая часть.
+    // На бирже появляется новая сделка — телефон должен её увидеть.
+    await page.close()
+    await opt.close()
+    await fetch(`http://localhost:${MOCK_PORT}/control/trade?account=demo-bybit`)
+    let fresh = got
+    for (let i = 0; i < 50 && fresh <= count; i++) {
+      await p2.waitForTimeout(1500)
+      const text = (await p2.textContent('.hero-sub').catch(() => '')) ?? ''
+      fresh = Number((/^\s*(\d+)/.exec(text) ?? [])[1]) || 0
+    }
+    check('свежая сделка дошла до телефона при закрытом журнале на компьютере', fresh === count + 1, `${fresh} из ${count + 1}`)
     await browser2.close()
   }
 

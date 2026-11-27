@@ -1,9 +1,10 @@
 import type { BridgeAccount } from '../../journal/src/core/protocol'
 import type { ExchangeId } from '../../journal/src/core/types'
+import { tx as dbTx } from './db'
 import { importSecret, signerOf, type Ctx } from './exchanges/http'
 
 /**
- * Хранилище ключей — база IndexedDB самого расширения. Сайты и другие расширения к ней доступа
+ * Хранилище ключей — в базе самого расширения (см. db.ts). Сайты и другие расширения к ней доступа
  * не имеют.
  *
  * Секрет ключа в исходном виде не хранится вовсе: при добавлении он превращается в не извлекаемый
@@ -16,31 +17,8 @@ interface Stored extends BridgeAccount {
   key: CryptoKey
 }
 
-const DB = 'tvx-bridge'
 const STORE = 'accounts'
-
-function open(): Promise<IDBDatabase> {
-  return new Promise((resolve, reject) => {
-    const req = indexedDB.open(DB, 1)
-    req.onupgradeneeded = () => req.result.createObjectStore(STORE, { keyPath: 'id' })
-    req.onsuccess = () => resolve(req.result)
-    req.onerror = () => reject(req.error)
-  })
-}
-
-async function tx<T>(mode: IDBTransactionMode, run: (store: IDBObjectStore) => IDBRequest<T>): Promise<T> {
-  const db = await open()
-  try {
-    return await new Promise<T>((resolve, reject) => {
-      const t = db.transaction(STORE, mode)
-      const req = run(t.objectStore(STORE))
-      t.oncomplete = () => resolve(req.result)
-      t.onerror = t.onabort = () => reject(t.error ?? req.error)
-    })
-  } finally {
-    db.close()
-  }
-}
+const tx = <T>(mode: IDBTransactionMode, run: (store: IDBObjectStore) => IDBRequest<T>) => dbTx<T>([STORE], mode, (t) => run(t.objectStore(STORE))) as Promise<T>
 
 const publicView = ({ id, exchange, label, hint, addedAt, expiresAt }: Stored): BridgeAccount => {
   const a: BridgeAccount = { id, exchange, label, hint, addedAt }

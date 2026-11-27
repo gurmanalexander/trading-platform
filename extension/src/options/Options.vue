@@ -1,14 +1,17 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import Icon from '../../../src/components/Icon.vue'
-import { EXCHANGES, type BridgeAccount } from '../../../journal/src/core/protocol'
+import { EXCHANGES, type AccountStatus, type BridgeAccount } from '../../../journal/src/core/protocol'
 import type { ExchangeId } from '../../../journal/src/core/types'
+import { explainError } from '../../../journal/src/lib/errors'
+import { fmtAgo } from '../../../journal/src/lib/format'
 import { i18n, locale, t } from '../../../journal/src/lib/i18n'
 import { HOSTS, SITES, VERSION } from '../config'
 import { binance } from '../exchanges/binance'
 import { bybit } from '../exchanges/bybit'
 import { BridgeError } from '../exchanges/http'
 import { KeyRejected } from '../exchanges/types'
+import { ext } from '../platform'
 import { addAccount, hasKey, importSecret, listAccounts, makeCtx, removeAccount, renameAccount } from '../vault'
 
 const accounts = ref<BridgeAccount[]>([])
@@ -22,7 +25,32 @@ const showSecret = ref(false)
 const journalUrl = computed(() => SITES.find((s) => s.startsWith('https://')) ?? '')
 
 const load = async () => (accounts.value = await listAccounts())
-onMounted(load)
+
+// ход фоновой загрузки — у фоновой части расширения; спрашиваем его, пока страница открыта
+const status = ref<Record<string, AccountStatus>>({})
+const nowTick = ref(Date.now())
+const tell = (msg: object) => ext.runtime.sendMessage(msg).catch(() => null)
+async function refreshStatus() {
+  const res = await tell({ own: 'status' })
+  if (res?.ok) status.value = res.data
+  nowTick.value = Date.now()
+}
+let timer = 0
+onMounted(() => {
+  load()
+  refreshStatus()
+  timer = window.setInterval(refreshStatus, 2500)
+})
+onBeforeUnmount(() => clearInterval(timer))
+
+function statusText(id: string): string {
+  const st = status.value[id]
+  if (!st) return ''
+  if (st.busy) return t('загружаю историю… {p}%', { p: Math.round(st.progress * 100) })
+  if (st.error) return explainError(st.error, st.message)
+  if (st.pulledAt) return t('обновлено {when}', { when: fmtAgo(st.pulledAt, nowTick.value) })
+  return t('ждёт первой загрузки')
+}
 
 /** Права ключа словами — чтобы было понятно, что именно нужно выключить */
 const FLAGS: Record<string, () => string> = {
@@ -71,6 +99,9 @@ async function submit() {
     showSecret.value = false
     added.value = acc.label
     await load()
+    // фоновая часть сразу начинает грузить историю нового счёта
+    await tell({ own: 'added', account: acc.id })
+    refreshStatus()
   } catch (e) {
     error.value = explain(e)
   } finally {
@@ -80,6 +111,7 @@ async function submit() {
 
 async function remove(id: string) {
   await removeAccount(id)
+  await tell({ own: 'removed', account: id })
   confirmId.value = ''
   await load()
 }
@@ -141,10 +173,10 @@ const steps = computed(() =>
         </div>
       </div>
       <div class="fact">
-        <Icon name="wifi" />
+        <Icon name="refresh" />
         <div>
-          <b>{{ t('Только биржи') }}</b>
-          <p>{{ t('Расширению разрешены соединения лишь с адресами Binance и Bybit. Никаких сторонних серверов и аналитики.') }}</p>
+          <b>{{ t('Работает в фоне') }}</b>
+          <p>{{ t('Запросы с ключом уходят только на адреса Binance и Bybit. Если в журнале включена синхронизация, мост сам передаёт вашим устройствам зашифрованные сделки — без ключей. Аналитики и сторонних серверов нет.') }}</p>
         </div>
       </div>
     </section>
@@ -160,6 +192,7 @@ const steps = computed(() =>
           <span v-if="a.expiresAt" class="exp" :class="{ soon: daysLeft(a.expiresAt) <= 14 }" :title="fmtDate(a.expiresAt)">
             <Icon name="clock" :size="14" /> {{ t('ещё {n} дн.', { n: Math.max(0, daysLeft(a.expiresAt)) }) }}
           </span>
+          <span class="st" :class="{ bad: status[a.id]?.error && !status[a.id]?.busy }">{{ statusText(a.id) }}</span>
           <span class="grow" />
           <template v-if="confirmId === a.id">
             <button class="btn sm danger" @click="remove(a.id)">{{ t('Удалить') }}</button>
@@ -168,7 +201,8 @@ const steps = computed(() =>
           <button v-else class="btn sm" :aria-label="t('Удалить счёт')" :title="t('Удалить счёт')" @click="confirmId = a.id"><Icon name="trash" :size="16" /></button>
         </li>
       </ul>
-      <p v-if="added" class="ok"><Icon name="check" :size="16" /> {{ t('Счёт «{name}» добавлен. Вернитесь в журнал — сделки загрузятся сами.', { name: added }) }}</p>
+      <p v-if="added" class="ok"><Icon name="check" :size="16" /> {{ t('Счёт «{name}» добавлен. История уже загружается — журнал покажет сделки, как только она будет готова.', { name: added }) }}</p>
+      <p v-if="accounts.length" class="muted bg-note">{{ t('Пока браузер открыт, мост сам догружает новые сделки каждые несколько минут — вкладку журнала держать открытой не нужно.') }}</p>
     </section>
 
     <section class="card">
@@ -336,6 +370,20 @@ a.btn {
 }
 .exp.soon {
   color: var(--warn);
+}
+.st {
+  font-size: 12px;
+  color: var(--muted);
+  min-width: 0;
+  flex-basis: 180px;
+  flex-grow: 1;
+}
+.st.bad {
+  color: var(--down);
+}
+.bg-note {
+  margin: 10px 0 0;
+  font-size: 12.5px;
 }
 .btn.danger {
   background: var(--down);

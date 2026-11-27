@@ -23,6 +23,10 @@ const reload = () => location.reload()
 
 const daysLeft = (ms: number) => Math.ceil((ms - Date.now()) / 86_400_000)
 const DEPTHS = [90, 180, 365, 730]
+
+/** Для какого браузера показывать установку: по умолчанию — для того, в котором открыт журнал */
+const ua = navigator.userAgent
+const browser = ref<'chromium' | 'firefox' | 'safari'>(/Firefox\//.test(ua) ? 'firefox' : /Safari\//.test(ua) && !/Chrome|Chromium|Edg|OPR|YaBrowser/.test(ua) ? 'safari' : 'chromium')
 </script>
 
 <template>
@@ -34,6 +38,7 @@ const DEPTHS = [90, 180, 365, 730]
         <div class="grow">
           <b>{{ t('Расширение подключено') }}</b>
           <div class="muted">tvx bridge v{{ state.bridgeVersion }} · {{ t('ключи хранятся в нём и на сайт не попадают') }}</div>
+          <div class="muted">{{ t('Пока браузер открыт, мост сам догружает новые сделки каждые несколько минут — эту вкладку можно закрыть.') }}</div>
         </div>
         <button class="btn primary" @click="openOptions">{{ t('Ключи и счета') }}</button>
       </div>
@@ -53,15 +58,29 @@ const DEPTHS = [90, 180, 365, 730]
         <p class="lead">
           {{ t('Биржи не принимают запросы с ключом прямо со страницы сайта, поэтому ключи держит небольшое расширение браузера — «мост». Оно само запрашивает у биржи историю и отдаёт журналу только готовые сделки.') }}
         </p>
-        <ol class="steps">
+        <div class="browsers" role="group" :aria-label="t('Браузер')">
+          <button class="sg" :class="{ on: browser === 'chromium' }" @click="browser = 'chromium'">Chrome · Edge · Brave · Opera · Yandex</button>
+          <button class="sg" :class="{ on: browser === 'firefox' }" @click="browser = 'firefox'">Firefox</button>
+          <button class="sg" :class="{ on: browser === 'safari' }" @click="browser = 'safari'">Safari</button>
+        </div>
+        <ol v-if="browser === 'chromium'" class="steps">
           <li>
             <a class="btn primary" href="./tvx-bridge.zip" download><Icon name="download" :size="16" /> {{ t('Скачать расширение') }}</a>
             <span class="muted">{{ t('и распакуйте архив в отдельную папку') }}</span>
           </li>
-          <li>{{ t('Откройте в Chrome, Edge или Brave страницу chrome://extensions и включите «Режим разработчика».') }}</li>
+          <li>{{ t('Откройте страницу расширений (в адресной строке: chrome://extensions) и включите «Режим разработчика».') }}</li>
           <li>{{ t('Нажмите «Загрузить распакованное расширение» и выберите папку с расширением.') }}</li>
           <li>{{ t('Вернитесь сюда и добавьте ключ только для чтения.') }}</li>
         </ol>
+        <ol v-else-if="browser === 'firefox'" class="steps">
+          <li>
+            <a class="btn primary" href="./tvx-bridge-firefox.zip" download><Icon name="download" :size="16" /> {{ t('Скачать расширение для Firefox') }}</a>
+          </li>
+          <li>{{ t('Откройте в Firefox страницу about:debugging#/runtime/this-firefox и нажмите «Загрузить временное дополнение».') }}</li>
+          <li>{{ t('Выберите скачанный архив. Вернитесь сюда и добавьте ключ только для чтения.') }}</li>
+          <li class="muted">{{ t('Так дополнение работает до перезапуска Firefox: для постоянной установки его нужно подписать у Mozilla. Подписанной сборки пока нет.') }}</li>
+        </ol>
+        <p v-else class="note-box">{{ t('Сборки для Safari пока нет: Apple принимает расширения только через Xcode и платную учётную запись разработчика. На Mac подойдут Chrome, Edge, Brave или Firefox; на iPhone сделки приходят через синхронизацию.') }}</p>
         <div class="row-btns">
           <button class="btn" :disabled="checking" @click="recheck"><Icon name="refresh" :size="16" /> {{ checking ? t('Проверяю…') : t('Проверить ещё раз') }}</button>
           <span class="muted">{{ t('На телефоне расширение не нужно: сделки придут через синхронизацию.') }}</span>
@@ -94,7 +113,7 @@ const DEPTHS = [90, 180, 365, 730]
             <template v-if="a.demo"> · {{ t('сгенерированные данные для знакомства') }}</template>
             <template v-else-if="state.jobs[a.id]?.busy"> · {{ t('загружаю историю… {p}%', { p: Math.round((state.jobs[a.id]?.progress ?? 0) * 100) }) }}</template>
             <template v-else-if="a.local && state.pulled[a.id]"> · {{ t('обновлено {when}', { when: fmtAgo(state.pulled[a.id], ui.now) }) }}</template>
-            <template v-else-if="a.local"> · {{ t('ключ на этом устройстве') }}</template>
+            <template v-else-if="a.local"> · {{ t('ждёт первой загрузки') }}</template>
             <template v-else> · {{ t('ключ на другом устройстве — сделки приходят через синхронизацию') }}</template>
             <span v-if="a.expiresAt && daysLeft(a.expiresAt) <= 21" class="exp-warn"> · {{ t('ключ истекает {date}', { date: fmtDate(a.expiresAt, true) }) }}</span>
           </div>
@@ -116,7 +135,7 @@ const DEPTHS = [90, 180, 365, 730]
       <div>
         <h3>{{ t('Телефон и другие устройства') }}</h3>
         <p class="muted lead">
-          {{ cloud.code ? t('Синхронизация включена: на связи {n} из {m} ретрансляторов.', { n: cloud.online, m: cloud.relays.length }) : t('Сделки и пометки можно видеть на телефоне. Данные шифруются на устройстве, ключи бирж не передаются.') }}
+          {{ cloud.code ? t('Синхронизация включена: на связи {n} из {m} ретрансляторов. Новые сделки мост отправляет сам, даже когда журнал закрыт.', { n: cloud.online, m: cloud.relays.length }) : t('Сделки и пометки можно видеть на телефоне. Данные шифруются на устройстве, ключи бирж не передаются.') }}
         </p>
         <button class="btn primary" @click="ui.syncOpen = true"><Icon name="phone" :size="16" /> {{ cloud.code ? t('Подключить устройство') : t('Настроить синхронизацию') }}</button>
       </div>
@@ -161,6 +180,22 @@ const DEPTHS = [90, 180, 365, 730]
 }
 .install .lead {
   margin: 0 0 12px;
+}
+.browsers {
+  display: inline-flex;
+  flex-wrap: wrap;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+  margin-bottom: 12px;
+}
+.install .note-box {
+  margin: 0 0 12px;
+  padding: 9px 11px;
+  border-radius: 8px;
+  background: var(--panel-2);
+  color: var(--muted);
+  line-height: 1.45;
 }
 .steps {
   margin: 0 0 12px;

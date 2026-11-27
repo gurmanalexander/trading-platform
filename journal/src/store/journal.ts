@@ -1,18 +1,19 @@
 import { computed, reactive, shallowReactive, watch } from 'vue'
 import { load, save } from '../../../src/lib/storage'
-import { BridgeFailure, hello, onBridgeReady, pull, snapshot } from '../bridge/client'
+import { BridgeFailure, bridgeRefresh, bridgeStatus, bridgeTrades, hello, onBridgeReady } from '../bridge/client'
 import { DEMO_ACCOUNTS, demoData, isDemo } from '../core/demo'
+import { sortTrades, weekOf } from '../core/pack'
 import { buildTrades } from '../core/positions'
-import type { BridgeErrorCode, PullCursor } from '../core/protocol'
-import type { Account, Fill, Funding, Note, Snapshot, Trade } from '../core/types'
-import { clearRows, getRows, kvDel, kvGet, kvSet, putRows } from './db'
+import type { AccountData, AccountStatus, BridgeErrorCode } from '../core/protocol'
+import type { Account, Note, Snapshot, Trade } from '../core/types'
+import { kvDel, kvGet, kvSet } from './db'
 
 /**
  * Состояние журнала: счета, сделки, пометки, ход загрузки.
  *
- * Сделки счёта берутся из двух источников. На устройстве с мостом — собираются из исполнений,
- * загруженных с биржи. На остальных (телефон) — приходят готовыми через синхронизацию.
- * Оба пути кладут результат в одно место, интерфейсу разница не видна.
+ * Сделки счёта берутся из двух источников. На устройстве с мостом их отдаёт мост: он сам, в фоне,
+ * загружает историю с биржи и собирает из неё сделки. На остальных (телефон) сделки приходят
+ * через синхронизацию. Оба пути кладут результат в одно место, интерфейсу разница не видна.
  */
 export interface AccountView extends Account {
   /** ключ этого счёта есть в мосте на этом устройстве — историю можно догружать отсюда */
@@ -63,8 +64,7 @@ watch(prefs, () => save('j:prefs', prefs), { deep: true })
 /** Смещение часового пояса устройства от UTC, минуты */
 export const tzMin = -new Date().getTimezoneOffset()
 
-const WEEK = 7 * 86_400_000
-export const weekOf = (ms: number) => Math.floor(ms / WEEK)
+export { weekOf }
 /** Пометки делятся на документы по кварталам открытия сделки */
 export const quarterOf = (ms: number) => Math.floor(ms / (91 * 86_400_000))
 
@@ -106,6 +106,10 @@ export async function init() {
 
 // ---------- мост ----------
 
+/** какую версию данных каждого счёта журнал уже забрал у моста */
+const taken: Record<string, number> = {}
+let pollTimer = 0
+
 export async function detectBridge(): Promise<void> {
   try {
     const h = await hello()
@@ -113,8 +117,8 @@ export async function detectBridge(): Promise<void> {
     state.bridgeVersion = h.version
     const ids = new Set(h.accounts.map((a) => a.id))
     for (const b of h.accounts) {
-      // счёт, удалённый раньше, а потом снова добавленный в мост, возвращается
-      state.removed = state.removed.filter((id) => id !== b.id)
+      // счёт, удалённый из журнала, сам не возвращается, пока его ключ лежит в мосте
+      if (state.removed.includes(b.id)) continue
       const have = state.accounts.find((a) => a.id === b.id)
       if (have) Object.assign(have, b, { local: true })
       else {
@@ -125,75 +129,109 @@ export async function detectBridge(): Promise<void> {
     for (const a of state.accounts) if (a.local && !ids.has(a.id)) a.local = false
     persistAccounts()
     state.rev++
-    refresh()
+    await applyStatus(h.status)
+    schedulePoll()
   } catch (e) {
     state.bridge = e instanceof BridgeFailure && e.code === 'reload' ? 'reload' : 'absent'
     for (const a of state.accounts) a.local = false
   }
 }
 
-/** Догружает историю счетов, ключи которых есть в мосте на этом устройстве */
+/** Просит мост догрузить историю сейчас, не дожидаясь его расписания */
 export async function refresh(only?: string): Promise<void> {
   if (state.bridge !== 'ready') return
-  await Promise.all(state.accounts.filter((a) => a.local && (!only || a.id === only)).map((a) => pullAccount(a.id)))
-}
-
-/** После первой загрузки берём с запасом назад: биржа могла дописать исполнения задним числом */
-const OVERLAP = 30 * 60_000
-
-async function pullAccount(id: string): Promise<void> {
-  if (state.jobs[id]?.busy) return
-  const job: Job = (state.jobs[id] = { busy: true, progress: 0 })
-  const started = Date.now()
   try {
-    const since = state.pulled[id] ? state.pulled[id] - OVERLAP : started - prefs.depthDays * 86_400_000
-    let cursor: PullCursor | null = null
-    do {
-      const chunk = await pull(id, since, cursor)
-      await Promise.all([putRows('fills', id, chunk.fills), putRows('funding', id, chunk.funding)])
-      state.jobs[id].progress = chunk.progress
-      cursor = chunk.next
-    } while (cursor)
-    await rebuild(id)
-    state.pulled[id] = started
-    try {
-      snapshots[id] = await snapshot(id)
-      kvSet('snap:' + id, snapshots[id])
-    } catch {
-      /* состояние счёта не критично: сделки уже загружены */
-    }
-    persistAccounts()
-    state.rev++
-    state.jobs[id] = { busy: false, progress: 1 }
+    await bridgeRefresh(only)
+    for (const a of state.accounts) if (a.local && (!only || a.id === only)) state.jobs[a.id] = { ...(state.jobs[a.id] ?? { progress: 0 }), busy: true, error: undefined, message: undefined }
+    schedulePoll(400)
   } catch (e) {
-    const code = e instanceof BridgeFailure ? e.code : 'exchange'
-    state.jobs[id] = { busy: false, progress: job.progress, error: code, message: e instanceof Error ? e.message : String(e) }
-    if (code === 'absent' || code === 'reload') state.bridge = code
+    lost(e)
   }
 }
 
-/** Пересобирает сделки счёта из всех его исполнений */
-async function rebuild(id: string) {
-  const [fills, funding] = await Promise.all([getRows<Fill>('fills', id), getRows<Funding>('funding', id)])
-  const built = buildTrades(id, fills, funding)
-  // Сделки старше загруженных исполнений могли прийти с другого устройства, где история глубже, — их сохраняем
-  const earliest = fills.reduce((m, f) => Math.min(m, f.t), Infinity)
-  const older = (trades[id] ?? []).filter((t) => t.open < earliest)
+function lost(e: unknown) {
+  const code = e instanceof BridgeFailure ? e.code : 'absent'
+  if (code === 'absent' || code === 'reload') {
+    state.bridge = code
+    for (const a of state.accounts) a.local = false
+  }
+}
+
+/**
+ * Пока журнал открыт, он спрашивает у моста, как идёт загрузка: часто — пока что-то грузится,
+ * изредка — в остальное время (мост догружает историю сам, по своему расписанию).
+ */
+function schedulePoll(delay?: number) {
+  clearTimeout(pollTimer)
+  const busy = Object.values(state.jobs).some((j) => j.busy)
+  pollTimer = window.setTimeout(poll, delay ?? (busy ? 1200 : 20_000))
+}
+
+async function poll() {
+  if (state.bridge !== 'ready') return
+  if (document.visibilityState === 'visible') {
+    try {
+      await applyStatus(await bridgeStatus())
+    } catch (e) {
+      lost(e)
+    }
+  }
+  if (state.bridge === 'ready') schedulePoll()
+}
+
+/** Возвращает опрос моста сразу — например, когда вкладку снова открыли */
+export function pollNow() {
+  if (state.bridge === 'ready') schedulePoll(0)
+}
+
+async function applyStatus(status: Record<string, AccountStatus>) {
+  for (const a of state.accounts) {
+    if (!a.local) continue
+    const st = status[a.id]
+    if (!st) continue
+    const job: Job = { busy: st.busy, progress: st.progress }
+    if (st.error) {
+      job.error = st.error
+      if (st.message) job.message = st.message
+    }
+    state.jobs[a.id] = job
+    if (st.pulledAt) state.pulled[a.id] = st.pulledAt
+    if (st.rev && taken[a.id] !== st.rev) {
+      const data = await bridgeTrades(a.id)
+      takeBridgeData(a.id, data)
+      taken[a.id] = data.rev
+    }
+  }
+}
+
+/** Принимает сделки и состояние счёта от моста */
+function takeBridgeData(id: string, data: AccountData) {
+  // Сделки старше истории, которую знает мост, могли прийти с другого устройства, где она глубже, — их сохраняем
+  const older = data.earliest > 0 ? (trades[id] ?? []).filter((t) => t.open < data.earliest) : []
   const dup = (t: Trade) => t.partial && older.some((o) => o.sym === t.sym && o.side === t.side && Math.abs(o.close - t.close) < 1000)
-  setTrades(id, [...older, ...built.filter((t) => !dup(t))])
+  setTrades(id, [...older, ...data.trades.filter((t) => !dup(t))])
+  if (data.snapshot) {
+    snapshots[id] = data.snapshot
+    kvSet('snap:' + id, data.snapshot)
+  }
+  persistAccounts()
+  state.rev++
 }
 
 function setTrades(id: string, list: Trade[]) {
-  trades[id] = list.slice().sort((a, b) => a.open - b.open || (a.id < b.id ? -1 : 1))
+  trades[id] = sortTrades(list)
   if (!isDemo(id)) kvSet('trades:' + id, trades[id])
 }
 
-/** Удаляет счёт из журнала вместе с его сделками. Ключ в мосте остаётся — его удаляют в расширении */
+/**
+ * Удаляет счёт из журнала вместе с его сделками. Ключ в мосте остаётся — его удаляют в расширении;
+ * до тех пор мост этот счёт не грузит и не публикует (список удалённых уходит ему в настройках).
+ */
 export async function removeAccount(id: string) {
   state.accounts = state.accounts.filter((a) => a.id !== id)
   if (!isDemo(id)) {
     if (!state.removed.includes(id)) state.removed.push(id)
-    await Promise.all([clearRows(id), kvDel('trades:' + id), kvDel('snap:' + id)])
+    await Promise.all([kvDel('trades:' + id), kvDel('snap:' + id)])
   }
   delete trades[id]
   delete snapshots[id]
