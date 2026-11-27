@@ -159,11 +159,15 @@ export async function desktop(d) {
   // ---------- 2 ----------
   await d.chapter(2, ru('График и его вид', 'The chart and its look'))
   await d.say(
-    ru('График двигается мышью, а колесо меняет масштаб по времени.', 'Drag the chart with the mouse, and the wheel zooms the time scale.'),
+    ru(
+      'График двигается мышью во все стороны, а колесо меняет масштаб по времени.',
+      'Drag the chart with the mouse in any direction, and the wheel zooms the time scale.',
+    ),
     async () => {
       const a = await inChart(d, 0, 0.6, 0.5)
       await d.drag(a, { x: a.x - 260, y: a.y + 10 }, 900)
       await d.drag({ x: a.x - 260, y: a.y }, a, 700)
+      await d.drag(a, { x: a.x, y: a.y + 80 }, 700)
       await d.wheel(-120, 4)
       await d.sleep(400)
       await d.wheel(120, 4)
@@ -171,8 +175,8 @@ export async function desktop(d) {
   )
   await d.say(
     ru(
-      'Колесо над ценовой шкалой растягивает график по вертикали, кнопка «авто» возвращает обычный масштаб. Вид, настроенный вручную, запоминается для монеты и интервала.',
-      'The wheel over the price scale stretches the chart vertically, and the “auto” button resets the scale. A view you set up by hand is remembered for the coin and interval.',
+      'Колесо над ценовой шкалой растягивает график по вертикали, кнопка «авто» возвращает обычный масштаб. Другая монета открывается в том же масштабе и на том же месте.',
+      'The wheel over the price scale stretches the chart vertically, and the “auto” button resets the scale. Another coin opens with the same zoom and position.',
     ),
     async () => {
       const host = await d.page.locator('.chart-host').first().boundingBox()
