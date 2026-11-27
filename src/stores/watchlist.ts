@@ -1,4 +1,4 @@
-import { computed, reactive } from 'vue'
+import { computed, reactive, watch } from 'vue'
 import { sameSymbol, symbolKey, type SymbolRef } from '../types'
 import { load, persist } from '../lib/storage'
 import { i18n, type Lang } from '../lib/i18n'
@@ -6,6 +6,8 @@ import { latestPosition } from '../chart/position'
 import { drawings } from './drawings'
 
 export type Side = 'long' | 'short'
+/** Ручная отметка: направление или «снято» (позиция на графике не в счёт) */
+export type Mark = Side | 'none'
 export type SideFilter = 'all' | Side
 
 export type WatchItem = SymbolRef
@@ -61,11 +63,11 @@ function defaults(): { all: WatchList[]; activeId: string } {
   return { all, activeId: all[5].id }
 }
 
-type SavedLists = { all?: (Omit<WatchList, 'items'> & { items: (SymbolRef & { side?: Side })[] })[]; activeId?: string; filter?: SideFilter; marks?: Record<string, Side>; cols?: ListCol[] } | null
+type SavedLists = { all?: (Omit<WatchList, 'items'> & { items: (SymbolRef & { side?: Side })[] })[]; activeId?: string; filter?: SideFilter; marks?: Record<string, Mark>; cols?: ListCol[] } | null
 
 function parse(saved: SavedLists) {
-  const marks: Record<string, Side> = {}
-  for (const [k, v] of Object.entries(saved?.marks ?? {})) if (v === 'long' || v === 'short') marks[k] = v
+  const marks: Record<string, Mark> = {}
+  for (const [k, v] of Object.entries(saved?.marks ?? {})) if (v === 'long' || v === 'short' || v === 'none') marks[k] = v
   // раньше отметка хранилась в строке списка — переносим её на монету
   for (const l of saved?.all ?? []) for (const r of l?.items ?? []) if (r && (r.side === 'long' || r.side === 'short')) marks[symbolKey(r)] ??= r.side
   const all = (saved?.all ?? [])
@@ -109,22 +111,50 @@ export function localizeDefaultLists(): void {
 
 export const activeList = computed(() => lists.all.find((l) => l.id === lists.activeId) ?? lists.all[0])
 
-/** Отметка направления, поставленная вручную */
-export const markOf = (ref: SymbolRef): Side | null => lists.marks[symbolKey(ref)] ?? null
+/** Отметка направления, поставленная вручную (лонг или шорт) */
+export function markOf(ref: SymbolRef): Side | null {
+  const m = lists.marks[symbolKey(ref)]
+  return m === 'long' || m === 'short' ? m : null
+}
 
-/** Направление инструмента: ручная отметка либо направление последней позиции на его графике */
+/**
+ * Направление инструмента: ручная отметка либо направление последней позиции на его графике.
+ * Отметка «none» — направление снято вручную, хотя позиция на графике осталась.
+ */
 export function sideOf(ref: SymbolRef): Side | null {
-  const mark = markOf(ref)
-  if (mark) return mark
+  const m = lists.marks[symbolKey(ref)]
+  if (m) return m === 'none' ? null : m
   const p = latestPosition(drawings[symbolKey(ref)])
   return p ? (p.type as Side) : null
 }
 
+/** Ставит или снимает направление. Снять можно и тогда, когда на графике есть позиция */
 export function setMark(ref: SymbolRef, side: Side | null) {
   const key = symbolKey(ref)
   if (side) lists.marks[key] = side
+  else if (latestPosition(drawings[key])) lists.marks[key] = 'none'
   else delete lists.marks[key]
 }
+
+/**
+ * «Снято» относится к той позиции, что была на графике: нарисовали новую — направление снова берётся
+ * с графика; позиций не осталось — отметка больше не нужна.
+ */
+const hiddenPositions = new Map<string, string>()
+watch(
+  () => Object.keys(lists.marks).filter((k) => lists.marks[k] === 'none').map((k) => [k, latestPosition(drawings[k])?.id ?? ''] as const),
+  (now) => {
+    for (const [k, id] of now) {
+      const was = hiddenPositions.get(k)
+      if (!id || (was !== undefined && was !== id)) {
+        delete lists.marks[k]
+        hiddenPositions.delete(k)
+      } else hiddenPositions.set(k, id)
+    }
+    for (const k of [...hiddenPositions.keys()]) if (lists.marks[k] !== 'none') hiddenPositions.delete(k)
+  },
+  { immediate: true },
+)
 
 /** Фильтр «лонги» прячет только шорты (и наоборот): неотмеченные инструменты видны всегда */
 export function matchesFilter(item: WatchItem): boolean {
@@ -160,8 +190,9 @@ export function removeItem(listId: string, index: number) {
 }
 
 /** Отметка направления по кругу: нет → лонг → шорт → нет */
+/** По кругу от того, что видно: нет → лонг → шорт → нет */
 export function cycleSide(ref: SymbolRef) {
-  const cur = markOf(ref)
+  const cur = sideOf(ref)
   setMark(ref, !cur ? 'long' : cur === 'long' ? 'short' : null)
 }
 

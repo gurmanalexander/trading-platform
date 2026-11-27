@@ -4,7 +4,7 @@ import Icon from './Icon.vue'
 import { sameSymbol, type SymbolRef } from '../types'
 import { toast } from '../stores/app'
 import { t } from '../lib/i18n'
-import { lists, markOf, setMark, type Side, type WatchList } from '../stores/watchlist'
+import { lists, setMark, sideOf, type Side, type WatchList } from '../stores/watchlist'
 
 // Меню «в какие списки и с каким направлением»: для одной монеты или сразу для нескольких выбранных.
 const props = defineProps<{ items: SymbolRef[] }>()
@@ -12,7 +12,7 @@ const props = defineProps<{ items: SymbolRef[] }>()
 const many = computed(() => props.items.length > 1)
 /** Сколько из выбранных монет лежит в списке */
 const countIn = (l: WatchList) => props.items.filter((it) => l.items.some((r) => sameSymbol(r, it))).length
-const allMarked = (side: Side) => props.items.length > 0 && props.items.every((it) => markOf(it) === side)
+const allMarked = (side: Side) => props.items.length > 0 && props.items.every((it) => sideOf(it) === side)
 
 function mark(side: Side) {
   const next = allMarked(side) ? null : side
