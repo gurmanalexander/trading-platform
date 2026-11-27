@@ -260,11 +260,46 @@ export class ChartController {
     return JSON.stringify([r && [Math.round(r.from * 10), Math.round(r.to * 10)], p && [p.from, p.to]])
   }
 
-  private onPress = () => {
+  private onPress = (e: PointerEvent) => {
     this.viewAtPress = this.viewSignature()
+    this.freezePriceScale(e)
+  }
+
+  /**
+   * Перетаскивание мышью двигает график и по вертикали, как в TradingView. Библиотека двигает цену,
+   * только когда автомасштаб выключен, — поэтому при нажатии он выключается с тем же диапазоном,
+   * а при отпускании возвращается, если график по вертикали не сдвинули (клик, сдвиг по времени).
+   */
+  private frozenRange: { from: number; to: number } | null = null
+  private freezePriceScale(e: PointerEvent) {
+    this.frozenRange = null
+    if (e.pointerType !== 'mouse' || e.button !== 0) return
+    const r = this.host.getBoundingClientRect()
+    const x = e.clientX - r.left
+    const y = e.clientY - r.top
+    // только над основным графиком: шкалы и окна индикаторов ведут себя как раньше
+    if (x > this.chart.paneSize(0).width || y > this.chart.paneSize(0).height) return
+    const scale = this.chart.priceScale('right', 0)
+    const range = scale.getVisibleRange()
+    if (!scale.options().autoScale || !range || !(range.to > range.from)) return
+    this.frozenRange = { from: range.from, to: range.to }
+    scale.setAutoScale(false)
+    scale.setVisibleRange(this.frozenRange)
+  }
+  private unfreezePriceScale() {
+    const was = this.frozenRange
+    this.frozenRange = null
+    if (!was || this.disposed) return
+    const scale = this.chart.priceScale('right', 0)
+    if (scale.options().autoScale) return
+    const now = scale.getVisibleRange()
+    const h = was.to - was.from
+    // сдвиг меньше 1,5% высоты — это дрожание руки при прокрутке по времени, а не перенос по вертикали
+    if (!now || (Math.abs(now.from - was.from) < h * 0.015 && Math.abs(now.to - was.to) < h * 0.015)) scale.setAutoScale(true)
   }
 
   private onRelease = () => {
+    this.unfreezePriceScale()
     if (!this.viewAtPress) return
     const before = this.viewAtPress
     this.viewAtPress = ''
@@ -425,6 +460,8 @@ export class ChartController {
 
   async load() {
     const token = ++this.token
+    // как в TradingView: новая монета встаёт на то же место — тот же масштаб и отступ от правого края
+    const carryOffset = this.bars.length ? this.chart.timeScale().scrollPosition() : null
     this.stopLive()
     clearTimeout(this.retryTimer)
     this.retryTimer = 0
@@ -459,10 +496,10 @@ export class ChartController {
       this.setAll()
       this.loadOi()
       this.chart.priceScale('right').applyOptions({ autoScale: true })
-      this.chart.timeScale().scrollToPosition(6, false)
+      this.chart.timeScale().scrollToPosition(carryOffset ?? 6, false)
       this.ui.loading = false
-      // просьба показать дату важнее запомненного вида
-      const saved = getView(viewKey(symbolKey(symbol), this.tf.id))
+      // просьба показать дату важнее запомненного вида; свой вид у каждой монеты — по настройке
+      const saved = app.view.coinView ? getView(viewKey(symbolKey(symbol), this.tf.id)) : undefined
       if (!this.applyDateFocus() && saved) this.restoreView(saved)
       if (!this.live) return
       this.offLive = adapter.subscribeKline(

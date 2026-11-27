@@ -20,6 +20,8 @@ export default {
   'Тонкие бары': 'Thin bars',
   'Горизонтальная линия от последнего бара; цена и таймер на шкале остаются': 'Horizontal line from the last bar; the price and timer stay on the scale',
   'Линия текущей цены': 'Current price line',
+  'Свой масштаб у каждой монеты': 'Separate zoom for each symbol',
+  'выключено — новая монета встаёт в том же масштабе и на том же месте, как в TradingView': 'off: a new symbol opens with the same zoom and position, like in TradingView',
   'Индикаторы (/)': 'Indicators (/)',
   'Индикаторы': 'Indicators',
   'Оповещения: непрочитанных {n}': 'Alerts: {n} unread',

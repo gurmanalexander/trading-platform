@@ -232,6 +232,11 @@ export interface ViewSettings {
   priceLine: boolean
   /** часовой пояс внутридневных графиков: 'local' — как на устройстве, 'UTC' или пояс IANA */
   tz: string
+  /**
+   * false (как в TradingView) — новая монета открывается в том же масштабе и на том же месте, что и прежняя;
+   * true — у каждой монеты свой запомненный вид
+   */
+  coinView: boolean
 }
 
 /** Объём позиции: депозит и риск на сделку в процентах от него */
@@ -250,6 +255,7 @@ const sanitizeView = (v?: Partial<ViewSettings>): ViewSettings => ({
   thinBars: v?.thinBars !== false,
   priceLine: v?.priceLine !== false,
   tz: isTimeZone(v?.tz) ? (v?.tz as string) : LOCAL_TZ,
+  coinView: v?.coinView === true,
 })
 const positive = (v: unknown, def: number, max: number) => (typeof v === 'number' && isFinite(v) && v >= 0 ? Math.min(max, v) : def)
 const sanitizeRisk = (v?: Partial<RiskSettings>): RiskSettings => ({ deposit: positive(v?.deposit, 0, 1e12), pct: positive(v?.pct, 1, 100) })

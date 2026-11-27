@@ -45,6 +45,10 @@ function num(e: Event): number {
         <input v-model="app.view.priceLine" type="checkbox" />
         <span>{{ t('Линия текущей цены') }}<small class="muted">{{ t('горизонтальная линия от последнего бара; цена и таймер на шкале остаются') }}</small></span>
       </label>
+      <label class="vd-row check">
+        <input v-model="app.view.coinView" type="checkbox" />
+        <span>{{ t('Свой масштаб у каждой монеты') }}<small class="muted">{{ t('выключено — новая монета встаёт в том же масштабе и на том же месте, как в TradingView') }}</small></span>
+      </label>
 
       <div class="vd-title">{{ t('Размер позиции') }}</div>
       <label class="vd-row">
