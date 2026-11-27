@@ -5,6 +5,8 @@ import { TIMEZONES, tzMenuLabel } from '../lib/timezone'
 import { t } from '../lib/i18n'
 
 // Вид графиков (крупные шрифты, таймер свечи) и объём позиции из депозита и риска
+/** Целое из поля ввода в пределах 0…max */
+const whole = (e: Event, max: number) => Math.min(max, Math.round(num(e)))
 function num(e: Event): number {
   const v = parseFloat((e.target as HTMLInputElement).value.replace(',', '.').replace(/\s/g, ''))
   return isFinite(v) && v >= 0 ? v : 0
@@ -48,6 +50,20 @@ function num(e: Event): number {
       <label class="vd-row check">
         <input v-model="app.view.coinView" type="checkbox" />
         <span>{{ t('Свой масштаб у каждой монеты') }}<small class="muted">{{ t('выключено — новая монета встаёт в том же масштабе и на том же месте, как в TradingView') }}</small></span>
+      </label>
+
+      <div class="vd-title">{{ t('Поля') }}</div>
+      <label class="vd-row">
+        <span>{{ t('Сверху, %') }}<small class="muted">{{ t('отступ от верхнего края при автомасштабе') }}</small></span>
+        <input class="field num" type="number" min="0" max="40" :value="app.view.marginTop" @change="app.view.marginTop = whole($event, 40)" />
+      </label>
+      <label class="vd-row">
+        <span>{{ t('Снизу, %') }}<small class="muted">{{ t('с объёмом — не меньше 20%, чтобы он не заходил на свечи') }}</small></span>
+        <input class="field num" type="number" min="0" max="40" :value="app.view.marginBottom" @change="app.view.marginBottom = whole($event, 40)" />
+      </label>
+      <label class="vd-row">
+        <span>{{ t('Справа, баров') }}<small class="muted">{{ t('место после последней свечи; график сдвигается за новыми свечами') }}</small></span>
+        <input class="field num" type="number" min="0" max="300" :value="app.view.marginRight" @change="app.view.marginRight = whole($event, 300)" />
       </label>
 
       <div class="vd-title">{{ t('Размер позиции') }}</div>
@@ -96,6 +112,9 @@ function num(e: Event): number {
 }
 .vd-row .field {
   width: 130px;
+}
+.vd-row .field.num {
+  width: 80px;
 }
 .vd-row.check {
   cursor: pointer;

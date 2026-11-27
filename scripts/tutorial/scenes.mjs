@@ -229,17 +229,19 @@ export async function desktop(d) {
   )
   await d.say(
     ru(
-      'Под шестерёнкой — тема, свои цвета и окно «Шрифты, таймер, размер позиции»: крупный шрифт шкал и легенды, таймер свечи и депозит для расчёта объёма.',
-      'The gear menu has the theme, custom colors and the “Fonts, timer, position size” window: larger scale and legend fonts, the candle timer and the deposit used for position size.',
+      'Под шестерёнкой — тема, свои цвета и окно «Вид: шрифты, поля, размер позиции»: крупный шрифт шкал и легенды, таймер свечи, поля графика — как в TradingView — и депозит для расчёта объёма.',
+      'The gear menu has the theme, custom colors and the “View: fonts, margins, position size” window: larger scale and legend fonts, the candle timer, chart margins like in TradingView, and the deposit used for position size.',
     ),
     async () => {
       await d.click(title(d, 'Настройки'))
       await d.sleep(700)
-      await d.click(`.dropdown-menu .menu-item:has-text("${T('Шрифты, таймер, размер позиции…')}")`)
+      await d.click(`.dropdown-menu .menu-item:has-text("${T('Вид: шрифты, поля, размер позиции…')}")`)
       await d.sleep(600)
       await d.page.locator('.vd select').first().selectOption('13')
       await d.sleep(900)
-      await d.click('.vd input.field >> nth=0')
+      await d.hover('.vd input.field.num >> nth=2')
+      await d.sleep(500)
+      await d.click('.vd input[inputmode="decimal"] >> nth=0')
       await d.type('1000')
       await d.page.keyboard.press('Tab')
       await d.sleep(700)
