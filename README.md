@@ -92,6 +92,39 @@ ATR toolkit, screener, watchlists and alerts — no sign-up, no ads, no API keys
 
 </details>
 
+## Trading journal
+
+<img src="docs/screenshots/journal.png" alt="tvx journal: net PnL, cumulative PnL curve, win rate, profit factor, drawdown, open positions and PnL by day" width="100%" />
+
+**[tvx journal](https://gurmanalexander.github.io/trading-platform/journal/)** turns your Binance and Bybit futures
+history into statistics — with no server and no sign-up, in the same spirit as the terminal.
+
+- **What you see.** Net PnL and the cumulative curve, win rate, profit factor, average trade, max drawdown, fees and
+  funding, best and worst trade, PnL by day / weekday / entry hour / holding time / coin / long vs short, a calendar,
+  and the full list of trades with tags, notes and CSV export. Every trade opens on the tvx chart at its entry day.
+- **How it connects.** Exchanges reject keyed requests sent straight from a web page, so the keys live in a small
+  browser extension, **tvx bridge**. It signs read-only requests and hands the journal finished trades only.
+- **Works in the background.** While the browser is open, the bridge loads new trades by itself every few minutes —
+  the journal tab can stay closed. With sync on, it also sends them to your other devices.
+- **Security.** The bridge accepts **read-only keys only** — it checks the key's permissions on the exchange and
+  rejects one that can trade or withdraw; it has no order code at all. The secret is stored as a non-extractable
+  signing key, keyed requests go to exchange hosts only, and the journal site never sees the keys.
+- **Phone.** Trades, notes and account state sync end-to-end encrypted over the same Nostr relays (and the same sync
+  code) as the terminal. The phone needs no extension and never receives the keys.
+- **Supported now:** Binance USDⓈ-M Futures (the exchange serves the last 3 months), Bybit USDT/USDC perpetuals
+  (2 years). Everything loaded stays in the journal for good.
+
+Install the bridge from the journal's **Accounts** tab:
+
+- **Chrome, Edge, Brave, Opera, Vivaldi, Yandex Browser:** download `tvx-bridge.zip`, unzip it, open
+  `chrome://extensions`, turn on Developer mode and click **Load unpacked**.
+- **Firefox:** download `tvx-bridge-firefox.zip`, open `about:debugging#/runtime/this-firefox` and click
+  **Load Temporary Add-on**. It works until Firefox restarts — a permanent install needs the add-on signed by Mozilla.
+  The Firefox build has not been tested in a real Firefox yet.
+- **Safari:** no build — Apple accepts extensions only through Xcode and a paid developer account.
+
+Want to look first? The journal has built-in demo data.
+
 ## Keyboard shortcuts
 
 | Action | Keys |
@@ -111,8 +144,10 @@ The app is a static site: no backend, no environment variables. Requires Node.js
 ```bash
 npm install
 npm run dev        # http://localhost:5173
-npm run build      # type check + production build into dist/
+npm run build      # type check + production build into dist/ (terminal, journal, bridge extension)
 npm test           # unit tests
+npm run dev:journal            # the journal on http://localhost:5174
+node scripts/e2e-bridge.mjs    # end-to-end check: extension + journal + a mock exchange in Chromium
 ```
 
 `dist/` can be served by any static hosting (relative paths, works in a subfolder). HTTPS is needed
@@ -156,4 +191,6 @@ src/
   stores/      app state: layouts, lists, screener, live prices, alerts, drawings
   components/  UI
   i18n/en/     English translations
+journal/src/   trading journal: core (trades from fills, statistics), store, sync, views
+extension/src/ tvx bridge: read-only exchange clients, key vault, options page
 ```

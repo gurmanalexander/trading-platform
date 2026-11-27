@@ -39,6 +39,8 @@ self.addEventListener('fetch', (event) => {
   if (req.method !== 'GET') return
   const url = new URL(req.url)
   if (url.origin !== self.location.origin) return
+  // журнал сделок лежит в подпапке и держит свой кэш — его запросы не трогаем
+  if (url.pathname.includes('/journal/')) return
   // обучающее видео большое и запрашивается кусками — его отдаёт сеть напрямую, мимо кэша
   if (req.headers.has('range') || url.pathname.includes('/help/')) return
 

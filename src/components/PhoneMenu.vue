@@ -76,6 +76,7 @@ loadStars()
     <template #default="{ close }">
       <div class="pm">
         <button class="menu-item" :disabled="refreshing" @click="refreshAll(), close()"><Icon name="refresh" :size="16" />{{ t('Обновить данные') }}</button>
+        <a class="menu-item" href="./journal/" @click="close()"><Icon name="trendUp" :size="16" />{{ t('Журнал сделок') }}</a>
         <button class="menu-item" @click="(app.tutorialOpen = true), close()"><Icon name="learn" :size="16" />{{ t('Обучение: видео-обзор') }}</button>
         <button class="menu-item donate" @click="(app.donateOpen = true), close()"><Icon name="heart" :size="16" />{{ t('Поддержать проект') }}</button>
         <a class="menu-item gh" :href="REPO_URL" target="_blank" rel="noopener" @click="close()">
