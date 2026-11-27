@@ -107,7 +107,7 @@ export default {
     'Pin to screen: the text stays put when scrolling and shows in the same place on all timeframes',
   'Лонг': 'Long',
   'Шорт': 'Short',
-  'По депозиту и риску на сделку из настроек «Шрифты, таймер, размер позиции»': 'Based on the deposit and risk per trade from the “Fonts, timer, position size” settings',
+  'По депозиту и риску на сделку из настроек «Вид: шрифты, поля, размер позиции»': 'Based on the deposit and risk per trade from the “View: fonts, margins, position size” settings',
   'Задать депозит и риск на сделку — появится объём позиции': 'Set the deposit and risk per trade to see the position size',
   'объём?': 'size?',
   'На каких интервалах показывать': 'Timeframes to show on',

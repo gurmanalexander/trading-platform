@@ -337,7 +337,7 @@ loadStars()
           <Icon :name="th.icon" :size="16" />{{ t(th.label) }}
         </button>
         <button class="menu-item" @click="(app.colorsOpen = true), close()"><Icon name="pencil" :size="16" />{{ t('Свои цвета…') }}</button>
-        <button class="menu-item" @click="(app.viewOpen = true), close()"><Icon name="text" :size="16" />{{ t('Шрифты, таймер, размер позиции…') }}</button>
+        <button class="menu-item" @click="(app.viewOpen = true), close()"><Icon name="text" :size="16" />{{ t('Вид: шрифты, поля, размер позиции…') }}</button>
         <div class="menu-sep" />
         <div class="menu-title">Язык / Language</div>
         <button v-for="l in LANGS" :key="l.id" class="menu-item" :class="{ on: i18n.lang === l.id }" @click="i18n.lang = l.id">{{ l.label }}</button>

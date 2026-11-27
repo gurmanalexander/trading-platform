@@ -150,6 +150,7 @@ export class ChartController {
   private colors: ChartColors
   private alertLines: IPriceLine[] = []
   private alertPrices: number[] = []
+  private hasVolume = false
   /** когда поток свечей или запрос в последний раз принёс данные */
   private lastDataAt = 0
   private lastWatchAt = 0
@@ -204,7 +205,17 @@ export class ChartController {
         horzLine: { color: c.cross, labelBackgroundColor: c.crossLabel, style: LineStyle.Dashed, width: 1 },
       },
       rightPriceScale: { borderColor: c.border },
-      timeScale: { borderColor: c.border, timeVisible: true, secondsVisible: false, rightOffset: 6, barSpacing: 8, minBarSpacing: 0.8 },
+      timeScale: {
+        borderColor: c.border,
+        timeVisible: true,
+        secondsVisible: false,
+        rightOffset: app.view.marginRight,
+        barSpacing: 8,
+        minBarSpacing: 0.8,
+        // правее последней свечи — пустые точки «будущего»; новая свеча встаёт на такую точку,
+        // и без этого флага график не сдвигался бы за ней: свечи уезжали бы за правый край
+        allowShiftVisibleRangeOnWhitespaceReplacement: true,
+      },
       localization: { locale: locale() },
       kineticScroll: { touch: true, mouse: false },
     })
@@ -496,7 +507,7 @@ export class ChartController {
       this.setAll()
       this.loadOi()
       this.chart.priceScale('right').applyOptions({ autoScale: true })
-      this.chart.timeScale().scrollToPosition(carryOffset ?? 6, false)
+      this.chart.timeScale().scrollToPosition(carryOffset ?? app.view.marginRight, false)
       this.ui.loading = false
       // просьба показать дату важнее запомненного вида; свой вид у каждой монеты — по настройке
       const saved = app.view.coinView ? getView(viewKey(symbolKey(symbol), this.tf.id)) : undefined
@@ -1034,7 +1045,7 @@ export class ChartController {
     clearView(viewKey(symbolKey(this.pane.symbol), this.tf.id))
     this.chart.priceScale('right').applyOptions({ autoScale: true })
     this.chart.timeScale().applyOptions({ barSpacing: 8 })
-    this.chart.timeScale().scrollToPosition(6, false)
+    this.chart.timeScale().scrollToPosition(app.view.marginRight, false)
   }
 
   goRealtime() {
@@ -1043,8 +1054,24 @@ export class ChartController {
   }
 
   /** Размер шрифта шкал поменяли в настройках */
+  /** Поменяли отступ справа: график, что следит за ценой, встаёт с новым отступом; отмотанный назад — не трогаем */
+  applyRightMargin() {
+    const ts = this.chart.timeScale()
+    const back = ts.scrollPosition() < -3
+    ts.applyOptions({ rightOffset: app.view.marginRight })
+    if (!back) ts.scrollToPosition(app.view.marginRight, false)
+  }
+
+  /** Поля сверху и снизу (как в TradingView); под объёмом снизу остаётся место для его столбиков */
+  private applyMargins() {
+    const top = app.view.marginTop / 100
+    const bottom = Math.max(app.view.marginBottom / 100, this.hasVolume ? 0.2 : 0)
+    this.chart.priceScale('right', 0).applyOptions({ scaleMargins: { top, bottom: Math.min(bottom, 0.9 - top) } })
+  }
+
   applyView() {
     this.chart.applyOptions({ layout: { fontSize: app.view.scaleFont } })
+    this.applyMargins()
     if (this.pane.chartType === 'bars') this.main.applyOptions({ thinBars: app.view.thinBars })
     this.main.applyOptions({ priceLineVisible: app.view.priceLine })
     this.draw.redraw()
@@ -1150,7 +1177,8 @@ export class ChartController {
       }
       this.inds.push({ inst, def, params: resolveParams(def, inst), colors, series, out: [], pane: paneIdx })
     }
-    this.chart.priceScale('right', 0).applyOptions({ scaleMargins: { top: 0.08, bottom: hasVolume ? 0.2 : 0.08 } })
+    this.hasVolume = hasVolume
+    this.applyMargins()
     const panes = this.chart.panes()
     panes.forEach((p, i) => p.setStretchFactor(i === 0 ? Math.max(3, 5 - panes.length * 0.5) : 1))
     this.ui.indPane = indPane

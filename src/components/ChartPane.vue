@@ -98,7 +98,8 @@ watch(() => [pane.scale, pane.invert], () => ctrl.value?.applyScale())
 watch(() => pane.indicators, () => ctrl.value?.syncIndicators(), { deep: true })
 watch([theme, () => app.colors], () => ctrl.value?.applyTheme(), { deep: true })
 watch(() => app.drawingsHidden, () => ctrl.value?.draw.redraw())
-watch(() => [app.view.scaleFont, app.view.countdown, app.view.thinBars, app.view.priceLine, app.risk.deposit, app.risk.pct], () => ctrl.value?.applyView())
+watch(() => [app.view.scaleFont, app.view.countdown, app.view.thinBars, app.view.priceLine, app.view.marginTop, app.view.marginBottom, app.risk.deposit, app.risk.pct], () => ctrl.value?.applyView())
+watch(() => app.view.marginRight, () => ctrl.value?.applyRightMargin())
 
 // ---------- синхронизация с другими панелями ----------
 

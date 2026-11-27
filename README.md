@@ -74,7 +74,8 @@ ATR toolkit, screener, watchlists and alerts — no sign-up, no ads, no API keys
   crosshair and time between charts. Save layouts as templates and pin favorites to the top bar.
 - **Charts:** bars, candles, hollow candles, Heikin Ashi, line, area; 13 intervals; normal, log, percent and inverted
   scales; grid and time labels continue into the future; last price colored by the last bar with a candle countdown;
-  time zone selector (device time by default).
+  time zone selector (device time by default). Chart margins like TradingView: top and bottom in %, right in bars;
+  the chart follows new candles instead of letting them run off the right edge.
 - **Drawing tools:** trend line, ray, horizontal line and ray, vertical line, cross, rectangle, Fibonacci, long/short
   position, text, freehand pencil (`Alt+B`), ruler (`Alt+M`). Magnet with off / weak / strong modes and a magnet crosshair (`Alt+Shift+M`)
   that snaps to candle OHLC. Per-timeframe visibility like TradingView (pick any set of timeframes, whole groups, or presets), undo/redo, copy/paste, keyboard nudging. Lines, shapes and

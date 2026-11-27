@@ -140,7 +140,7 @@ loadStars()
         <button class="menu-item" @click="(app.syncOpen = true), close()"><Icon name="cloud" :size="16" />{{ t('Синхронизация устройств…') }}</button>
         <button class="menu-item" @click="(app.transfer = { code: '' }), close()"><Icon name="share" :size="16" />{{ t('Перенос с другого устройства') }}</button>
         <button class="menu-item" @click="(app.colorsOpen = true), close()"><Icon name="pencil" :size="16" />{{ t('Свои цвета') }}</button>
-        <button class="menu-item" @click="(app.viewOpen = true), close()"><Icon name="text" :size="16" />{{ t('Шрифты, таймер, размер позиции') }}</button>
+        <button class="menu-item" @click="(app.viewOpen = true), close()"><Icon name="text" :size="16" />{{ t('Вид: шрифты, поля, размер позиции') }}</button>
 
         <div class="menu-title">{{ t('Тема') }}</div>
         <div class="icons">

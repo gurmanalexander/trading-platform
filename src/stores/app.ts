@@ -237,6 +237,11 @@ export interface ViewSettings {
    * true — у каждой монеты свой запомненный вид
    */
   coinView: boolean
+  /** поля, как в TradingView: отступ графика от верхнего и нижнего края, % высоты */
+  marginTop: number
+  marginBottom: number
+  /** отступ справа от последней свечи, бары */
+  marginRight: number
 }
 
 /** Объём позиции: депозит и риск на сделку в процентах от него */
@@ -247,6 +252,7 @@ export interface RiskSettings {
 
 export const SCALE_FONTS = [11, 12, 13, 14, 16, 18, 20, 24]
 export const LEGEND_FONTS = [12, 13, 14, 16, 18, 20, 24]
+const clampInt = (v: unknown, min: number, max: number, def: number) => (typeof v === 'number' && isFinite(v) ? Math.min(max, Math.max(min, Math.round(v))) : def)
 const pick = (v: unknown, list: number[], def: number) => (typeof v === 'number' && list.includes(v) ? v : def)
 const sanitizeView = (v?: Partial<ViewSettings>): ViewSettings => ({
   scaleFont: pick(v?.scaleFont, SCALE_FONTS, 11),
@@ -256,6 +262,9 @@ const sanitizeView = (v?: Partial<ViewSettings>): ViewSettings => ({
   priceLine: v?.priceLine !== false,
   tz: isTimeZone(v?.tz) ? (v?.tz as string) : LOCAL_TZ,
   coinView: v?.coinView === true,
+  marginTop: clampInt(v?.marginTop, 0, 40, 8),
+  marginBottom: clampInt(v?.marginBottom, 0, 40, 8),
+  marginRight: clampInt(v?.marginRight, 0, 300, 6),
 })
 const positive = (v: unknown, def: number, max: number) => (typeof v === 'number' && isFinite(v) && v >= 0 ? Math.min(max, v) : def)
 const sanitizeRisk = (v?: Partial<RiskSettings>): RiskSettings => ({ deposit: positive(v?.deposit, 0, 1e12), pct: positive(v?.pct, 1, 100) })

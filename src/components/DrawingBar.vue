@@ -298,7 +298,7 @@ function duplicate() {
       </template>
       <template v-if="position">
         <b class="kind" :class="d.type === 'long' ? 'up' : 'down'">{{ d.type === 'long' ? t('Лонг') : t('Шорт') }}</b>
-        <span v-if="posSize" class="muted" :title="t('По депозиту и риску на сделку из настроек «Шрифты, таймер, размер позиции»')">{{ posSize }}</span>
+        <span v-if="posSize" class="muted" :title="t('По депозиту и риску на сделку из настроек «Вид: шрифты, поля, размер позиции»')">{{ posSize }}</span>
         <button v-else class="btn sm muted" :title="t('Задать депозит и риск на сделку — появится объём позиции')" @click="app.viewOpen = true">{{ t('объём?') }}</button>
         <span class="grow" />
       </template>
