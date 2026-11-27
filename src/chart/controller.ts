@@ -957,9 +957,18 @@ export class ChartController {
     return this.host
   }
 
-  /** Картинка графика с подписью «монета · интервал · биржа» */
+  /** Картинка графика с подписью «монета · интервал · биржа», без линий алертов */
   capture(): HTMLCanvasElement | null {
-    const src = this.chart.takeScreenshot(true)
+    // линии алертов — личная пометка, на снимке они закрывают уровни: снимаем без них.
+    // takeScreenshot перерисовывает график сразу, а возвращённые линии появятся к следующему кадру — мигания нет
+    for (const l of this.alertLines) this.main.removePriceLine(l)
+    this.alertLines = []
+    let src: HTMLCanvasElement
+    try {
+      src = this.chart.takeScreenshot(true)
+    } finally {
+      this.setAlertLines(this.alertPrices)
+    }
     const out = document.createElement('canvas')
     out.width = src.width
     out.height = src.height

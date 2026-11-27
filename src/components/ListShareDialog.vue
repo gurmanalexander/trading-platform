@@ -108,7 +108,7 @@ async function prepare() {
   if (!refs.length) return
   freeUrls()
   failed.value = []
-  imagesSent.value = false
+  sentCount.value = 0
   if (!withImages.value) {
     text.value = refs.map((r) => lineOf(r)).join('\n')
     stage.value = 'done'
@@ -164,24 +164,50 @@ async function copyText(silent = false) {
 }
 
 /**
+ * Chrome на компьютере отказывает («Permission denied»), если файлов больше 10 за раз —
+ * поэтому картинки уходят пачками: каждое нажатие «Отправить» — следующая пачка.
+ */
+const SHARE_BATCH = 10
+/** Сколько картинок уже передано */
+const sentCount = ref(0)
+const leftCount = computed(() => Math.max(0, files.value.length - sentCount.value))
+const batchCount = computed(() => Math.ceil(files.value.length / SHARE_BATCH))
+
+/**
  * Картинки ушли в другое приложение. Telegram берёт подпись только к одной картинке:
  * когда их несколько, текст он отбрасывает — тогда список отправляют вторым сообщением.
  */
-const imagesSent = ref(false)
+const imagesSent = computed(() => files.value.length > 1 && leftCount.value === 0)
 const needsSecondStep = computed(() => canShareFiles.value && files.value.length > 1)
+
+/** Подпись кнопки: «Отправить», а если картинок больше пачки — какие уходят следующими */
+const shareLabel = computed(() => {
+  if (!canShareFiles.value) return shots.value.length ? t('Отправить список') : t('Отправить')
+  if (batchCount.value < 2) return t('Отправить')
+  const from = (leftCount.value ? sentCount.value : 0) + 1
+  const to = Math.min(files.value.length, from - 1 + SHARE_BATCH)
+  return t('Отправить {from}–{to} из {total}', { from, to, total: files.value.length })
+})
 
 function share() {
   // не все мессенджеры берут подпись вместе с картинками — на этот случай список уже лежит в буфере
   if (files.value.length) copyText(true)
   const withFiles = canShareFiles.value
-  const data: ShareData = withFiles ? { files: files.value, text: text.value } : { text: text.value }
+  // всё отправлено, а нажали ещё раз — начинаем заново
+  const start = withFiles && leftCount.value ? sentCount.value : 0
+  const batch = withFiles ? files.value.slice(start, start + SHARE_BATCH) : []
+  // список — подписью к первой пачке
+  const data: ShareData = withFiles ? (start === 0 ? { files: batch, text: text.value } : { files: batch }) : { text: text.value }
   navigator
     .share(data)
     .then(() => {
-      if (withFiles && files.value.length > 1) imagesSent.value = true
+      if (withFiles) sentCount.value = start + batch.length
     })
     .catch((e) => {
-      if ((e as Error)?.name !== 'AbortError') toast(t('Система не приняла отправку. Сохраните картинки и вставьте список вручную'), 'error', 7000)
+      const err = e as Error
+      if (err?.name === 'AbortError') return
+      console.warn('share failed', err)
+      toast(t('Система не приняла отправку ({reason}). Сохраните картинки и вставьте список вручную', { reason: err?.message || err?.name || '?' }), 'error', 7000)
     })
 }
 
@@ -290,10 +316,16 @@ async function copyImage(s: CoinShot) {
         <span class="grow" />
         <button v-if="shots.length" class="btn" :title="t('Сохранить все картинки файлами')" @click="download"><Icon name="download" :size="16" />{{ t('Картинки') }}</button>
         <button class="btn" :class="{ primary: !canShareText }" @click="copyText()"><Icon name="copy" :size="16" />{{ t('Список') }}</button>
-        <button v-if="canShareText" class="btn primary" :title="canShareFiles ? t('Отправить картинки и список в мессенджер') : t('Отправить список в мессенджер')" @click="share">
-          <Icon name="share" :size="16" />{{ canShareFiles || !shots.length ? t('Отправить') : t('Отправить список') }}
+        <button
+          v-if="canShareText"
+          class="btn primary"
+          :title="canShareFiles ? t('Открывает системное меню «Поделиться» (Telegram, WhatsApp, AirDrop…) с картинками и списком') : t('Открывает системное меню «Поделиться» (Telegram, WhatsApp…) со списком')"
+          @click="share"
+        >
+          <Icon name="share" :size="16" />{{ shareLabel }}
         </button>
       </footer>
+      <p v-if="canShareFiles && batchCount > 1" class="tip muted">{{ t('За раз система берёт до {n} картинок — нажимайте «Отправить», пока не уйдут все.', { n: SHARE_BATCH }) }}</p>
       <div v-if="needsSecondStep" class="second" :class="{ now: imagesSent }">
         <p>
           <b v-if="imagesSent">{{ t('Картинки переданы.') }}</b>

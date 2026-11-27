@@ -1,6 +1,5 @@
 import { symbolKey, type SymbolRef } from '../types'
 import { app, paneCount, theme, type PaneState } from '../stores/app'
-import { alerts } from '../stores/alerts'
 import { drawings } from '../stores/drawings'
 import { chartColors } from './theme'
 import { ChartController, snapshotName } from './controller'
@@ -61,12 +60,10 @@ export async function renderCoins(refs: SymbolRef[], step: (index: number, ref: 
       const ref = refs[i]
       if (!step(i, ref)) break
       const key = symbolKey(ref)
-      const prices = alerts.filter((a) => a.active && symbolKey(a.ref) === key).map((a) => a.price)
       await Promise.all(
         charts.map((c, k) => {
           panes[k].symbol = { exchange: ref.exchange, market: ref.market, symbol: ref.symbol }
           c.draw.setList(drawings[key] ?? [])
-          c.setAlertLines(prices)
           // масштаб прошлой монеты не переносится: у этой либо свой запомненный вид, либо обычный
           c.chart.timeScale().applyOptions({ barSpacing: 8 })
           return c.load()
