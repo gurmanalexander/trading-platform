@@ -11,7 +11,7 @@ import { symbolKey } from '../types'
 import { app, activeIndex, paneCount, isPhone, phoneWide, setZen, theme, toast, type ScaleMode } from '../stores/app'
 import { stepInfo, stepSymbol } from '../stores/screener'
 import { tickers, useTickers } from '../stores/tickers'
-import { alerts, addAlert, moveAlert, type PriceAlert } from '../stores/alerts'
+import { alerts, addAlert, moveAlert, removeAlert, type PriceAlert } from '../stores/alerts'
 import { clearDrawings, drawings, drawingsOf, selection } from '../stores/drawings'
 import { crosshairBus, dateFocus, timeBus } from '../stores/sync'
 import { useDayStats } from '../stores/atr'
@@ -30,7 +30,7 @@ const key = computed(() => symbolKey(pane.symbol))
 const isActive = computed(() => activeIndex.value === props.index)
 const precision = computed(() => ctrl.value?.ui.precision ?? 2)
 
-const menu = reactive({ open: false, x: 0, y: 0, price: 0 })
+const menu = reactive({ open: false, x: 0, y: 0, price: 0, alertId: '' })
 
 // таблица ATR — на «рабочих» интервалах (15 минут и младше): там, где выбирают вход
 const atrCapable = computed(() => getTf(pane.tf).sec <= 900)
@@ -173,6 +173,36 @@ function activate() {
 const paneAlerts = computed(() => alerts.filter((a) => a.active && symbolKey(a.ref) === key.value))
 const overAlert = ref(false)
 let alertDrag: PriceAlert | null = null
+let alertMoved = false
+let alertDownY = 0
+
+/**
+ * Кнопка «удалить» у линии оповещения: мышью — при наведении на линию, пальцем — после касания линии.
+ * y — вертикаль линии в окне графика.
+ */
+const alertTip = reactive({ id: '', y: 0 })
+let tipTimer = 0
+function showTip(a: PriceAlert, ms = 0) {
+  const y = ctrl.value?.yOf(a.price)
+  if (y == null) return
+  clearTimeout(tipTimer)
+  tipTimer = 0
+  alertTip.id = a.id
+  alertTip.y = y
+  // после касания кнопка висит несколько секунд: курсора, который с неё уйдёт, у пальца нет
+  if (ms) tipTimer = window.setTimeout(hideTip, ms)
+}
+function hideTip() {
+  clearTimeout(tipTimer)
+  tipTimer = 0
+  alertTip.id = ''
+}
+const tipAlert = computed(() => (alertTip.id ? paneAlerts.value.find((a) => a.id === alertTip.id) : undefined))
+function deleteAlert(a: PriceAlert) {
+  removeAlert(a.id)
+  hideTip()
+  toast(t('Оповещение удалено: {symbol} {price}', { symbol: pane.symbol.symbol, price: fmtPrice(a.price, precision.value) }))
+}
 
 function alertAt(e: PointerEvent): PriceAlert | null {
   const c = ctrl.value
@@ -199,6 +229,9 @@ function onAlertDown(e: PointerEvent) {
   e.stopImmediatePropagation()
   e.preventDefault()
   alertDrag = a
+  alertMoved = false
+  alertDownY = e.clientY
+  hideTip()
   window.addEventListener('pointermove', onAlertMove)
   window.addEventListener('pointerup', onAlertUp)
   window.addEventListener('pointercancel', onAlertUp)
@@ -206,12 +239,18 @@ function onAlertDown(e: PointerEvent) {
 function onAlertMove(e: PointerEvent) {
   const c = ctrl.value
   if (!alertDrag || !c || !host.value) return
+  // дрожание пальца при касании — ещё не перенос
+  if (!alertMoved && Math.abs(e.clientY - alertDownY) < 4) return
+  alertMoved = true
   const price = c.priceAt(e.clientY - host.value.getBoundingClientRect().top)
   if (price == null || !(price > 0)) return
   moveAlert(alertDrag, +price.toFixed(precision.value), tickers[key.value]?.last ?? price)
 }
-function onAlertUp() {
-  if (alertDrag) toast(t('Оповещение перенесено: {symbol} {price}', { symbol: pane.symbol.symbol, price: fmtPrice(alertDrag.price, precision.value) }))
+function onAlertUp(e?: Event) {
+  const a = alertDrag
+  if (a && alertMoved) toast(t('Оповещение перенесено: {symbol} {price}', { symbol: pane.symbol.symbol, price: fmtPrice(a.price, precision.value) }))
+  // коснулись линии, не сдвинув, — показываем кнопку «удалить» (мышью она видна уже при наведении)
+  else if (a) showTip(a, (e as PointerEvent | undefined)?.pointerType === 'mouse' ? 0 : 4000)
   alertDrag = null
   window.removeEventListener('pointermove', onAlertMove)
   window.removeEventListener('pointerup', onAlertUp)
@@ -219,7 +258,15 @@ function onAlertUp() {
 }
 function onAlertHover(e: PointerEvent) {
   if (e.pointerType !== 'mouse' || alertDrag) return
-  overAlert.value = app.tool === 'cursor' && !host.value?.classList.contains('over-drawing') && !!alertAt(e)
+  const a = app.tool === 'cursor' && !host.value?.classList.contains('over-drawing') ? alertAt(e) : null
+  overAlert.value = !!a
+  if (a) showTip(a)
+  else if (alertTip.id && !tipTimer) hideTip()
+}
+/** Указатель ушёл с графика — кнопку прячем, если только он не ушёл на неё саму */
+function onHostLeave(e: PointerEvent) {
+  overAlert.value = false
+  if (!(e.relatedTarget as HTMLElement | null)?.closest?.('.alert-tip') && e.pointerType === 'mouse') hideTip()
 }
 
 // ---------- контекстное меню ----------
@@ -231,6 +278,13 @@ function onContext(e: MouseEvent) {
   const price = c.priceAt(e.clientY - r.top)
   if (price == null || !(price > 0)) return
   menu.price = price
+  // щёлкнули по линии оповещения — в меню будет «удалить оповещение»
+  const y = e.clientY - r.top
+  const near = paneAlerts.value.find((a) => {
+    const ay = c.yOf(a.price)
+    return ay != null && Math.abs(ay - y) <= 8
+  })
+  menu.alertId = near?.id ?? ''
   menu.x = Math.min(e.clientX - r.left, r.width - 250)
   menu.y = Math.min(e.clientY - r.top, r.height - 170)
   menu.open = true
@@ -242,6 +296,11 @@ function menuAlert() {
   const last = tickers[key.value]?.last ?? ctrl.value?.legend.value?.c ?? menu.price
   addAlert(pane.symbol, +menu.price.toFixed(precision.value), last)
   toast(t('Оповещение: {symbol} {price}', { symbol: pane.symbol.symbol, price: fmtPrice(menu.price, precision.value) }))
+  menu.open = false
+}
+const menuAlertItem = computed(() => (menu.alertId ? paneAlerts.value.find((a) => a.id === menu.alertId) : undefined))
+function menuDeleteAlert() {
+  if (menuAlertItem.value) deleteAlert(menuAlertItem.value)
   menu.open = false
 }
 function menuLine() {
@@ -274,7 +333,8 @@ function toggleScale(id: ScaleMode) {
       :class="{ drawing: app.tool !== 'cursor', 'over-alert': overAlert }"
       @pointerdown.capture="onAlertDown"
       @pointermove="onAlertHover"
-      @pointerleave="overAlert = false"
+      @pointerleave="onHostLeave"
+      @wheel.passive="hideTip"
       @contextmenu.prevent="onContext"
     >
       <div v-show="app.tool !== 'cursor'" ref="overlay" class="draw-overlay" />
@@ -335,7 +395,22 @@ function toggleScale(id: ScaleMode) {
 
     <DrawingBar v-if="ctrl && selected" :layer="ctrl.draw" :host="host" :pane-w="paneWidth" :pane-h="paneHeight" :precision="precision" />
 
+    <button
+      v-if="tipAlert && ctrl"
+      class="alert-tip"
+      :style="{ top: alertTip.y + 'px', right: ctrl.ui.corner.w + 58 + 'px' }"
+      :title="t('Удалить оповещение')"
+      :aria-label="t('Удалить оповещение')"
+      @pointerleave="($event.pointerType === 'mouse' && !overAlert) ? hideTip() : null"
+      @click="deleteAlert(tipAlert)"
+    >
+      <Icon name="x" :size="13" />
+    </button>
+
     <div v-if="menu.open" class="menu ctx-menu" :style="{ left: Math.max(4, menu.x) + 'px', top: Math.max(4, menu.y) + 'px' }">
+      <button v-if="menuAlertItem" class="menu-item" @click="menuDeleteAlert">
+        <Icon name="trash" :size="16" />{{ t('Удалить оповещение на {price}', { price: fmtPrice(menuAlertItem.price, precision) }) }}
+      </button>
       <button class="menu-item" @click="menuAlert"><Icon name="bell" :size="16" />{{ t('Оповещение на {price}', { price: fmtPrice(menu.price, precision) }) }}</button>
       <button class="menu-item" @click="menuLine"><Icon name="hline" :size="16" />{{ t('Линия на {price}', { price: fmtPrice(menu.price, precision) }) }}</button>
       <div class="menu-sep" />
@@ -376,6 +451,29 @@ function toggleScale(id: ScaleMode) {
 }
 .chart-host.over-drawing :deep(canvas) {
   cursor: pointer !important;
+}
+.alert-tip {
+  position: absolute;
+  z-index: 3;
+  width: 20px;
+  height: 20px;
+  margin-top: -10px;
+  display: grid;
+  place-items: center;
+  border-radius: 4px;
+  color: #fff;
+  background: var(--alert-line, #f5a623);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
+}
+.alert-tip:hover {
+  filter: brightness(1.1);
+}
+@media (pointer: coarse) {
+  .alert-tip {
+    width: 30px;
+    height: 30px;
+    margin-top: -15px;
+  }
 }
 .chart-host.over-alert :deep(canvas) {
   cursor: ns-resize !important;
