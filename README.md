@@ -83,7 +83,7 @@ ATR toolkit, screener, watchlists and alerts — no sign-up, no ads, no API keys
 - **ATR toolkit:** daily ATR, how much of it is spent, stop / target / slack from daily and 5-minute ATR,
   daily range bounds.
 - **Trade checklist** next to the chart, remembered per coin, can be pinned to the chart as a note.
-- **Price alerts:** in-app, sound, vibration, browser notifications; drag the alert line on the chart.
+- **Price alerts:** in-app, sound, vibration, browser notifications; drag the alert line on the chart, remove it with the cross on the line or a right-click.
 - **Chart view on symbol change:** like TradingView, a new symbol keeps the zoom and position. Drag the chart in any
   direction (vertical drag turns off auto-scale). "Separate zoom for each symbol" in the View window remembers the view per symbol and interval.
 - **Quick input:** start typing to search a symbol, type digits for an interval, paste a setup line
