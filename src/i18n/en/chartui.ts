@@ -4,6 +4,9 @@ export default {
   // ChartPane
   'Часовой пояс графиков: {tz}': 'Chart time zone: {tz}',
   'Оповещение перенесено: {symbol} {price}': 'Alert moved: {symbol} {price}',
+  'Оповещение удалено: {symbol} {price}': 'Alert removed: {symbol} {price}',
+  'Удалить оповещение': 'Remove alert',
+  'Удалить оповещение на {price}': 'Remove alert at {price}',
   'Оповещение: {symbol} {price}': 'Alert: {symbol} {price}',
   'Сбросить масштаб (Alt+R)': 'Reset scale (Alt+R)',
   'авто': 'auto',

@@ -932,6 +932,22 @@ async function chapters12to15(d) {
   )
   await d.say(
     ru(
+      'Наведите на линию — появится крестик: он удаляет оповещение. Ещё удалить можно правой кнопкой по линии или во вкладке оповещений.',
+      'Hover over the line and a cross appears: it removes the alert. You can also remove it with a right-click on the line or in the alerts tab.',
+    ),
+    async () => {
+      await d.click(await inChart(d, 0, 0.55, 0.5), 0.5, 0.5, { button: 'right' })
+      await d.sleep(700)
+      await d.click('.ctx-menu .menu-item >> nth=0')
+      await d.sleep(500)
+      await d.hover(await inChart(d, 0, 0.35, 0.5))
+      await d.sleep(900)
+      await d.click('.alert-tip')
+      await d.sleep(600)
+    },
+  )
+  await d.say(
+    ru(
       'Когда цена дойдёт до уровня, терминал покажет сообщение и подаст звук, а непрочитанные считаются на колокольчике. Оповещения работают, пока терминал открыт.',
       'When the price reaches the level, the terminal shows a message and plays a sound, and unread alerts are counted on the bell. Alerts work while the terminal is open.',
     ),

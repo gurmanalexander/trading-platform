@@ -132,41 +132,42 @@
 | --- | --- | --- |
 | 64 | Часть 12. Оповещения о цене. | Part 12. Price alerts. |
 | 65 | Оповещение ставится правой кнопкой по графику или сочетанием Alt+A. Его линию можно взять мышью и перетащить на другую цену. | Set an alert with a right-click on the chart or with Alt+A. Its line can be grabbed with the mouse and moved to another price. |
-| 66 | Когда цена дойдёт до уровня, терминал покажет сообщение и подаст звук, а непрочитанные считаются на колокольчике. Оповещения работают, пока терминал открыт. | When the price reaches the level, the terminal shows a message and plays a sound, and unread alerts are counted on the bell. Alerts work while the terminal is open. |
+| 66 | Наведите на линию — появится крестик: он удаляет оповещение. Ещё удалить можно правой кнопкой по линии или во вкладке оповещений. | Hover over the line and a cross appears: it removes the alert. You can also remove it with a right-click on the line or in the alerts tab. |
+| 67 | Когда цена дойдёт до уровня, терминал покажет сообщение и подаст звук, а непрочитанные считаются на колокольчике. Оповещения работают, пока терминал открыт. | When the price reaches the level, the terminal shows a message and plays a sound, and unread alerts are counted on the bell. Alerts work while the terminal is open. |
 
 ## 13. Обзор по спискам · 13. Watchlist dashboard
 
 | # | Русский | English |
 | --- | --- | --- |
-| 67 | Часть 13. Обзор по спискам. | Part 13. Watchlist dashboard. |
-| 68 | Обзор открывается кнопкой на панели или сочетанием Alt+D. Наверху — сводка: монеты и направления, сделки, монеты у уровня, запас хода и оповещения. Ниже — подробности, щелчок по строке открывает монету. | The dashboard opens with the toolbar button or Alt+D. At the top is a summary: coins and directions, trades, coins near a level, room to move and alerts. Below are the details, and clicking a row opens the coin. |
+| 68 | Часть 13. Обзор по спискам. | Part 13. Watchlist dashboard. |
+| 69 | Обзор открывается кнопкой на панели или сочетанием Alt+D. Наверху — сводка: монеты и направления, сделки, монеты у уровня, запас хода и оповещения. Ниже — подробности, щелчок по строке открывает монету. | The dashboard opens with the toolbar button or Alt+D. At the top is a summary: coins and directions, trades, coins near a level, room to move and alerts. Below are the details, and clicking a row opens the coin. |
 
 ## 14. Снимки, настройки и клавиши · 14. Snapshots, settings and hotkeys
 
 | # | Русский | English |
 | --- | --- | --- |
-| 69 | Часть 14. Снимки, настройки и клавиши. | Part 14. Snapshots, settings and hotkeys. |
-| 70 | Камера сохраняет все окна одной картинкой, а кнопка рядом копирует снимок в буфер — сразу вставить в чат. В меню камеры — снимок только активного окна. | The camera saves all windows as one picture, and the button next to it copies the snapshot to the clipboard, ready to paste into a chat. The camera menu also has the active window only. |
-| 71 | Цвета свечей, фона и сетки настраиваются отдельно для светлой и тёмной темы. Язык интерфейса переключается в настройках, без перезагрузки. | Candle, background and grid colors are set separately for the light and dark themes. The interface language is switched in the settings, without reloading. |
-| 72 | Все горячие клавиши собраны в справке, нужное сочетание находится поиском. Рядом — кнопка «Обучение» с этим обзором и сердечко, если захотите поддержать проект. | All hotkeys are in the help, and search finds the one you need. Next to it are the Tutorial button with this overview and the heart, if you would like to support the project. |
+| 70 | Часть 14. Снимки, настройки и клавиши. | Part 14. Snapshots, settings and hotkeys. |
+| 71 | Камера сохраняет все окна одной картинкой, а кнопка рядом копирует снимок в буфер — сразу вставить в чат. В меню камеры — снимок только активного окна. | The camera saves all windows as one picture, and the button next to it copies the snapshot to the clipboard, ready to paste into a chat. The camera menu also has the active window only. |
+| 72 | Цвета свечей, фона и сетки настраиваются отдельно для светлой и тёмной темы. Язык интерфейса переключается в настройках, без перезагрузки. | Candle, background and grid colors are set separately for the light and dark themes. The interface language is switched in the settings, without reloading. |
+| 73 | Все горячие клавиши собраны в справке, нужное сочетание находится поиском. Рядом — кнопка «Обучение» с этим обзором и сердечко, если захотите поддержать проект. | All hotkeys are in the help, and search finds the one you need. Next to it are the Tutorial button with this overview and the heart, if you would like to support the project. |
 
 ## 15. Синхронизация устройств · 15. Device sync
 
 | # | Русский | English |
 | --- | --- | --- |
-| 73 | Часть 15. Синхронизация устройств. | Part 15. Device sync. |
-| 74 | Синхронизация включается в настройках. Списки с направлениями, уровни и рисунки, оповещения, чеклист и шаблоны становятся одинаковыми на всех ваших устройствах. | Sync is turned on in the settings. Lists with directions, levels and drawings, alerts, the checklist and templates become the same on all your devices. |
-| 75 | Второе устройство подключается ссылкой или QR-кодом. Своего сервера нет: данные шифруются на устройстве и идут через публичные ретрансляторы, которые видят только шифр. Ссылка — ключ к вашим данным, не публикуйте её. | A second device connects with the link or QR code. There is no server of our own: data is encrypted on the device and goes through public relays that only see ciphertext. The link is the key to your data, so keep it private. |
+| 74 | Часть 15. Синхронизация устройств. | Part 15. Device sync. |
+| 75 | Синхронизация включается в настройках. Списки с направлениями, уровни и рисунки, оповещения, чеклист и шаблоны становятся одинаковыми на всех ваших устройствах. | Sync is turned on in the settings. Lists with directions, levels and drawings, alerts, the checklist and templates become the same on all your devices. |
+| 76 | Второе устройство подключается ссылкой или QR-кодом. Своего сервера нет: данные шифруются на устройстве и идут через публичные ретрансляторы, которые видят только шифр. Ссылка — ключ к вашим данным, не публикуйте её. | A second device connects with the link or QR code. There is no server of our own: data is encrypted on the device and goes through public relays that only see ciphertext. The link is the key to your data, so keep it private. |
 
 ## 16. Терминал на телефоне · 16. The terminal on a phone
 
 | # | Русский | English |
 | --- | --- | --- |
-| 76 | Часть 16. Терминал на телефоне. | Part 16. The terminal on a phone. |
-| 77 | Откройте ссылку синхронизации на телефоне — и на нём те же списки, уровни, позиции и оповещения, что и на компьютере. | Open the sync link on your phone, and it has the same lists, levels, positions and alerts as the computer. |
-| 78 | График занимает весь экран, окна шаблона переключаются вкладками наверху, а кнопка рядом показывает все окна сразу. | The chart fills the screen, template windows switch with the tabs at the top, and the button next to them shows all windows at once. |
-| 79 | Под графиком — полоса с соседними монетами списка: стрелки или свайп листают их, не уходя с графика. | Under the chart is a strip with neighbouring coins of the list: arrows or a swipe step through them without leaving the chart. |
-| 80 | Внизу — разделы: отбор, списки, чеклист и оповещения. Касание по монете открывает её график. | At the bottom are the sections: screener, lists, checklist and alerts. Tap a coin to open its chart. |
-| 81 | Карандаш открывает инструменты рисования. Вставка работает и без клавиатуры: скопируйте сделку или строки с монетами и нажмите кнопку вставки — в списке, в меню «Ещё» или на панели позиции. | The pencil opens the drawing tools. Paste works without a keyboard too: copy a trade or lines with coins and press the paste button in the list, in the More menu or on the position panel. |
-| 82 | Телефон можно повернуть — навигация уйдёт в колонку слева, а график займёт всю ширину. Терминал добавляется на главный экран и запускается как приложение. | Turn the phone sideways and navigation moves to a column on the left while the chart takes the full width. The terminal can be added to the home screen and starts like an app. |
-| 83 | На этом всё. Начните с отбора и списков, добавьте уровни, включите синхронизацию — а к остальному возвращайтесь по мере надобности. Удачной торговли! | That’s it. Start with the screener and watchlists, add your levels, turn on sync, and come back to the rest when you need it. Happy trading! |
+| 77 | Часть 16. Терминал на телефоне. | Part 16. The terminal on a phone. |
+| 78 | Откройте ссылку синхронизации на телефоне — и на нём те же списки, уровни, позиции и оповещения, что и на компьютере. | Open the sync link on your phone, and it has the same lists, levels, positions and alerts as the computer. |
+| 79 | График занимает весь экран, окна шаблона переключаются вкладками наверху, а кнопка рядом показывает все окна сразу. | The chart fills the screen, template windows switch with the tabs at the top, and the button next to them shows all windows at once. |
+| 80 | Под графиком — полоса с соседними монетами списка: стрелки или свайп листают их, не уходя с графика. | Under the chart is a strip with neighbouring coins of the list: arrows or a swipe step through them without leaving the chart. |
+| 81 | Внизу — разделы: отбор, списки, чеклист и оповещения. Касание по монете открывает её график. | At the bottom are the sections: screener, lists, checklist and alerts. Tap a coin to open its chart. |
+| 82 | Карандаш открывает инструменты рисования. Вставка работает и без клавиатуры: скопируйте сделку или строки с монетами и нажмите кнопку вставки — в списке, в меню «Ещё» или на панели позиции. | The pencil opens the drawing tools. Paste works without a keyboard too: copy a trade or lines with coins and press the paste button in the list, in the More menu or on the position panel. |
+| 83 | Телефон можно повернуть — навигация уйдёт в колонку слева, а график займёт всю ширину. Терминал добавляется на главный экран и запускается как приложение. | Turn the phone sideways and navigation moves to a column on the left while the chart takes the full width. The terminal can be added to the home screen and starts like an app. |
+| 84 | На этом всё. Начните с отбора и списков, добавьте уровни, включите синхронизацию — а к остальному возвращайтесь по мере надобности. Удачной торговли! | That’s it. Start with the screener and watchlists, add your levels, turn on sync, and come back to the rest when you need it. Happy trading! |
